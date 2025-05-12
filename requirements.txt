@@ -1,1 +1,3 @@
 mitmproxy
+python-magic
+pymupdf

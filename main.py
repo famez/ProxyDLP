@@ -4,8 +4,10 @@ from mitmproxy.http import Response
 import json
 import re
 import base64
+import os
+from datetime import datetime
 
-allowed_domain = "gmail.com"
+allowed_domain = "hotmail.com"
 
 email_regex = r'^[a-zA-Z0-9._%+-]+@' + allowed_domain + '$'
 
@@ -106,7 +108,33 @@ def request(flow: http.HTTPFlow) -> None:
                 b"Blocked by proxy",  # Body
                 {"Content-Type": "text/plain"}  # Headers
             )
-            
+
+
+    #File being uploaded to ChatGPT.
+    if flow.request.method == "PUT" and "oaiusercontent.com/file" in flow.request.pretty_url:
+
+        content = flow.request.content
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        if content:
+            # Generate a filename from URL or timestamp
+            filename = f"{timestamp}"
+
+            content_type = flow.request.headers.get("Content-Type", "unknown")
+            if content_type == "application/pdf":
+                filename += ".pdf"
+
+            filepath = os.path.join("uploads", filename)
+
+            os.makedirs("uploads", exist_ok=True)
+
+            with open(filepath, "wb") as f:
+                f.write(content)
+
+            ctx.log.info(f"Saved PUT upload to: {filepath}")
+
+
+
 
        
 def response(flow: http.HTTPFlow) -> None:
