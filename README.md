@@ -5,14 +5,14 @@ The idea is to let in an enterprise or organization, the employees to use free A
 
 Roadmap
 
--Detect if we are using a company account or a personal account
--Monitor uploaded files and decode/parse PDFs, excels to plain text 
--Detect embedded images and standalone images and apply OCR to extract text
--Monitor conversations.
--Apply configurable regular expressions to detect data leakage.
--Get telemetry / user behaviour of the AI applications on a dashboard to have more visibility on your company
+- Detect if we are using a company account or a personal account
+- Monitor uploaded files and decode/parse PDFs, excels to plain text 
+- Detect embedded images and standalone images and apply OCR to extract text
+- Monitor conversations.
+- Apply configurable regular expressions to detect data leakage.
+- Get telemetry / user behaviour of the AI applications on a dashboard to have more visibility on your company
 
--Integration with ChatGPT --> On GOING
--Integration with Microsoft Copilot
--Integration with DeepSeek
--???
+- Integration with ChatGPT --> On GOING
+- Integration with Microsoft Copilot
+- Integration with DeepSeek
+- ???
