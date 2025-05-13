@@ -1,3 +1,7 @@
 mitmproxy
 python-magic
 pymupdf
+openpyxl
+python-docx
+SpeechRecognition
+pocketsphinx
