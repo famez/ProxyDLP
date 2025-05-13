@@ -10,6 +10,7 @@ Roadmap
 - Detect embedded images and standalone images and apply OCR to extract text
 - Monitor conversations.
 - Apply configurable regular expressions to detect data leakage.
+- Apply ML detection based on Name Entity Recognition and sentence-transformers with cosine similarity.
 - Get telemetry / user behaviour of the AI applications on a dashboard to have more visibility on your company
 
 - Integration with ChatGPT --> On GOING
