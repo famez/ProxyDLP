@@ -5,3 +5,4 @@ openpyxl
 python-docx
 SpeechRecognition
 pocketsphinx
+sentence-transformers
