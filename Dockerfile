@@ -19,8 +19,10 @@ RUN pip install pytesseract
 
 RUN python -m spacy download en_core_web_sm
 
+RUN apt-get update && apt-get install -y tmux
+
 # Copy the rest of your application code
 COPY src/ .
 
 # Set default command (optional, e.g., for running an app.py script)
- CMD ["mitmproxy", "-s", "proxyGPT.py"]
+CMD ["tmux", "new", "-As", "mysession", "mitmproxy", "-s", "proxyGPT.py"]
