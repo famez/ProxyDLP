@@ -25,7 +25,7 @@ email_regex = r'^[a-zA-Z0-9._%+-]+@' + allowed_domain + '$'
 regex_list = [  ("Credit card number", r"\b(?:\d[ -]*?){13,16}\b"), #Credit card number
                 ("Public IP addresses", r"\b(?!(10|127|172\.(1[6-9]|2[0-9]|3[01])|192\.168))(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\b"),   #Public IP addresses
                 ("IBAN", r'\b[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}\b'),      #IBAN
-                ("Phone number", r'\b(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b'),   #Phone number
+                ("Phone number", r"\+?\d{1,4}\d{9,10}"),   #Phone number
                 ("Email Address", r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),      #Email addresses
                 ("Confidential label", r'Contoso S.A - Confidential'),  
               ]
