@@ -6,3 +6,4 @@ python-docx
 SpeechRecognition
 pocketsphinx
 sentence-transformers
+spacy
