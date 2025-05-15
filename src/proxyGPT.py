@@ -228,16 +228,16 @@ def pad_b64(segment: str) -> str:
 
 def analyze_text_ner(text):
     doc = nlp(text)
-    return doc.ents
+    return " ".join(doc.ents)
         
     
 def analyze_text_cosine_similarity(text):
     feature_embedding = model.encode(text, convert_to_tensor=True)
-    for label_embedding in range(len(target_label_embeddings)):
+    for label_embedding in target_label_embeddings:
         similarity = util.cos_sim(feature_embedding, label_embedding).item()
         if similarity > 0.10:
-            return True
-    return False
+            return "Cosine Similarity!"
+    return ""
 
 
 def analyze_text(text):
