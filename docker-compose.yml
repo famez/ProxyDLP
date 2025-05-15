@@ -1,5 +1,6 @@
 services:
   proxygpt:
+    container_name: proxygpt
     build:
       context: .
       dockerfile: Dockerfile
@@ -8,3 +9,42 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URI: mongodb://root:example@mongo:27017/
+    networks:
+      - internal-net
+
+  mongo:
+    image: mongo:6.0
+    container_name: mongodb
+    restart: always
+    
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - internal-net
+
+  web-console:
+    build: ./app
+    container_name: web-console
+    restart: always
+    ports:
+      - "80:80"
+    environment:
+      MONGO_URI: mongodb://root:example@mongo:27017/
+    depends_on:
+      - mongo
+    networks:
+      - internal-net
+
+volumes:
+  mongodb-data:
+
+networks:
+  internal-net:
+    driver: bridge
