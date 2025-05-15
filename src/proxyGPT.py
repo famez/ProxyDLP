@@ -32,7 +32,7 @@ target_labels = [
 
 target_label_embeddings = []
 
-for label in target_labels:
+for i, label in enumerate(target_labels):
     target_label_embeddings.append(model.encode(target_labels[i], convert_to_tensor=True))
 
 
