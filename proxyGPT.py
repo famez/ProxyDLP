@@ -13,8 +13,31 @@ from PIL import Image
 import pytesseract
 import io
 import zipfile
+from sentence_transformers import SentenceTransformer, util
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+
+
+target_labels = [
+    "User manual for engineering = YES",
+    "Specification of requirements = YES",
+    "Assembly instruction = YES"
+]
+
+target_label_embeddings = []
+
+for label in target_labels:
+    target_label_embeddings.append(model.encode(target_labels[i], convert_to_tensor=True))
+
+
+
+
 
 allowed_domain = "gmail.com"      #Change by your org domain, such as contoso.com
 
@@ -203,8 +226,29 @@ def pad_b64(segment: str) -> str:
     return segment + '=' * (-len(segment) % 4)
 
 
-#Returns string of leak type, empty string otherwise.
+def analyze_text_ner(text):
+    doc = nlp(text)
+    return doc.ents
+        
+    
+def analyze_text_cosine_similarity(text):
+    feature_embedding = model.encode(text, convert_to_tensor=True)
+    for label_embedding in range(len(target_label_embeddings)):
+        similarity = util.cos_sim(feature_embedding, label_embedding).item()
+        if similarity > 0.10:
+            return True
+    return False
+
+
 def analyze_text(text):
+    retVal = ""
+    retVal += analyze_text_regex(text) + " "
+    retVal += analyze_text_ner(text) + " "
+    retVal += analyze_text_cosine_similarity(text) + " "
+    return retVal
+
+#Returns string of leak type, empty string otherwise.
+def analyze_text_regex(text):
 
     for line in text.splitlines():
         for regex in regex_list:
@@ -212,7 +256,6 @@ def analyze_text(text):
                 return regex[0]
         
     return ""
-
 
 def decode_file(filepath, content_type):
 
