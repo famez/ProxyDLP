@@ -16,43 +16,18 @@ import zipfile
 from sentence_transformers import SentenceTransformer, util
 import spacy
 
+
 nlp = spacy.load("en_core_web_sm")
-
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-
-model = SentenceTransformer('all-MiniLM-L6-v2')
-
-
-
-target_labels = [
-    "User manual for engineering = YES",
-    "Specification of requirements = YES",
-    "Assembly instruction = YES"
-]
-
-target_label_embeddings = []
-
-for i, label in enumerate(target_labels):
-    target_label_embeddings.append(model.encode(target_labels[i], convert_to_tensor=True))
-
-
-
-
 
 allowed_domain = "gmail.com"      #Change by your org domain, such as contoso.com
 
 email_regex = r'^[a-zA-Z0-9._%+-]+@' + allowed_domain + '$'
 
+#Open regex config file
+with open("/etc/proxyGPT/regex.json") as f:
+    regex_list = json.load(f)
 
-#Some regex examples
-regex_list = [  ("Credit card number", r"\b(?:\d[ -]*?){13,16}\b"), #Credit card number
-                ("Public IP addresses", r"\b(?!(10|127|172\.(1[6-9]|2[0-9]|3[01])|192\.168))(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\b"),   #Public IP addresses
-                ("IBAN", r'\b[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}\b'),      #IBAN
-                ("Phone number", r"\+?\d{1,4}\d{9,10}"),   #Phone number
-                ("Email Address", r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),      #Email addresses
-                ("Confidential label", r'Contoso S.A - Confidential'),  
-              ]
-
+regex_list = [(name, re.compile(pattern)) for name, pattern in regex_list]
 
 source_code_patterns = [
     r'\b(def|function|class)\b\s+\w+\s*\(',     # function or class
@@ -61,6 +36,18 @@ source_code_patterns = [
     r'[{};]',                                   # semicolons/braces
     r'(//|#|/\*)'                               # comments
 ]
+
+#Open cosine similarity strings config file
+with open("/etc/proxyGPT/cos_similarity.json") as f:
+    target_labels = json.load(f)
+    
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+target_label_embeddings = []
+
+for i, label in enumerate(target_labels):
+    target_label_embeddings.append(model.encode(target_labels[i], convert_to_tensor=True))
 
 
 def request(flow: http.HTTPFlow) -> None:
@@ -192,9 +179,23 @@ def request(flow: http.HTTPFlow) -> None:
                 filename += ".xlsx"
             elif content_type == "application/msword" or content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                 filename += ".docx"
-            elif content_type == "image/jpeg" or content_type == "image/png" or content_type == "image/gif" or content_type == "image/bmp" or content_type == "image/webp" or content_type == "image/svg+xml" or content_type == "image/tiff" or content_type == "image/vnd.microsoft.icon":
+            elif content_type == "image/jpeg":
                 filename += ".jpg"
-            
+            elif content_type == "image/png":
+                filename += ".png"
+            elif content_type == "image/gif":
+                filename += ".gif"
+            elif content_type == "image/bmp":
+                filename += ".bmp"
+            elif content_type == "image/webp":
+                filename += ".webp"
+            elif content_type == "image/svg+xml":
+                filename += ".svg"
+            elif content_type == "image/tiff":
+                filename += ".tiff"
+            elif content_type == "image/vnd.microsoft.icon":
+                filename += ".ico"
+
             filepath = os.path.join("uploads", filename)
 
             os.makedirs("uploads", exist_ok=True)
@@ -228,7 +229,7 @@ def pad_b64(segment: str) -> str:
 
 def analyze_text_ner(text):
     doc = nlp(text)
-    return " ".join(doc.ents)
+    return " ".join(ent.label_ for ent in doc.ents)
         
     
 def analyze_text_cosine_similarity(text):
@@ -327,4 +328,3 @@ def extract_images_from_docx(docx_path, output_folder="extracted_images"):
                     with open(target_path, "wb") as img_file:
                         img_file.write(docx_zip.read(file))
                     print(f"Saved image: {target_path}")
-
