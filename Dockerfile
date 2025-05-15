@@ -15,8 +15,12 @@ COPY requirements.txt .
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
+RUN pip install pytesseract
+
+RUN python -m spacy download en_core_web_sm
+
 # Copy the rest of your application code
-COPY . .
+COPY src/ .
 
 # Set default command (optional, e.g., for running an app.py script)
-# CMD ["python", "app.py"]
+ CMD ["mitmproxy", "-s", "proxyGPT.py"]
