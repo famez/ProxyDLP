@@ -223,9 +223,12 @@ def request(flow: http.HTTPFlow) -> None:
             ctx.log.info(f"Saved PUT upload to: {filepath}")
 
             ctx.log.info(f"Analysing file...")
-            result = analyze_file(filepath, content_type)
+            text, result = analyze_file(filepath, content_type)
 
             ctx.log.info(f"Leaked data from file: {result}")
+
+            event = {"timestamp": datetime.now(timezone.utc), "rational": "Conversation", "content": text,"leak" : result}
+            collection.insert_one(event)
           
 
 def decode_jwt(token: str):
@@ -327,7 +330,7 @@ def decode_file(filepath, content_type):
 
 def analyze_file(filepath, content_type):
     text = decode_file(filepath, content_type)
-    return analyze_text(text)
+    return text, analyze_text(text)
 
 
 
