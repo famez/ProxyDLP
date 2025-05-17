@@ -36,6 +36,8 @@ RUN apt-get install -y \
 
 RUN pip install pillow
 
+RUN pip install pymongo
+
 COPY src/ .
 
 

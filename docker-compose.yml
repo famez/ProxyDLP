@@ -26,6 +26,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: example
     volumes:
       - mongodb-data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
     networks:
       - internal-net
 

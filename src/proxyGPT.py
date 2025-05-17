@@ -5,7 +5,7 @@ import json
 import re
 import base64
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import pymupdf
 from openpyxl import load_workbook
 from docx import Document
@@ -15,6 +15,13 @@ import io
 import zipfile
 from sentence_transformers import SentenceTransformer, util
 import spacy
+from pymongo import MongoClient
+from datetime import datetime
+
+
+db_client = MongoClient(os.getenv("MONGO_URI"))
+collection = db_client["proxyGPT"]["events"]
+
 
 
 nlp = spacy.load("en_core_web_sm")
@@ -96,6 +103,13 @@ def request(flow: http.HTTPFlow) -> None:
                     {"Content-Type": "application/json"}
                 )
 
+            else:
+                ctx.log.info(f"Corporative user {email} logged in")
+
+                #Register event into the database.
+                event = {"timestamp": datetime.now(datetime.timezone.utc), "user": email, "rational": "Logged in", "detail" : ""}
+                collection.insert_one(event)
+
                 return
 
     if flow.request.method == "POST" and "chatgpt.com/backend-anon/conversation" in flow.request.pretty_url:
@@ -145,12 +159,15 @@ def request(flow: http.HTTPFlow) -> None:
                         json_body = flow.request.json()
                         conversation_text = json_body["messages"][0]["content"]["parts"][0]
 
-
                         ctx.log.info(f"Conversation sent: {conversation_text}")
 
                         result = analyze_text(conversation_text)
 
                         ctx.log.info(f"Leaked data from conversation: {result}")
+
+                        event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": conversation_text,"leak" : result}
+
+                        collection.insert_one(event)
 
                         return
 
