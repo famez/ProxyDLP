@@ -251,10 +251,10 @@ def analyze_text_ner(text):
     
 def analyze_text_cosine_similarity(text):
     feature_embedding = model.encode(text, convert_to_tensor=True)
-    for label_embedding in target_label_embeddings:
+    for i, label_embedding in enumerate(target_label_embeddings):
         similarity = util.cos_sim(feature_embedding, label_embedding).item()
-        if similarity > 0.10:
-            return "Cosine Similarity!"
+        if similarity > 0.40:
+            return label[i]
     return ""
 
 
