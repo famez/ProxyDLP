@@ -254,7 +254,7 @@ def analyze_text_cosine_similarity(text):
     for i, label_embedding in enumerate(target_label_embeddings):
         similarity = util.cos_sim(feature_embedding, label_embedding).item()
         if similarity > 0.40:
-            return label[i]
+            return target_labels[i]
     return ""
 
 
