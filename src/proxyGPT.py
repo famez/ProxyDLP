@@ -107,7 +107,7 @@ def request(flow: http.HTTPFlow) -> None:
                 ctx.log.info(f"Corporative user {email} logged in")
 
                 #Register event into the database.
-                event = {"timestamp": datetime.now(datetime.timezone.utc), "user": email, "rational": "Logged in", "detail" : ""}
+                event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Logged in", "detail" : ""}
                 collection.insert_one(event)
 
                 return
