@@ -159,12 +159,13 @@ def request(flow: http.HTTPFlow) -> None:
             for key, value in files[email].items():
                 ctx.log.info(f"{key}: {value}")
 
+            ctx.log.info(f"Analysing file...")
 
             text, result = analyze_file(files[email]['filepath'], files[email]['content_type'])
 
             ctx.log.info(f"Leaked data from file: {result}")
 
-            event = {"timestamp": datetime.now(timezone.utc), "rational": "Attached file", "filename" : files[email]['file_name'], "content": text,"leak" : result}
+            event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : files[email]['file_name'], "content": text,"leak" : result}
             collection.insert_one(event)
 
         except EmailNotFoundException as e:
@@ -281,24 +282,16 @@ def request(flow: http.HTTPFlow) -> None:
 
             ctx.log.info(f"Saved PUT upload to: {filepath}")
 
-            ctx.log.info(f"Analysing file...")
 
             #Get file id
 
             file_id = extract_substring_between(flow.request.pretty_url, "oaiusercontent.com/", "?")
 
-            ctx.log.info(f"File id: {file_id}")
+            #ctx.log.info(f"File id: {file_id}")
 
             file_ids[file_id] = { "filepath" : filepath, "content_type" : content_type }
 
-            """
-            text, result = analyze_file(filepath, content_type)
-
-            ctx.log.info(f"Leaked data from file: {result}")
-
-            event = {"timestamp": datetime.now(timezone.utc), "rational": "Conversation", "content": text,"leak" : result}
-            collection.insert_one(event)
-            """
+           
 
 def decode_jwt(token: str):
     parts = token.split(".")
