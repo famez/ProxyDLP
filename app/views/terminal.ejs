@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Docker tmux Terminal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+    }
+    #terminal {
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+  <script>
+    const term = new Terminal();
+    term.open(document.getElementById('terminal'));
+
+    const socket = new WebSocket('ws://' + window.location.hostname + ':8765');
+    socket.binaryType = 'arraybuffer';
+
+    socket.onopen = () => {
+      term.write('Connected to tmux session\r\n');
+    };
+
+    socket.onmessage = (event) => {
+        const data = new Uint8Array(event.data);
+        const textDecoder = new TextDecoder();
+        term.write(textDecoder.decode(data));
+    };
+
+    socket.onclose = () => {
+      term.write('\r\nConnection closed');
+    };
+
+    socket.onerror = (err) => {
+      console.error('WebSocket error:', err);
+      term.write('\r\nWebSocket error');
+    };
+
+    term.onData(data => {
+      socket.send(data);
+    });
+  </script>
+</body>
+</html>

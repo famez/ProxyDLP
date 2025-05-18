@@ -38,8 +38,11 @@ RUN pip install pillow
 
 RUN pip install pymongo
 
+RUN pip install websockets asyncio
+
 COPY src/ .
 
 
 # Set default command (optional, e.g., for running an app.py script)
 CMD ["tmux", "new", "-As", "mysession", "mitmproxy", "-s", "proxyGPT.py"]
+#CMD ["tmux", "new", "-As", "mysession", "python", "proxyGPT.py"]
