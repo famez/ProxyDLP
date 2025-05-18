@@ -22,7 +22,15 @@ from datetime import datetime
 db_client = MongoClient(os.getenv("MONGO_URI"))
 collection = db_client["proxyGPT"]["events"]
 
+class EmailNotFoundException(Exception):
+    def __init__(self, field, message):
+        self.field = field
+        self.message = message
+        super().__init__(f"Validation error on '{field}': {message}")
 
+files = {}
+
+file_ids = {}
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -111,6 +119,57 @@ def request(flow: http.HTTPFlow) -> None:
                 collection.insert_one(event)
 
                 return
+
+    if flow.request.method == "POST" and flow.request.pretty_url == "https://chatgpt.com/backend-api/files":
+
+        #Get the file reference
+        try:
+            auth_header = flow.request.headers.get("Authorization")
+            email = get_email_from_auth_header(auth_header)
+
+            #Decode json from body
+            json_body = flow.request.json()
+
+            file_name = json_body['file_name']
+
+            files[email] = { "file_name" : file_name }
+
+        except EmailNotFoundException as e:
+            ctx.log.error(f"Email not found on URL: {e}")
+            
+
+    if flow.request.method == "POST" and "chatgpt.com/backend-api/files/process_upload_stream" in flow.request.pretty_url:
+        
+        
+        #Get the file reference
+        try:
+            auth_header = flow.request.headers.get("Authorization")
+            email = get_email_from_auth_header(auth_header)
+
+            #Decode json from body
+            json_body = flow.request.json()
+
+            file_id = json_body['file_id']
+
+            files[email]['filepath'] = file_ids[file_id]['filepath']
+            files[email]['content_type'] = file_ids[file_id]['content_type']
+
+            ctx.log.info(f"File:")
+
+            for key, value in files[email].items():
+                ctx.log.info(f"{key}: {value}")
+
+
+            text, result = analyze_file(files[email]['filepath'], files[email]['content_type'])
+
+            ctx.log.info(f"Leaked data from file: {result}")
+
+            event = {"timestamp": datetime.now(timezone.utc), "rational": "Attached file", "filename" : files[email]['file_name'], "content": text,"leak" : result}
+            collection.insert_one(event)
+
+        except EmailNotFoundException as e:
+            ctx.log.error(f"Email not found on URL: {e}")
+
 
     if flow.request.method == "POST" and "chatgpt.com/backend-anon/conversation" in flow.request.pretty_url:
         # Return JSON response
@@ -223,13 +282,23 @@ def request(flow: http.HTTPFlow) -> None:
             ctx.log.info(f"Saved PUT upload to: {filepath}")
 
             ctx.log.info(f"Analysing file...")
+
+            #Get file id
+
+            file_id = extract_substring_between(flow.request.pretty_url, "oaiusercontent.com/", "?")
+
+            ctx.log.info(f"File id: {file_id}")
+
+            file_ids[file_id] = { "filepath" : filepath, "content_type" : content_type }
+
+            """
             text, result = analyze_file(filepath, content_type)
 
             ctx.log.info(f"Leaked data from file: {result}")
 
             event = {"timestamp": datetime.now(timezone.utc), "rational": "Conversation", "content": text,"leak" : result}
             collection.insert_one(event)
-          
+            """
 
 def decode_jwt(token: str):
     parts = token.split(".")
@@ -245,6 +314,33 @@ def decode_jwt(token: str):
 
 def pad_b64(segment: str) -> str:
     return segment + '=' * (-len(segment) % 4)
+
+def get_email_from_auth_header(auth_header):
+    
+    if auth_header and auth_header.startswith("Bearer "):
+            
+        jwt_token = auth_header[len("Bearer "):].strip()
+        #ctx.log.info(f"JWT Token extracted: {jwt_token}")
+
+        jwt_data = decode_jwt(jwt_token)
+
+        if jwt_data:
+            #ctx.log.info(f"JWT Header: {json.dumps(jwt_data['header'], indent=2)}")
+            #ctx.log.info(f"JWT Payload: {json.dumps(jwt_data['payload'], indent=2)}")
+
+            jwt_payload = jwt_data['payload']
+
+            #Let's check only the email address from the JWT token, 
+            #as the rest of fields are already validated by Chatgpt to 
+            #perform the request (correctly signed, not expired, etc).
+
+            if "https://api.openai.com/profile" in jwt_payload and 'email' in jwt_payload["https://api.openai.com/profile"]:
+
+                email = jwt_payload["https://api.openai.com/profile"]['email']
+                return email
+
+    raise EmailNotFoundException("JWT", "Email not found on jwt token")
+
 
 
 def analyze_text_ner(text):
@@ -348,3 +444,19 @@ def extract_images_from_docx(docx_path, output_folder="extracted_images"):
                     with open(target_path, "wb") as img_file:
                         img_file.write(docx_zip.read(file))
                     print(f"Saved image: {target_path}")
+
+
+def extract_substring_between(s, start, end):
+    
+    # Find the index of the start substring
+    idx1 = s.find(start)
+
+    # Find the index of the end substring, starting after the start substring
+    idx2 = s.find(end, idx1 + len(start))
+
+    # Check if both delimiters are found and extract the substring between them
+    if idx1 != -1 and idx2 != -1:
+        res = s[idx1 + len(start):idx2]
+        return res  # Output: world
+    
+    return ""
