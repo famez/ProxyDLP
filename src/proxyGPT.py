@@ -165,7 +165,7 @@ def request(flow: http.HTTPFlow) -> None:
 
             ctx.log.info(f"Leaked data from file: {result}")
 
-            event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : files[email]['file_name'], "content": text,"leak" : result}
+            event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : files[email]['file_name'], "filepath" : files[email]['filepath'], "content": text,"leak" : result}
             collection.insert_one(event)
 
         except EmailNotFoundException as e:
