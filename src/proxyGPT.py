@@ -191,53 +191,38 @@ def request(flow: http.HTTPFlow) -> None:
 
         #Obtain JWT token to double check that the session is still authorized
         auth_header = flow.request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
+        try:
+            email = get_email_from_auth_header(auth_header)
+
+            if re.match(email_regex, email):
+                ctx.log.info(f"Email address belongs to the organization")
+
+                #Get the text sent to the conversation
+
+                json_body = flow.request.json()
+                conversation_text = json_body["messages"][0]["content"]["parts"][0]
+
+                ctx.log.info(f"Conversation sent: {conversation_text}")
+
+                result = analyze_text(conversation_text)
+
+                ctx.log.info(f"Leaked data from conversation: {result}")
+
+                event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": conversation_text,"leak" : result}
+
+                collection.insert_one(event)
+
+                return
             
-            jwt_token = auth_header[len("Bearer "):].strip()
-            #ctx.log.info(f"JWT Token extracted: {jwt_token}")
+        except EmailNotFoundException as e:
+            ctx.log.error("Email not properly decoded!")
 
-            jwt_data = decode_jwt(jwt_token)
-
-            if jwt_data:
-                #ctx.log.info(f"JWT Header: {json.dumps(jwt_data['header'], indent=2)}")
-                #ctx.log.info(f"JWT Payload: {json.dumps(jwt_data['payload'], indent=2)}")
-
-                jwt_payload = jwt_data['payload']
-
-                #Let's check only the email address from the JWT token, 
-                #as the rest of fields are already validated by Chatgpt to 
-                #perform the request (correctly signed, not expired, etc).
-
-                if "https://api.openai.com/profile" in jwt_payload and 'email' in jwt_payload["https://api.openai.com/profile"]:
-
-                    email = jwt_payload["https://api.openai.com/profile"]['email']
-
-                    if re.match(email_regex, email):
-                        ctx.log.info(f"Email address belongs to the organization")
-
-                        #Get the text sent to the conversation
-
-                        json_body = flow.request.json()
-                        conversation_text = json_body["messages"][0]["content"]["parts"][0]
-
-                        ctx.log.info(f"Conversation sent: {conversation_text}")
-
-                        result = analyze_text(conversation_text)
-
-                        ctx.log.info(f"Leaked data from conversation: {result}")
-
-                        event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": conversation_text,"leak" : result}
-
-                        collection.insert_one(event)
-
-                        return
-
-            ctx.log.info("JWT token checks failed!")
-            flow.response = Response.make(
-                403,
-                b"Blocked by proxy",  # Body
-                {"Content-Type": "text/plain"}  # Headers
-            )
+        ctx.log.info("JWT token checks failed!")
+        flow.response = Response.make(
+            403,
+            b"Blocked by proxy",  # Body
+            {"Content-Type": "text/plain"}  # Headers
+        )
 
 
     #File being uploaded to ChatGPT.
