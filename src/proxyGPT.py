@@ -17,6 +17,7 @@ from sentence_transformers import SentenceTransformer, util
 import spacy
 from pymongo import MongoClient
 from datetime import datetime
+import uuid
 
 
 db_client = MongoClient(os.getenv("MONGO_URI"))
@@ -246,8 +247,11 @@ def request(flow: http.HTTPFlow) -> None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         if content:
-            # Generate a filename from URL or timestamp
-            filename = f"{timestamp}"
+            # Generate a filename from UUID
+
+            unique_id = uuid.uuid4().hex
+
+            filename = f"{unique_id}"
 
             content_type = flow.request.headers.get("Content-Type", "unknown")
             if content_type == "application/pdf":
