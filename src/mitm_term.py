@@ -2,8 +2,15 @@ import asyncio
 import os, pty, fcntl, termios, signal, sys
 import threading
 import websockets
+import json
+import struct
 
-# ── 1. Your async handler ──────────────────────────────────────────────────────
+
+def set_pty_winsize(fd, rows, cols):
+    winsize = struct.pack("HHHH", rows, cols, 0, 0)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
+
+
 async def echo(websocket, path):
     """
     Echo every message back to the client, prefixing it for clarity.
@@ -11,9 +18,6 @@ async def echo(websocket, path):
     async for msg in websocket:
         await websocket.send(f"Echo: {msg}")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Low-level helper: spawn bash in a new PTY and return (child_pid, master_fd)
-# ──────────────────────────────────────────────────────────────────────────────
 def spawn_pty_shell(argv: list[str] | None = None):
     if argv is None:
         #argv = ["/bin/bash", "--login"]
@@ -27,9 +31,6 @@ def spawn_pty_shell(argv: list[str] | None = None):
         fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         return pid, master_fd
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Per-connection handler
-# ──────────────────────────────────────────────────────────────────────────────
 async def pty_session(websocket):
     child_pid, master_fd = spawn_pty_shell()
     loop = asyncio.get_running_loop()
@@ -56,6 +57,14 @@ async def pty_session(websocket):
         try:
             async for msg in websocket:
                 if isinstance(msg, str):
+                    try:
+                        data = json.loads(msg)
+                        if isinstance(data, dict) and data.get("type") == "resize":
+                            set_pty_winsize(master_fd, int(data["rows"]), int(data["cols"]))
+                            continue
+                    except Exception:
+                        pass
+
                     #print(f"Received message {msg}")
                     os.write(master_fd, msg.encode())
                 else:                # already bytes
@@ -73,7 +82,6 @@ async def pty_session(websocket):
         pass
     os.close(master_fd)
 
-# ── 2. The thread target: create *its own* event-loop ──────────────────────────
 def run_ws_server(host='0.0.0.0', port=8765):
     async def echo(websocket):
         async for msg in websocket:
@@ -90,6 +98,5 @@ def run_ws_server(host='0.0.0.0', port=8765):
 
 
 def launch_ws_term():
-    # ── 3. Kick off the server in a daemon thread ─────────────────────────────────
     ws_thread = threading.Thread(target=run_ws_server, daemon=True, name="WS-Server")
     ws_thread.start()

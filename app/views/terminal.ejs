@@ -5,23 +5,27 @@
   <title>Docker tmux Terminal</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
   <style>
-    body {
-      margin: 0;
-      background: #000;
-    }
-    #terminal {
-      width: 100vw;
-      height: 100vh;
-    }
+    body, html { margin: 0; height: 100%; }
+    #terminal { height: 100vh; width: 100vw; }
   </style>
 </head>
 <body>
   <div id="terminal"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
   <script>
     const term = new Terminal();
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+
     term.open(document.getElementById('terminal'));
+
+    window.addEventListener("resize", () => {
+      fitAddon.fit();
+    });
+
 
     const socket = new WebSocket('ws://' + window.location.hostname + ':8765');
     socket.binaryType = 'arraybuffer';
@@ -48,6 +52,22 @@
     term.onData(data => {
       socket.send(data);
     });
+
+    // Handle terminal resize and send to server (optional)
+    term.onResize(({cols, rows}) => {
+        socket.send(JSON.stringify({type: 'resize', cols, rows}));
+    });
+
+    const ro = new ResizeObserver(() => {
+      fitAddon.fit();  // this sets correct term.cols/rows
+      socket.send(JSON.stringify({
+        type: "resize",
+        cols: term.cols,
+        rows: term.rows
+      }));
+    });
+    ro.observe(container);
+
   </script>
 </body>
 </html>
