@@ -1,6 +1,45 @@
-<h2>Users connected in the last 30 minutes</h2>
-<ul>
-  <% users.forEach(function(user) { %>
-    <li><%= user %></li>
-  <% }) %>
-</ul>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Active Users (Last 30 min)</title>
+  <!-- Tailwind CSS CDN for rapid styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Subtle pulsing animation for new/first item */
+    @keyframes pulseList {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+    li[data-pulse="true"] {
+      animation: pulseList 2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 min-h-screen flex items-center justify-center p-4">
+  <div class="backdrop-blur-md bg-white/70 shadow-2xl rounded-2xl w-full max-w-lg p-8">
+    <h2 class="text-3xl font-semibold text-indigo-700 text-center mb-6 tracking-wide flex items-center justify-center gap-2">
+      <!-- Heroicon: user group -->
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a7 7 0 00-14 0v2h5" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 12a5 5 0 100-10 5 5 0 000 10z" />
+      </svg>
+      Users connected in the last&nbsp;30&nbsp;minutes
+    </h2>
+
+    <!-- Dynamic list rendered by EJS -->
+    <ul class="space-y-3">
+      <% users.forEach(function(user, idx) { %>
+        <li class="flex items-center gap-4 p-4 bg-white shadow-sm rounded-xl border border-indigo-100 hover:shadow-md transition-shadow duration-300" data-pulse="<%= idx === 0 %>">
+          <!-- Avatar with user initial -->
+          <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center text-lg font-semibold shadow-inner">
+            <%= user.charAt(0).toUpperCase() %>
+          </div>
+          <span class="text-gray-700 font-medium"><%= user %></span>
+        </li>
+      <% }) %>
+    </ul>
+  </div>
+</body>
+</html>
