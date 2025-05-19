@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title><%= title %></title>
+  <link href="https://cdn.tailwindcss.com" rel="stylesheet" />
+</head>
+<body class="flex h-screen bg-gray-100">
+
+  <!-- Sidebar -->
+  <aside class="w-64 bg-white shadow-md p-4">
+    <h2 class="text-xl font-bold mb-6">Admin Panel</h2>
+    <nav class="space-y-4">
+      <a href="/terminal" class="block px-4 py-2 rounded hover:bg-indigo-100">MITMPROXY Terminal</a>
+      <a href="/users" class="block px-4 py-2 rounded hover:bg-indigo-100">Users</a>
+      <a href="/settings" class="block px-4 py-2 rounded hover:bg-indigo-100">Settings</a>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 p-8 overflow-auto">
+    <%- body %>
+  </main>
+
+</body>
+</html>
