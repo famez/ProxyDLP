@@ -39,7 +39,7 @@ file_ids = {}
 
 nlp = spacy.load("en_core_web_sm")
 
-allowed_domain = "actiasystems.com"      #Change by your org domain, such as contoso.com
+allowed_domain = "gmail.com"      #Change by your org domain, such as contoso.com
 
 email_regex = r'^[a-zA-Z0-9._%+-]+@' + allowed_domain + '$'
 
