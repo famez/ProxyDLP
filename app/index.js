@@ -14,6 +14,11 @@ app.use(express.static('public'));
 app.set('views', path.join(__dirname, 'views'));
 
 
+app.get('/', (req, res) => {
+  res.render('welcome', { title: 'Welcome' });
+});
+
+
 app.get('/users', async (req, res) => {
 
   try {

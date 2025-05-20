@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <title>MITMPROXY Terminal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
   <style>
     body, html { margin: 0; height: 100%; }
     #terminal { height: 100vh; width: 100vw; }
   </style>
 </head>
-<body>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 min-h-screen flex items-center justify-center p-4">
   <div id="terminal"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
