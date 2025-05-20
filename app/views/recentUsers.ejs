@@ -36,7 +36,7 @@
           <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center text-lg font-semibold shadow-inner">
             <%= user.charAt(0).toUpperCase() %>
           </div>
-          <span class="text-gray-700 font-medium"><%= user %></span>
+          <a href="/user/<%= user %>" class="text-gray-700 font-medium hover:text-indigo-600 transition-colors duration-200"><%= user %></a>
         </li>
       <% }) %>
     </ul>

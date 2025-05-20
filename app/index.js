@@ -47,9 +47,20 @@ app.get('/users', async (req, res) => {
 
 });
 
-
 app.get('/terminal', (req, res) => {
   res.render('terminal', { title: 'Terminal' }); // renders views/terminal.ejs
+});
+
+app.get('/user/:username', (req, res) => {
+  const username = req.params.username;
+  const actions = [
+    { timestamp: '2025-05-19 10:23', title: 'Logged In', description: 'User logged into the system.' },
+    { timestamp: '2025-05-19 10:30', title: 'Updated Profile', description: 'Changed profile picture and bio.' },
+    // more actions...
+  ];
+
+  // Fetch user data if needed
+  res.render('user', { title: username + ' activity', username, actions });
 });
 
 app.listen(PORT, () => {
