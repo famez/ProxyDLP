@@ -37,7 +37,7 @@ app.get('/users', async (req, res) => {
       // Map to get an array of emails
       const users = recentUsers.map(u => u._id);
 
-      res.render('recentUsers', { title: 'Users', users });
+      res.render('users', { title: 'Users', users });
 
 
 
