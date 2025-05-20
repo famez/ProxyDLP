@@ -14,6 +14,23 @@ app.use(express.static('public'));
 app.set('views', path.join(__dirname, 'views'));
 
 
+async function connectToDB() {
+  const client = new MongoClient(mongoUri);
+  await client.connect();
+  const db = client.db('proxyGPT');
+  const collection = db.collection('events');
+  
+  return { client, collection };
+}
+
+async function getUserEvents(username) {
+  const { client, collection } = await connectToDB();
+  const events = await collection.find({ user: username }).toArray();
+  await client.close();
+  return events;
+}
+
+
 app.get('/', (req, res) => {
   res.render('welcome', { title: 'Welcome' });
 });
@@ -22,12 +39,10 @@ app.get('/', (req, res) => {
 app.get('/users', async (req, res) => {
 
   try {
-      const client = new MongoClient(mongoUri);
-      await client.connect();
-      const db = client.db('proxyGPT');
-      const collection = db.collection('events');
+      
+      const { client, collection } = await connectToDB();
 
-      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+      const thirtyMinutesAgo = new Date(Date.now() - 30000 * 60 * 1000);
 
       const recentUsers = await collection.aggregate([
         { $match: { timestamp: { $gte: thirtyMinutesAgo } } },
@@ -37,9 +52,11 @@ app.get('/users', async (req, res) => {
       // Map to get an array of emails
       const users = recentUsers.map(u => u._id);
 
+      //console.log("Users: "+ users);
+
       res.render('users', { title: 'Users', users });
 
-
+      await client.close();
 
     } catch (err) {
       res.status(500).send('Error connecting to MongoDB: ' + err.message);
@@ -51,16 +68,22 @@ app.get('/terminal', (req, res) => {
   res.render('terminal', { title: 'Terminal' }); // renders views/terminal.ejs
 });
 
-app.get('/user/:username', (req, res) => {
-  const username = req.params.username;
-  const actions = [
-    { timestamp: '2025-05-19 10:23', title: 'Logged In', description: 'User logged into the system.' },
-    { timestamp: '2025-05-19 10:30', title: 'Updated Profile', description: 'Changed profile picture and bio.' },
-    // more actions...
-  ];
+app.get('/user/:username', async (req, res) => {
 
-  // Fetch user data if needed
-  res.render('user', { title: username + ' activity', username, actions });
+  const username = req.params.username;
+
+  try {
+      
+    events = await getUserEvents(username);
+
+    // Fetch user data if needed
+    res.render('user', { title: username + ' activity', username, events });
+
+
+  } catch (err) {
+      res.status(500).send('Error connecting to MongoDB: ' + err.message);
+    }
+  
 });
 
 app.listen(PORT, () => {
