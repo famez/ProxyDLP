@@ -42,7 +42,9 @@
 
     <% if (events && events.length > 0) { %>
       <ol class="relative border-l-2 border-indigo-300 pl-6 space-y-8">
-        <% events.forEach(function (event, idx) { %>
+        <% for (let idx = events.length - 1; idx >= 0; idx--) { 
+          let event = events[idx]; 
+        %>
           <li data-pulse="<%= idx === 0 %>">
             <div class="absolute w-4 h-4 bg-indigo-500 rounded-full -left-2 border-2 border-white"></div>
             <time class="block text-sm text-gray-500"><%= event.timestamp %></time>
@@ -72,7 +74,7 @@
               <% }) %>
             <% } %>
           </li>
-        <% }) %>
+        <% } %>
       </ol>
     <% } else { %>
       <p class="text-gray-600">No events found for this user.</p>
