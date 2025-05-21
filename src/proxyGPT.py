@@ -335,11 +335,11 @@ def analyze_text_ner(text):
         
     
 def analyze_text_cosine_similarity(text):
-    similarities = []
+    similarities = {}
     feature_embedding = model.encode(text, convert_to_tensor=True)
     for i, label_embedding in enumerate(target_label_embeddings):
         similarity = util.cos_sim(feature_embedding, label_embedding).item()
-        similarities.append({target_labels[i] : similarity})
+        similarities[target_labels[i]] = similarity
 
     return similarities
 
@@ -353,13 +353,14 @@ def analyze_text(text):
 
 #Returns string of leak type, empty string otherwise.
 def analyze_text_regex(text):
-
+    regexes = {}
     for line in text.splitlines():
         for regex in regex_list:
-            if re.match(regex[1], line):
-                return regex
+            match = re.search(regex[1], line)
+            if match:
+                regexes[match.group()] = regex[0]
         
-    return ""
+    return regexes
 
 def decode_file(filepath, content_type):
 
