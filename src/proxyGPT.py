@@ -168,7 +168,7 @@ def request(flow: http.HTTPFlow) -> None:
 
             text, result = analyze_file(files[email]['filepath'], files[email]['content_type'])
 
-            ctx.log.info(f"Leaked data from file: {result}")
+            #ctx.log.info(f"Leaked data from file: {result}")
 
             event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : files[email]['file_name'], "filepath" : files[email]['filepath'], "content": text,"leak" : result}
             collection.insert_one(event)
@@ -210,7 +210,7 @@ def request(flow: http.HTTPFlow) -> None:
 
                 result = analyze_text(conversation_text)
 
-                ctx.log.info(f"Leaked data from conversation: {result}")
+                #ctx.log.info(f"Leaked data from conversation: {result}")
 
                 event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": conversation_text,"leak" : result}
 
@@ -331,23 +331,24 @@ def get_email_from_auth_header(auth_header):
 
 def analyze_text_ner(text):
     doc = nlp(text)
-    return " ".join(ent.label_ for ent in doc.ents)
+    return {ent.text: ent.label_ for ent in doc.ents}
         
     
 def analyze_text_cosine_similarity(text):
+    similarities = []
     feature_embedding = model.encode(text, convert_to_tensor=True)
     for i, label_embedding in enumerate(target_label_embeddings):
         similarity = util.cos_sim(feature_embedding, label_embedding).item()
-        if similarity > 0.40:
-            return target_labels[i]
-    return ""
+        similarities.append({target_labels[i] : similarity})
+
+    return similarities
 
 
 def analyze_text(text):
-    retVal = ""
-    retVal += analyze_text_regex(text) + " "
-    retVal += analyze_text_ner(text) + " "
-    retVal += analyze_text_cosine_similarity(text) + " "
+    retVal = {}
+    retVal['regex'] = analyze_text_regex(text)
+    retVal['ner'] = analyze_text_ner(text)
+    retVal['cos_sim'] = analyze_text_cosine_similarity(text)
     return retVal
 
 #Returns string of leak type, empty string otherwise.
@@ -356,7 +357,7 @@ def analyze_text_regex(text):
     for line in text.splitlines():
         for regex in regex_list:
             if re.match(regex[1], line):
-                return regex[0]
+                return regex
         
     return ""
 
