@@ -21,7 +21,7 @@ async def echo(websocket, path):
 def spawn_pty_shell(argv: list[str] | None = None):
     if argv is None:
         #argv = ["/bin/bash", "--login"]
-        argv = ["tmux", "attach-session", "-t", "mysession"]
+        argv = ["tmux", "attach-session", "-t", "mitmsession"]
     pid, master_fd = pty.fork()
     if pid == 0:                      # ── Child: exec bash ──
         os.execvp(argv[0], argv)
