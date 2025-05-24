@@ -35,6 +35,11 @@ RUN apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 
+RUN openssl genrsa -out /tmp/mitmCA.key 4096
+RUN openssl req -x509 -new -nodes -key /tmp/mitmCA.key -sha256 -days 1825 -out /tmp/mitmCA.pem -subj "/CN=MyMITMProxyCA"
+RUN mkdir ~/.mitmproxy/
+RUN cat /tmp/mitmCA.key /tmp/mitmCA.pem > ~/.mitmproxy/mitmproxy-ca.pem
+
 COPY src/ .
 
 
