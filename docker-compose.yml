@@ -14,6 +14,8 @@ services:
       - mongo
     environment:
       MONGO_URI: mongodb://root:example@mongo:27017/
+    volumes:
+      - uploaded-files:/uploads/
     networks:
       - internal-net
 
@@ -28,6 +30,7 @@ services:
     volumes:
       - mongodb-data:/data/db
       - ./mongo-init:/docker-entrypoint-initdb.d:ro
+      - uploaded-files:/uploads/
     networks:
       - internal-net
 
@@ -41,11 +44,14 @@ services:
       MONGO_URI: mongodb://root:example@mongo:27017/
     depends_on:
       - mongo
+    volumes:
+      - uploaded-files:/uploads/
     networks:
       - internal-net
 
 volumes:
   mongodb-data:
+  uploaded-files:
 
 networks:
   internal-net:

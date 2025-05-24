@@ -3,6 +3,8 @@ const { MongoClient } = require('mongodb');
 const { ObjectId } = require('mongodb');
 const path = require('path');
 const expressLayouts = require('express-ejs-layouts');
+const fs = require('fs');
+
 
 
 const app = express();
@@ -212,6 +214,15 @@ app.post('/rules/:type/edit/:id', async (req, res) => {
   } catch (err) {
     res.status(500).send('Error updating rule');
   }
+});
+
+app.get('/uploads/:file', (req, res) => {
+  
+  const filepath = req.params.file;
+  const filename = req.query.name;
+  console.log("Getting file..." + filepath);
+  res.download("/uploads/" + filepath, filename); // second argument is optional
+
 });
 
 

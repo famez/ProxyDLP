@@ -20,20 +20,40 @@
       display: inline-block;
       margin-right: 0.5rem;
     }
+
+    .download-link {
+      display: inline-block;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #fff;
+      background: linear-gradient(135deg, #6e8efb, #a777e3);
+      border-radius: 25px;
+      text-decoration: none;
+      transition: all 0.25s ease-in-out;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .download-link:hover {
+      background: linear-gradient(135deg, #a777e3, #6e8efb);
+      transform: translateY(-2px);
+    }
+
+    .download-link::after {
+      content: ' ↓';
+      font-size: 12px;
+    }
+
+    .small-link {
+      margin-top: 10px;
+      display: inline-block;
+      color: #aaa;
+      font-size: 12px;
+      text-decoration: underline;
+    }
   </style>
 
-  <% /* Small utility to HTML‑escape any dynamic string */
-     
-     /* Colour classes we will cycle through for tags/labels */
-     const tagColors = [
-       "bg-indigo-100 text-indigo-800",
-       "bg-green-100 text-green-800",
-       "bg-blue-100 text-blue-800",
-       "bg-pink-100 text-pink-800",
-       "bg-yellow-100 text-yellow-800",
-       "bg-purple-100 text-purple-800"
-     ];
-  %>
+
 </head>
 
 <body class="bg-gray-50">
@@ -48,27 +68,31 @@
           <li data-pulse="<%= idx === 0 %>">
             <div class="absolute w-4 h-4 bg-indigo-500 rounded-full -left-2 border-2 border-white"></div>
             <time class="block text-sm text-gray-500"><%= event.timestamp %></time>
-            <div class="mt-1 text-lg font-medium text-gray-800"><%= event.rational %></div>
+            <div class="mt-1 text-lg font-medium text-gray-800"><%= event.rational %>
+            <% if (event.rational == "Attached file") { %>
+              <a href="<%= event.filepath %>?name=<%= event.filename %>" class="download-link" download><%= event.filename %></a>
+            <% } %>
+            </div>
             <p class="text-gray-600"><%= event.content %></p>
             <% if (event.leak) { %>
               <% Object.entries(event.leak.regex).forEach(function ([key, value]) { %>
               <span class="mt-2 tag-container">
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                     <%= key %>: <%= value %>
+                    <%= key %>: <%= value %>
                   </span>
               </span>
               <% }) %>
               <% Object.entries(event.leak.ner).forEach(function ([key, value]) { %>
               <span class="mt-2 tag-container">
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                     <%= key %>: <%= value %>
+                      <%= key %>: <%= value %>
                   </span>
               </span>
               <% }) %>
               <% Object.entries(event.leak.cos_sim).forEach(function ([key, value]) { %>
               <span class="mt-2 tag-container">
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                     <%= key %>: <%= value %>
+                      <%= key %>: <%= value %>
                   </span>
               </span>
               <% }) %>

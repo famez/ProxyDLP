@@ -254,9 +254,7 @@ def request(flow: http.HTTPFlow) -> None:
             elif content_type == "image/vnd.microsoft.icon":
                 filename += ".ico"
 
-            filepath = os.path.join("uploads", filename)
-
-            os.makedirs("uploads", exist_ok=True)
+            filepath = os.path.join("/uploads", filename)
 
             with open(filepath, "wb") as f:
                 f.write(content)
