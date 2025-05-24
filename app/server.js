@@ -1,5 +1,6 @@
 const express = require('express');
 const { MongoClient } = require('mongodb');
+const { ObjectId } = require('mongodb');
 const path = require('path');
 const expressLayouts = require('express-ejs-layouts');
 
@@ -158,6 +159,60 @@ app.post('/rules/topic/add', async (req, res) => {
   }
 });
 
+
+app.post('/rules/:type/delete/:id', async (req, res) => {
+  const { type, id } = req.params;
+
+  const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
+
+  try {
+    const { client, db } = await connectToDB();
+    await db.collection(collection).deleteOne({ _id: new ObjectId(id) });
+    res.redirect('/rules');
+  } catch (err) {
+    console.error('Error deleting rule:', err);
+    res.status(500).send('Error deleting rule');
+  }
+});
+
+app.get('/rules/:type/edit/:id', async (req, res) => {
+  const { type, id } = req.params;
+  const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
+
+  try {
+    const { client, db } = await connectToDB();
+    const rule = await db.collection(collection).findOne({ _id: new ObjectId(id) });
+    if (!rule) return res.status(404).send('Rule not found');
+    res.render('edit_rule', {title: "Edit Rule",  rule, type });
+  } catch (err) {
+    res.status(500).send('Error loading rule: ' + err);
+  }
+});
+
+
+app.post('/rules/:type/edit/:id', async (req, res) => {
+  const { type, id } = req.params;
+  const { name, pattern } = req.body;
+  const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
+
+  // Optional regex validation for regex rules
+  if (type === 'regex') {
+    if (!isValidRegex(pattern)) {
+      return res.status(400).send('Invalid regex pattern.');
+    }
+  }
+
+  try {
+    const { client, db } = await connectToDB();
+    await db.collection(collection).replaceOne(
+      { _id: new ObjectId(id) },
+      { [name]: pattern }
+    );
+    res.redirect('/rules');
+  } catch (err) {
+    res.status(500).send('Error updating rule');
+  }
+});
 
 
 app.listen(PORT, () => {
