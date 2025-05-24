@@ -6,3 +6,8 @@ Separate conversation and file extraction process from monitoring process (match
 Separate the decoding of the different site in different modules, then, register handlers (on_conversation_handle, on_file_upload_handler)
 Add pagination and filters for timeline
 Possibility to investigate conversation or file by clicking on the item
+Add authentication to admin page with JWT token and add authentication to WebSocket also with JWT.
+Expose PAC config file and redirect pages on web server or create nginx server to expose static files.
+Add criticallity to rules
+Add txt files extraction
+Configure allowed domains to login
