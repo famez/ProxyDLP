@@ -15,6 +15,14 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
+function isValidRegex(pattern) {
+  try {
+    new RegExp(pattern);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 
 async function connectToDB() {
@@ -116,6 +124,10 @@ app.post('/rules/regex/add', async (req, res) => {
 
   if (!name || !pattern) {
     return res.status(400).send('Name and pattern are required.');
+  }
+
+  if (!isValidRegex(pattern)) {
+    return res.status(400).send('Invalid regex pattern.');
   }
 
   try {
