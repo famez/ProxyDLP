@@ -2,16 +2,19 @@ services:
   proxy:
     container_name: proxy
     build:
-      context: ./proxy
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: ./proxy/Dockerfile
+    depends_on:
+      monitor:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
     ports:
       - "8080:8080"
       - "8765:8765"
     stdin_open: true
     tty: true
     restart: always
-    depends_on:
-      - mongo
     environment:
       MONGO_URI: mongodb://root:example@mongo:27017/
     volumes:
@@ -23,11 +26,17 @@ services:
   monitor:
     container_name: monitor
     build:
-      context: ./monitor
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: ./monitor/Dockerfile
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50051", "-rpc-timeout=2s"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
     restart: always
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     environment:
       MONGO_URI: mongodb://root:example@mongo:27017/
     volumes:
@@ -39,6 +48,11 @@ services:
     image: mongo:6.0
     container_name: mongodb
     restart: always
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
@@ -59,7 +73,8 @@ services:
     environment:
       MONGO_URI: mongodb://root:example@mongo:27017/
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     volumes:
       - uploaded-files:/uploads/
     networks:

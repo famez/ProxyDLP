@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Copy requirements.txt before other files to leverage Docker cache
-COPY requirements.txt .
+COPY monitor/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --upgrade pip \
@@ -36,6 +36,6 @@ RUN apt-get update && apt-get install -y curl \
 
 RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. monitor.proto
 
-COPY src/ .
+COPY monitor/src/ .
 
 CMD ["python", "monitor.py"]

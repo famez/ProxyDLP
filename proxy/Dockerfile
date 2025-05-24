@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Copy requirements.txt before other files to leverage Docker cache
-COPY requirements.txt .
+COPY proxy/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --upgrade pip \
@@ -27,9 +27,9 @@ RUN cat /tmp/mitmCA.key /tmp/mitmCA.pem > ~/.mitmproxy/mitmproxy-ca.pem
 
 COPY proto/ proto/
 
+
 RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. monitor.proto
 
-
-COPY src/ .
+COPY proxy/src/ .
 
 CMD ["tmux", "new", "-As", "mitmsession", "mitmproxy", "-s", "proxy.py"]
