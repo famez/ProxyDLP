@@ -25,7 +25,10 @@ launch_ws_term()
 
 
 db_client = MongoClient(os.getenv("MONGO_URI"))
-collection = db_client["proxyGPT"]["events"]
+events_collection = db_client["proxyGPT"]["events"]
+regex_collection = db_client["proxyGPT"]["regex_rules"]
+cos_sim_collection = db_client["proxyGPT"]["cos_sim_rules"]
+
 
 class EmailNotFoundException(Exception):
     def __init__(self, field, message):
@@ -43,32 +46,17 @@ allowed_domain = "gmail.com"      #Change by your org domain, such as contoso.co
 
 email_regex = r'^[a-zA-Z0-9._%+-]+@' + allowed_domain + '$'
 
-#Open regex config file
-with open("/etc/proxyGPT/regex.json") as f:
-    regex_list = json.load(f)
-
-regex_list = [(name, re.compile(pattern)) for name, pattern in regex_list]
-
-source_code_patterns = [
-    r'\b(def|function|class)\b\s+\w+\s*\(',     # function or class
-    r'\bimport\s+\w+',                          # import
-    r'\b\w+\s*=\s*.+',                          # assignment
-    r'[{};]',                                   # semicolons/braces
-    r'(//|#|/\*)'                               # comments
-]
-
-#Open cosine similarity strings config file
-with open("/etc/proxyGPT/cos_similarity.json") as f:
-    target_labels = json.load(f)
     
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-target_label_embeddings = []
+target_label_embeddings = {}
 
-for i, label in enumerate(target_labels):
-    target_label_embeddings.append(model.encode(target_labels[i], convert_to_tensor=True))
-
+for target_labels in cos_sim_collection.find():
+    for key, label in target_labels.items():
+        if key != "_id":
+        #print(f"key: {key}, label: {label}")
+            target_label_embeddings[key] = model.encode(label, convert_to_tensor=True)
 
 def request(flow: http.HTTPFlow) -> None:
     # Example: Add a custom header to requests to example.com
@@ -121,7 +109,7 @@ def request(flow: http.HTTPFlow) -> None:
 
                 #Register event into the database.
                 event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Logged in", "detail" : ""}
-                collection.insert_one(event)
+                events_collection.insert_one(event)
 
                 return
 
@@ -171,7 +159,7 @@ def request(flow: http.HTTPFlow) -> None:
             #ctx.log.info(f"Leaked data from file: {result}")
 
             event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : files[email]['file_name'], "filepath" : files[email]['filepath'], "content": text,"leak" : result}
-            collection.insert_one(event)
+            events_collection.insert_one(event)
 
         except EmailNotFoundException as e:
             ctx.log.error(f"Email not found on URL: {e}")
@@ -214,7 +202,7 @@ def request(flow: http.HTTPFlow) -> None:
 
                 event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": conversation_text,"leak" : result}
 
-                collection.insert_one(event)
+                events_collection.insert_one(event)
 
                 return
             
@@ -337,9 +325,9 @@ def analyze_text_ner(text):
 def analyze_text_cosine_similarity(text):
     similarities = {}
     feature_embedding = model.encode(text, convert_to_tensor=True)
-    for i, label_embedding in enumerate(target_label_embeddings):
+    for key, label_embedding in target_label_embeddings.items():
         similarity = util.cos_sim(feature_embedding, label_embedding).item()
-        similarities[target_labels[i]] = similarity
+        similarities[key] = similarity
 
     return similarities
 
@@ -353,12 +341,16 @@ def analyze_text(text):
 
 #Returns string of leak type, empty string otherwise.
 def analyze_text_regex(text):
+
     regexes = {}
-    for line in text.splitlines():
-        for regex in regex_list:
-            match = re.search(regex[1], line)
-            if match:
-                regexes[match.group()] = regex[0]
+    for doc in regex_collection.find():
+        for regex_name, regex_value in doc.items():
+            if regex_name != "_id":
+                compiled_regex = re.compile(regex_value)
+                for line in text.splitlines():
+                    match = re.search(compiled_regex, line)
+                    if match:
+                        regexes[match.group()] = regex_name
         
     return regexes
 

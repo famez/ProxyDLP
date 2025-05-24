@@ -25,7 +25,6 @@ RUN apt-get update && apt-get install -y tmux
 
 RUN mkdir /etc/proxyGPT/
 
-COPY config/* /etc/proxyGPT/
 
 RUN apt-get install -y \
     tesseract-ocr \
