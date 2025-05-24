@@ -42,7 +42,7 @@ app.get('/users', async (req, res) => {
       
       const { client, collection } = await connectToDB();
 
-      const thirtyMinutesAgo = new Date(Date.now() - 30000 * 60 * 1000);
+      const thirtyMinutesAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
       const recentUsers = await collection.aggregate([
         { $match: { timestamp: { $gte: thirtyMinutesAgo } } },
