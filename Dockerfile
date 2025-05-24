@@ -15,9 +15,9 @@ COPY requirements.txt .
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
-RUN pip install pytesseract
-
 RUN python -m spacy download en_core_web_sm
+RUN python -m spacy download es_core_news_sm
+RUN python -m spacy download fr_core_news_sm
 
 RUN apt-get update && apt-get install -y tmux
 
@@ -34,11 +34,6 @@ RUN apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install pillow
-
-RUN pip install pymongo
-
-RUN pip install websockets asyncio
 
 COPY src/ .
 
