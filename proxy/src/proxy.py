@@ -5,18 +5,13 @@ import re
 import base64
 import os
 from datetime import datetime, timezone
-import pymupdf
-from openpyxl import load_workbook
-from docx import Document
-from PIL import Image
-import pytesseract
-import io
-import zipfile
-from sentence_transformers import SentenceTransformer, util
-import spacy
 from pymongo import MongoClient
-from datetime import datetime
 import uuid
+import time
+
+import grpc
+import monitor_pb2
+import monitor_pb2_grpc
 
 
 from mitm_term import launch_ws_term
@@ -26,9 +21,6 @@ launch_ws_term()
 
 db_client = MongoClient(os.getenv("MONGO_URI"))
 events_collection = db_client["proxyGPT"]["events"]
-regex_collection = db_client["proxyGPT"]["regex_rules"]
-cos_sim_collection = db_client["proxyGPT"]["cos_sim_rules"]
-
 
 class EmailNotFoundException(Exception):
     def __init__(self, field, message):
@@ -40,23 +32,12 @@ files = {}
 
 file_ids = {}
 
-nlp = spacy.load("en_core_web_sm")
 
 allowed_domain = "gmail.com"      #Change by your org domain, such as contoso.com
 
 email_regex = r'^[a-zA-Z0-9._%+-]+@' + allowed_domain + '$'
-
     
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
-
-target_label_embeddings = {}
-
-for target_labels in cos_sim_collection.find():
-    for key, label in target_labels.items():
-        if key != "_id":
-        #print(f"key: {key}, label: {label}")
-            target_label_embeddings[key] = model.encode(label, convert_to_tensor=True)
 
 def request(flow: http.HTTPFlow) -> None:
     # Example: Add a custom header to requests to example.com
@@ -152,15 +133,21 @@ def request(flow: http.HTTPFlow) -> None:
             for key, value in files[email].items():
                 ctx.log.info(f"{key}: {value}")
 
-            ctx.log.info(f"Analysing file...")
-
-            text, result = analyze_file(files[email]['filepath'], files[email]['content_type'])
 
             #ctx.log.info(f"Leaked data from file: {result}")
 
             event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : files[email]['file_name'], "filepath" : files[email]['filepath'], 
-                     "content_type": files[email]['content_type'],"content": text,"leak" : result}
-            events_collection.insert_one(event)
+                     "content_type": files[email]['content_type']}
+            
+            result = events_collection.insert_one(event)
+            
+            mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
+
+            ctx.log.info("Sent event to monitor...")
+
+            response = stub.EventAdded(mon_message)
+
+            ctx.log.info(f"Response: {response}")
 
         except EmailNotFoundException as e:
             ctx.log.error(f"Email not found on URL: {e}")
@@ -195,15 +182,19 @@ def request(flow: http.HTTPFlow) -> None:
                 json_body = flow.request.json()
                 conversation_text = json_body["messages"][0]["content"]["parts"][0]
 
-                ctx.log.info(f"Conversation sent: {conversation_text}")
+                #ctx.log.info(f"Conversation sent: {conversation_text}")
 
-                result = analyze_text(conversation_text)
+                event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": conversation_text}
 
-                #ctx.log.info(f"Leaked data from conversation: {result}")
+                result = events_collection.insert_one(event)
 
-                event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": conversation_text,"leak" : result}
+                mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
 
-                events_collection.insert_one(event)
+                ctx.log.info("Sent event to monitor...")
+
+                response = stub.EventAdded(mon_message)
+
+                ctx.log.info(f"Response: {response}")
 
                 return
             
@@ -316,115 +307,6 @@ def get_email_from_auth_header(auth_header):
 
 
 
-def analyze_text_ner(text):
-    doc = nlp(text)
-    return {ent.text: ent.label_ for ent in doc.ents}
-        
-    
-def analyze_text_cosine_similarity(text):
-    similarities = {}
-    feature_embedding = model.encode(text, convert_to_tensor=True)
-    for key, label_embedding in target_label_embeddings.items():
-        similarity = util.cos_sim(feature_embedding, label_embedding).item()
-        similarities[key] = similarity
-
-    return similarities
-
-
-def analyze_text(text):
-    retVal = {}
-    retVal['regex'] = analyze_text_regex(text)
-    retVal['ner'] = analyze_text_ner(text)
-    retVal['cos_sim'] = analyze_text_cosine_similarity(text)
-    return retVal
-
-#Returns string of leak type, empty string otherwise.
-def analyze_text_regex(text):
-
-    regexes = {}
-    for doc in regex_collection.find():
-        for regex_name, regex_value in doc.items():
-            if regex_name != "_id":
-                compiled_regex = re.compile(regex_value)
-                for line in text.splitlines():
-                    match = re.search(compiled_regex, line)
-                    if match:
-                        regexes[match.group()] = regex_name
-        
-    return regexes
-
-def decode_file(filepath, content_type):
-
-    text = ""
-    if content_type == "application/pdf":
-        with pymupdf.open(filepath) as doc:  # open document
-            text = chr(12).join([page.get_text() for page in doc])
-
-            #Extract images and apply OCR
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-                image_list = page.get_images(full=True)
-                print(f"[+] Found {len(image_list)} images on page {page_num}")
-
-                for img_index, img in enumerate(image_list):
-                    xref = img[0]
-                    base_image = doc.extract_image(xref)
-                    image_bytes = base_image["image"]
-                    image = Image.open(io.BytesIO(image_bytes))
-                    text += pytesseract.image_to_string(image)
-                                    
-    elif content_type == "application/vnd.ms-excel" or content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-        workbook = load_workbook(filename=filepath)
-        text_data = []
-    
-        for sheet in workbook.sheetnames:
-            ws = workbook[sheet]
-            for row in ws.iter_rows(values_only=True):
-                row_text = ' '.join([str(cell) for cell in row if cell is not None])
-                text_data.append(row_text)
-        
-        text = '\n'.join(text_data)
-
-    elif content_type == "application/msword" or content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        doc = Document(filepath)
-        text = [para.text for para in doc.paragraphs if para.text.strip()]
-        text = '\n'.join(text)
-
-        extract_images_from_docx(filepath)
-
-
-    elif content_type == "image/jpeg" or content_type == "image/png" or content_type == "image/gif" or content_type == "image/bmp" or content_type == "image/webp" or content_type == "image/svg+xml" or content_type == "image/tiff" or content_type == "image/vnd.microsoft.icon":
-        
-        image = Image.open(filepath)
-        text = pytesseract.image_to_string(image)
-
-
-    
-    return text
-
-
-def analyze_file(filepath, content_type):
-    text = decode_file(filepath, content_type)
-    return text, analyze_text(text)
-
-
-
-def extract_images_from_docx(docx_path, output_folder="extracted_images"):
-    with zipfile.ZipFile(docx_path, 'r') as docx_zip:
-        # Create output folder if it doesn't exist
-        os.makedirs(output_folder, exist_ok=True)
-
-        # Loop through files in the ZIP and extract images
-        for file in docx_zip.namelist():
-            if file.startswith("word/media/"):
-                filename = os.path.basename(file)
-                if filename:  # skip folders
-                    target_path = os.path.join(output_folder, filename)
-                    with open(target_path, "wb") as img_file:
-                        img_file.write(docx_zip.read(file))
-                    print(f"Saved image: {target_path}")
-
-
 def extract_substring_between(s, start, end):
     
     # Find the index of the start substring
@@ -440,3 +322,7 @@ def extract_substring_between(s, start, end):
     
     return ""
 
+
+time.sleep(2)  # Wait for server to be ready
+channel = grpc.insecure_channel('monitor:50051')
+stub = monitor_pb2_grpc.MonitorStub(channel)

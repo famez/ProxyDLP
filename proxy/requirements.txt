@@ -1,0 +1,7 @@
+mitmproxy
+python-magic
+pymongo
+websockets
+asyncio
+grpcio
+grpcio-tools

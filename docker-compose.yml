@@ -1,15 +1,31 @@
 services:
-  proxygpt:
-    container_name: proxygpt
+  proxy:
+    container_name: proxy
     build:
-      context: .
+      context: ./proxy
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
       - "8765:8765"
     stdin_open: true
     tty: true
-    restart: unless-stopped
+    restart: always
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URI: mongodb://root:example@mongo:27017/
+    volumes:
+      - uploaded-files:/uploads/
+    networks:
+      - internal-net
+
+
+  monitor:
+    container_name: monitor
+    build:
+      context: ./monitor
+      dockerfile: Dockerfile
+    restart: always
     depends_on:
       - mongo
     environment:
@@ -35,7 +51,7 @@ services:
       - internal-net
 
   web-console:
-    build: ./app
+    build: ./web
     container_name: web-console
     restart: always
     ports:

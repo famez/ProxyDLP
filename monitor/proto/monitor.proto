@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package monitor;
+
+service Monitor {
+  rpc EventAdded (EventID) returns (MonitorReply);
+}
+
+message EventID {
+  string id = 1;
+}
+
+message MonitorReply {
+  int32 result = 1;
+}
