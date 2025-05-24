@@ -322,7 +322,5 @@ def extract_substring_between(s, start, end):
     
     return ""
 
-
-time.sleep(2)  # Wait for server to be ready
 channel = grpc.insecure_channel('monitor:50051')
 stub = monitor_pb2_grpc.MonitorStub(channel)

@@ -28,6 +28,12 @@ RUN apt-get update && apt-get install -y \
 
 COPY proto/ proto/
 
+RUN pip install grpcio grpcio-tools grpcio-health-checking
+
+RUN apt-get update && apt-get install -y curl \
+  && curl -L https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.11/grpc_health_probe-linux-amd64 -o /usr/local/bin/grpc_health_probe \
+  && chmod +x /usr/local/bin/grpc_health_probe
+
 RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. monitor.proto
 
 COPY src/ .

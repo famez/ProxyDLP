@@ -18,6 +18,7 @@ import threading
 import time
 import monitor_pb2
 import monitor_pb2_grpc
+from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
 background_executor = futures.ThreadPoolExecutor(max_workers=15)
 
@@ -200,6 +201,13 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 def main():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     monitor_pb2_grpc.add_MonitorServicer_to_server(MonitorServicer(), server)
+
+    #For health check to ensure proper start up of the containers
+    # Add health service
+    health_servicer = health.HealthServicer()
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+    health_servicer.set('', health_pb2.HealthCheckResponse.SERVING)
+
     server.add_insecure_port("[::]:50051")
     server.start()
     print("Server running on port 50051...")
