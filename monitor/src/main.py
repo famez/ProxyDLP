@@ -62,7 +62,6 @@ def analyze_text(text):
     retVal['cos_sim'] = analyze_text_cosine_similarity(text)
     return retVal
 
-#Returns string of leak type, empty string otherwise.
 def analyze_text_regex(text):
 
     regexes = {}
