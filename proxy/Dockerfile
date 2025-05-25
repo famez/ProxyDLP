@@ -32,4 +32,5 @@ RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. monit
 
 COPY proxy/src/ .
 
-CMD ["tmux", "new", "-As", "mitmsession", "mitmproxy", "-s", "proxy.py"]
+CMD ["tmux", "new", "-As", "mitmsession", "mitmproxy", "-s", "main.py"]
+#CMD ["python", "main.py"]

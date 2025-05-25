@@ -38,4 +38,4 @@ RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. monit
 
 COPY monitor/src/ .
 
-CMD ["python", "monitor.py"]
+CMD ["python", "main.py"]
