@@ -20,34 +20,39 @@ launch_ws_term()
 
 db_client = MongoClient(os.getenv("MONGO_URI"))
 events_collection = db_client["proxyGPT"]["events"]
+domains_collection = db_client["proxyGPT"]["domains"]
 
 class EmailNotFoundException(Exception):
     def __init__(self, field, message):
         self.field = field
         self.message = message
         super().__init__(f"Validation error on '{field}': {message}")
-
-
-
-allowed_domain = "gmail.com"      #Change by your org domain, such as contoso.com
-
-email_regex = r'^[a-zA-Z0-9._%+-]+@' + allowed_domain + '$'
     
 
 def account_login_callback(email):
-    if not re.match(email_regex, email):
-        ctx.log.info(f"Email address does not belong to an organization")
-        return False
-    
-    ctx.log.info(f"Corporative user {email} logged in")
-    #Register event into the database.
-    event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Logged in", "detail" : ""}
-    events_collection.insert_one(event)
 
-    return True
+    for domain in domains_collection.find():
+
+        email_regex = r'^[a-zA-Z0-9._%+-]+@' + domain['content'] + '$'
+
+        if re.match(email_regex, email):
+            ctx.log.info(f"Corporative user {email} logged in")
+            #Register event into the database.
+            event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Logged in", "detail" : ""}
+            events_collection.insert_one(event)
+            return True
+
+    ctx.log.info(f"Email address does not belong to an organization")
+    return False
+
+
 
 def account_check_callback(email):
-    return re.match(email_regex, email)
+    for domain in domains_collection.find():
+        email_regex = r'^[a-zA-Z0-9._%+-]+@' + domain['content'] + '$'
+        if re.match(email_regex, email):
+            return True
+    return False
 
 
 def conversation_callback(email, content):

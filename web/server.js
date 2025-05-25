@@ -225,6 +225,54 @@ app.get('/uploads/:file', (req, res) => {
 
 });
 
+app.get('/domains', async (req, res) => {
+
+  try {
+    const { client, db } = await connectToDB();
+    const domains = await db.collection("domains").find().toArray();
+    res.render('domains', { title: "Domains", domains });
+  } catch (err) {
+    res.status(500).send('Error loading rule: ' + err);
+  }
+  
+});
+
+app.post('/domains/delete/:id', async (req, res) => {
+  
+  const id = req.params.id;
+
+  try {
+    const { client, db } = await connectToDB();
+    await db.collection("domains").deleteOne({ _id: new ObjectId(id) });
+    res.redirect('/domains');
+  } catch (err) {
+    console.error('Error deleting domain:', err);
+    res.status(500).send('Error deleting domain');
+  }
+});
+
+app.post('/domains/add', async (req, res) => {
+  const { domain } = req.body;
+
+  if (!domain) {
+    return res.status(400).send('Domain is required.');
+  }
+
+  const regex = /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i;
+
+  if (!regex.test(domain)) {
+    return res.status(400).send('The value provided is not a domain');
+  }
+
+  try {
+    const { client, db } = await connectToDB();
+    await db.collection('domains').insertOne({ content: domain });
+    res.redirect('/domains');
+  } catch (err) {
+    console.error('Error adding domain:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

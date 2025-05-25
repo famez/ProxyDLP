@@ -8,15 +8,12 @@ var regex_rules =
   {"Confidential label": "Contoso S.A - Confidential"}
 ]
 
-
 var cos_sim_rules = 
 [
     {"User manual": "User manual for engineering = YES"},
     {"Specification": "Specification of requirements = YES"},
     {"Assembly Manual": "Assembly instruction = YES"}
 ]
-
-
 
 db = db.getSiblingDB('proxyGPT'); // Creates database 'proxyGPT'
 
@@ -25,6 +22,7 @@ db.createCollection('events');
 db.createCollection('regex_rules');
 db.createCollection('cos_sim_rules');
 
+db.createCollection('domains');
 
 db.regex_rules.insertMany(regex_rules);
 db.cos_sim_rules.insertMany(cos_sim_rules);
