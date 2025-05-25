@@ -156,28 +156,6 @@ class ChatGPT(Site):
                 filename = f"{unique_id}"
 
                 content_type = flow.request.headers.get("Content-Type", "unknown")
-                if content_type == "application/pdf":
-                    filename += ".pdf"
-                elif content_type == "application/vnd.ms-excel" or content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-                    filename += ".xlsx"
-                elif content_type == "application/msword" or content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                    filename += ".docx"
-                elif content_type == "image/jpeg":
-                    filename += ".jpg"
-                elif content_type == "image/png":
-                    filename += ".png"
-                elif content_type == "image/gif":
-                    filename += ".gif"
-                elif content_type == "image/bmp":
-                    filename += ".bmp"
-                elif content_type == "image/webp":
-                    filename += ".webp"
-                elif content_type == "image/svg+xml":
-                    filename += ".svg"
-                elif content_type == "image/tiff":
-                    filename += ".tiff"
-                elif content_type == "image/vnd.microsoft.icon":
-                    filename += ".ico"
 
                 filepath = os.path.join("/uploads", filename)
 
