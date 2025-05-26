@@ -11,9 +11,14 @@ services:
         condition: service_healthy
     ports:
       - "8080:8080"
-      - "8765:8765"
     stdin_open: true
     tty: true
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import socket; s=socket.socket(); s.settimeout(1); s.connect((\"localhost\",8765)); s.close()'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: always
     environment:
       MONGO_URI: mongodb://root:example@mongo:27017/
@@ -21,6 +26,7 @@ services:
       - uploaded-files:/uploads/
     networks:
       - internal-net
+      - web-net
 
   nginx:
     image: nginx:1.28.0
@@ -34,6 +40,8 @@ services:
     restart: always
     depends_on:
       mongo:
+        condition: service_healthy
+      proxy:
         condition: service_healthy
     networks:
       - web-net
