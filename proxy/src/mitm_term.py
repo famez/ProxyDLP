@@ -2,9 +2,12 @@ import asyncio
 import os, pty, fcntl, termios, signal, sys
 import threading
 import websockets
+import ssl
 import json
 import struct
 
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ssl_context.load_cert_chain(certfile="cert.pem", keyfile="key.pem")
 
 def set_pty_winsize(fd, rows, cols):
     winsize = struct.pack("HHHH", rows, cols, 0, 0)
@@ -88,7 +91,7 @@ def run_ws_server(host='0.0.0.0', port=8765):
             await websocket.send(f"Echo: {msg}")
 
     async def start_server():
-        async with websockets.serve(pty_session, host, port):
+        async with websockets.serve(pty_session, host, port, ssl = ssl_context):
             print(f"WebSocket server running at ws://{host}:{port}")
             await asyncio.Future()  # Keep the server running
 

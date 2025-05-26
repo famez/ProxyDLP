@@ -30,6 +30,11 @@ COPY proto/ proto/
 
 RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. monitor.proto
 
+RUN openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+  -keyout key.pem -out cert.pem \
+  -subj "/C=US/ST=Dev/L=Local/O=Example/CN=localhost"
+
+
 COPY proxy/src/ .
 
 CMD ["tmux", "new", "-As", "mitmsession", "mitmproxy", "-s", "main.py"]

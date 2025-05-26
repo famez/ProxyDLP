@@ -28,7 +28,7 @@
     });
 
 
-    const socket = new WebSocket('ws://' + window.location.hostname + ':8765');
+    const socket = new WebSocket('wss://' + window.location.hostname + ':8765');
     socket.binaryType = 'arraybuffer';
 
     socket.onopen = () => {
