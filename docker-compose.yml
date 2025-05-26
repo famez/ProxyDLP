@@ -22,6 +22,21 @@ services:
     networks:
       - internal-net
 
+  nginx:
+    image: nginx:1.28.0
+    container_name: nginx
+    build:
+      context: nginx/
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: always
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - web-net
 
   monitor:
     container_name: monitor
@@ -68,17 +83,22 @@ services:
     build: ./web
     container_name: web-console
     restart: always
-    ports:
-      - "80:80"
     environment:
       MONGO_URI: mongodb://root:example@mongo:27017/
     depends_on:
       mongo:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     volumes:
       - uploaded-files:/uploads/
     networks:
       - internal-net
+      - web-net
 
 volumes:
   mongodb-data:
@@ -86,4 +106,7 @@ volumes:
 
 networks:
   internal-net:
+    driver: bridge
+
+  web-net:
     driver: bridge

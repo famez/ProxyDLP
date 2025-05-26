@@ -8,7 +8,7 @@ const fs = require('fs');
 
 
 const app = express();
-const PORT = 80;
+const PORT = 3000;
 const mongoUri = process.env.MONGO_URI;
 
 app.set('view engine', 'ejs');
