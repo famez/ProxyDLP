@@ -17,12 +17,17 @@ var cos_sim_rules =
 
 db = db.getSiblingDB('proxyGPT'); // Creates database 'proxyGPT'
 
-db.createCollection('events');
+db.createCollection('users');
 
+db.createCollection('events');
 db.createCollection('regex_rules');
 db.createCollection('cos_sim_rules');
-
 db.createCollection('domains');
+
+
+//Insert default admin user
+
+db.users.insertOne({username: "admin", password: "$2a$10$3lKl1v9l8Fe8PtAOCAEiaeXW.fTaCpKyCWJcuD1zELyFi2OZKIZBe"}) //Hashed password for "admin" password
 
 db.regex_rules.insertMany(regex_rules);
 db.cos_sim_rules.insertMany(cos_sim_rules);

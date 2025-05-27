@@ -3,7 +3,10 @@ const { MongoClient } = require('mongodb');
 const { ObjectId } = require('mongodb');
 const path = require('path');
 const expressLayouts = require('express-ejs-layouts');
-const fs = require('fs');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+const authMiddleware = require('./middleware/authMiddleware');
 
 
 
@@ -17,6 +20,7 @@ app.use(express.static('public'));
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(cookieParser());
 
 function isValidRegex(pattern) {
   try {
@@ -57,12 +61,12 @@ async function getTopicMatchRules() {
   return topicRules;
 }
 
-app.get('/', (req, res) => {
+app.get('/', authMiddleware, (req, res) => {
   res.render('welcome', { title: 'Welcome' });
 });
 
 
-app.get('/users', async (req, res) => {
+app.get('/users', authMiddleware, async (req, res) => {
 
   try {
       
@@ -91,11 +95,11 @@ app.get('/users', async (req, res) => {
 
 });
 
-app.get('/terminal', (req, res) => {
+app.get('/terminal', authMiddleware, (req, res) => {
   res.render('terminal', { title: 'Terminal' }); // renders views/terminal.ejs
 });
 
-app.get('/user/:username', async (req, res) => {
+app.get('/user/:username', authMiddleware, async (req, res) => {
 
   const username = req.params.username;
 
@@ -113,7 +117,7 @@ app.get('/user/:username', async (req, res) => {
   
 });
 
-app.get('/rules', async (req, res) => {
+app.get('/rules', authMiddleware, async (req, res) => {
 
   regexRules = await getRegexRules();
   cossimrules = await getTopicMatchRules();
@@ -122,7 +126,7 @@ app.get('/rules', async (req, res) => {
 });
 
 
-app.post('/rules/regex/add', async (req, res) => {
+app.post('/rules/regex/add', authMiddleware, async (req, res) => {
   const { name, pattern } = req.body;
 
   if (!name || !pattern) {
@@ -144,7 +148,7 @@ app.post('/rules/regex/add', async (req, res) => {
 });
 
 
-app.post('/rules/topic/add', async (req, res) => {
+app.post('/rules/topic/add', authMiddleware, async (req, res) => {
   const { name, pattern } = req.body;
 
   if (!name || !pattern) {
@@ -162,7 +166,7 @@ app.post('/rules/topic/add', async (req, res) => {
 });
 
 
-app.post('/rules/:type/delete/:id', async (req, res) => {
+app.post('/rules/:type/delete/:id', authMiddleware, async (req, res) => {
   const { type, id } = req.params;
 
   const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
@@ -177,7 +181,7 @@ app.post('/rules/:type/delete/:id', async (req, res) => {
   }
 });
 
-app.get('/rules/:type/edit/:id', async (req, res) => {
+app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
   const { type, id } = req.params;
   const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
 
@@ -192,7 +196,7 @@ app.get('/rules/:type/edit/:id', async (req, res) => {
 });
 
 
-app.post('/rules/:type/edit/:id', async (req, res) => {
+app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
   const { type, id } = req.params;
   const { name, pattern } = req.body;
   const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
@@ -216,7 +220,7 @@ app.post('/rules/:type/edit/:id', async (req, res) => {
   }
 });
 
-app.get('/uploads/:file', (req, res) => {
+app.get('/uploads/:file', authMiddleware, (req, res) => {
   
   const filepath = req.params.file;
   const filename = req.query.name;
@@ -225,7 +229,7 @@ app.get('/uploads/:file', (req, res) => {
 
 });
 
-app.get('/domains', async (req, res) => {
+app.get('/domains', authMiddleware, async (req, res) => {
 
   try {
     const { client, db } = await connectToDB();
@@ -237,7 +241,7 @@ app.get('/domains', async (req, res) => {
   
 });
 
-app.post('/domains/delete/:id', async (req, res) => {
+app.post('/domains/delete/:id', authMiddleware, async (req, res) => {
   
   const id = req.params.id;
 
@@ -251,7 +255,7 @@ app.post('/domains/delete/:id', async (req, res) => {
   }
 });
 
-app.post('/domains/add', async (req, res) => {
+app.post('/domains/add', authMiddleware, async (req, res) => {
   const { domain } = req.body;
 
   if (!domain) {
@@ -272,6 +276,33 @@ app.post('/domains/add', async (req, res) => {
     console.error('Error adding domain:', err);
     res.status(500).send('Internal Server Error');
   }
+});
+
+app.get('/login', (req, res) => res.render('login', { layout: false }));
+
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    const { client, db } = await connectToDB();
+    const user = await db.collection('users').findOne({ username: username });
+    if (!user) return res.status(401).send('Invalid credentials');
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(401).send('Invalid credentials');
+    const token = jwt.sign({ id: user._id, username }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.cookie('token', token, { httpOnly: true });
+    res.redirect('/');
+
+  } catch (err) {
+    console.error('Error in login:', err);
+    res.status(500).send('Internal Server Error');
+  }
+
+});
+
+app.get('/logout', authMiddleware, (req, res) => {
+  res.clearCookie('token');
+  res.redirect('/login');
 });
 
 app.listen(PORT, () => {
