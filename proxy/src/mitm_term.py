@@ -11,13 +11,6 @@ def set_pty_winsize(fd, rows, cols):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
 
 
-async def echo(websocket, path):
-    """
-    Echo every message back to the client, prefixing it for clarity.
-    """
-    async for msg in websocket:
-        await websocket.send(f"Echo: {msg}")
-
 def spawn_pty_shell(argv: list[str] | None = None):
     if argv is None:
         #argv = ["/bin/bash", "--login"]
