@@ -76,9 +76,7 @@ async def pty_session(websocket):
     os.close(master_fd)
 
 def run_ws_server(host='0.0.0.0', port=8765):
-    async def echo(websocket):
-        async for msg in websocket:
-            await websocket.send(f"Echo: {msg}")
+    
 
     async def start_server():
         async with websockets.serve(pty_session, host, port):
