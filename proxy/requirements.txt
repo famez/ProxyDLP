@@ -5,3 +5,4 @@ websockets
 asyncio
 grpcio
 grpcio-tools
+PyJWT

@@ -4,6 +4,7 @@ import threading
 import websockets
 import json
 import struct
+import jwt
 
 
 def set_pty_winsize(fd, rows, cols):
@@ -28,6 +29,23 @@ async def pty_session(websocket):
     child_pid, master_fd = spawn_pty_shell()
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
+    try:
+        cookies = websocket.request.headers.get('Cookie')
+        cookies = dict(item.strip().split("=", 1) for item in cookies.split(";"))
+
+        secret_key = os.getenv("JWT_SECRET")
+        payload = jwt.decode(cookies['token'], secret_key, algorithms=["HS256"])
+
+    except jwt.ExpiredSignatureError:
+        print("Token has expired.")     #If token expired, then return
+        return
+    except jwt.InvalidTokenError:
+        print("Invalid token.")     #If token invalid, then return
+        return
+    except Exception as e:
+        print("Exception:", e)
+        return
+
 
     async def pty_to_ws():
         try:
