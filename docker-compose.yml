@@ -29,9 +29,9 @@ services:
       - internal-net
       - web-net
 
-  nginx:
+  nginx-server:
     image: nginx:1.28.0
-    container_name: nginx
+    container_name: nginx-server
     build:
       context: nginx/
       dockerfile: Dockerfile
