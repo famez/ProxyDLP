@@ -18,10 +18,10 @@ RUN pip install --upgrade pip \
 
 RUN apt-get update && apt-get install -y tmux
 
-# Copy the rest of your application code
 
-RUN openssl genrsa -out /tmp/mitmCA.key 4096
-RUN openssl req -x509 -new -nodes -key /tmp/mitmCA.key -sha256 -days 1825 -out /tmp/mitmCA.pem -subj "/CN=MyMITMProxyCA"
+COPY proxy/mitmCA.key /tmp/mitmCA.key
+COPY proxy/mitmCA.pem /tmp/mitmCA.pem
+
 RUN mkdir ~/.mitmproxy/
 RUN cat /tmp/mitmCA.key /tmp/mitmCA.pem > ~/.mitmproxy/mitmproxy-ca.pem
 
