@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>User Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 min-h-screen p-6">
+  <div class="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-lg">
+    <h2 class="text-3xl font-bold text-indigo-700 mb-6 text-center">User Management</h2>
+
+    <!-- Add User Form -->
+    <form method="POST" action="/add-user" class="flex flex-col sm:flex-row gap-4 mb-6">
+      <input type="text" name="username" required placeholder="New Username" class="flex-1 px-4 py-2 border rounded-lg">
+      <input type="password" name="password" required placeholder="Password" class="flex-1 px-4 py-2 border rounded-lg">
+      <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition">Add User</button>
+    </form>
+
+    <!-- Users Table -->
+    <div class="overflow-x-auto">
+      <table class="min-w-full bg-white border rounded-lg shadow">
+        <thead>
+          <tr class="bg-indigo-100 text-indigo-700 text-left">
+            <th class="py-3 px-4">Username</th>
+            <th class="py-3 px-4">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach(user => { %>
+            <tr class="border-t">
+              <td class="py-3 px-4"><%= user.username %></td>
+              <td class="py-3 px-4 flex gap-2">
+                <!-- Edit Password -->
+                <form method="POST" action="/update-password" class="flex gap-2 items-center">
+                  <input type="hidden" name="username" value="<%= user.username %>">
+                  <input type="password" name="newPassword" required placeholder="New Password" class="px-2 py-1 border rounded">
+                  <button type="submit" class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600">Update</button>
+                </form>
+
+                <!-- Delete User -->
+                <form method="POST" action="/delete-user" onsubmit="return confirmDelete('<%= user.username %>')">
+                  <input type="hidden" name="username" value="<%= user.username %>">
+                  <button type="submit" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Delete</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</body>
+</html>

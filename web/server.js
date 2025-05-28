@@ -31,6 +31,11 @@ function isValidRegex(pattern) {
   }
 }
 
+function isStrongPassword(password) {
+  const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{12,}$/;
+  return strongPasswordRegex.test(password);
+}
+
 
 async function connectToDB() {
   const client = new MongoClient(mongoUri);
@@ -286,9 +291,9 @@ app.post('/login', async (req, res) => {
   try {
     const { client, db } = await connectToDB();
     const user = await db.collection('users').findOne({ username: username });
-    if (!user) return res.status(401).send('Invalid credentials');
+    if (!user) return res.status(401).redirect('/login');
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).send('Invalid credentials');
+    if (!isMatch) return res.status(401).redirect('/login');
     const token = jwt.sign({ id: user._id, username }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.cookie('token', token, { httpOnly: true });
     res.redirect('/');
@@ -304,6 +309,95 @@ app.get('/logout', authMiddleware, (req, res) => {
   res.clearCookie('token');
   res.redirect('/login');
 });
+
+app.get('/user-management', authMiddleware, async (req, res) => {
+  const { client, db } = await connectToDB();
+  const users = await db.collection('users').find().toArray();  
+  res.render('user-management', {
+    title: "User management",
+    users
+  });
+});
+
+
+app.post('/add-user', authMiddleware, async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const { client, db } = await connectToDB();
+    const user = await db.collection('users').findOne({ username: username });
+
+
+    if (user) {
+      return res.status(400).send("User already exists.");
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).send("Password must be at least 12 characters long and include uppercase, lowercase, number, and special character.");
+    }
+
+    await db.collection('users').insertOne({ username: username, password: await bcrypt.hash(password, 10) });
+    res.redirect('/user-management');
+
+  } catch (err) {
+    console.error('Error in add-user:', err);
+    res.status(500).send('Internal Server Error');
+  }
+
+});
+
+app.post('/update-password', authMiddleware, async (req, res) => {
+
+  const { username, newPassword } = req.body;
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  
+  try {
+    const { client, db } = await connectToDB();
+    const user = await db.collection('users').findOne({ username: username });
+
+    if (!user) {
+      return res.status(400).send("User does not exist.");
+    }
+
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).send("Password must be at least 12 characters long and include uppercase, lowercase, number, and special character.");
+    }
+
+    await db.collection('users').updateOne(
+          { username: username },
+          { $set: { password: hashedPassword } }
+    );
+    res.redirect('/user-management');
+
+  } catch (err) {
+    console.error('Error in update-password:', err);
+    res.status(500).send('Internal Server Error');
+  }
+
+});
+
+app.post('/delete-user', authMiddleware, async (req, res) => {
+  const { username } = req.body;
+
+  // Prevent self-deletion
+  if (username === res.locals.username) {
+    return res.status(400).send("You cannot delete your own account.");
+  }
+
+  try {
+    const { client, db } = await connectToDB();
+    const result = await db.collection('users').deleteOne({ username: username });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send("User not found.");
+    }
+
+    res.redirect('/user-management');
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
