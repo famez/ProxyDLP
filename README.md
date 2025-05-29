@@ -18,7 +18,7 @@ Roadmap
 - Integration with DeepSeek
 - ???
 
-#Instructions
+# Instructions
 
 1. Optional: Generate auto-signed certificate (Root CA used by Mitmproxy to generate certificates on the fly for the sites) with private key and copy them to:
 - ./proxy/mitmCA.key
