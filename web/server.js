@@ -290,7 +290,7 @@ app.post('/login', async (req, res) => {
 
   try {
     const { client, db } = await connectToDB();
-    const user = await db.collection('users').findOne({ username: username });
+    const user = await db.collection('dashboard').findOne({ username: username });
     if (!user) return res.status(401).redirect('/login');
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).redirect('/login');
