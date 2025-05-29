@@ -2,5 +2,6 @@
 nginx/server.crt
 nginx/server.key
 proxy/mitmCA.pem
+proxy/mitmCA.key
 .gitignore
-.gitignore
+.env
