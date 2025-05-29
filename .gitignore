@@ -1,1 +1,6 @@
 *.pyc
+nginx/server.crt
+nginx/server.key
+proxy/mitmCA.pem
+.gitignore
+.gitignore
