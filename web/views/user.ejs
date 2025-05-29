@@ -72,6 +72,7 @@
             <% if (event.rational == "Attached file") { %>
               <a href="<%= event.filepath %>?name=<%= event.filename %>" class="download-link" download><%= event.filename %></a>
             <% } %>
+            <span class="text-sm text-blue-600 italic mt-1"><%= event.site %></span>
             </div>
             <p class="text-gray-600"><%= event.content %></p>
             <% if (event.leak) { %>

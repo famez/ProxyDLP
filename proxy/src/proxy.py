@@ -29,21 +29,37 @@ class EmailNotFoundException(Exception):
         super().__init__(f"Validation error on '{field}': {message}")
 
 class Site:
-    def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback):
+    def __init__(self, name, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback):
+        self.name = name
         self.urls = urls
-        self.account_login_callback = account_login_callback
-        self.account_check_callback = account_check_callback
-        self.conversation_callback = conversation_callback
-        self.attached_file_callback = attached_file_callback
+        self.on_account_login_callback = account_login_callback
+        self.on_account_check_callback = account_check_callback
+        self.on_conversation_callback = conversation_callback
+        self.on_attached_file_callback = attached_file_callback
 
     def get_urls(self):
         return self.urls
+    
+    def get_name(self):
+        return self.name
 
     def handle_request(self, flow):
         self.on_request_handle(flow)
 
     def on_request_handle(self, flow):
         pass        #To be implement by child
+
+    def account_login_callback(self, email):
+        return self.on_account_login_callback(self, email)
+
+    def account_check_callback(self, email):
+        return self.on_account_check_callback(self, email)
+
+    def conversation_callback(self, email, conversation_text):
+        return self.on_conversation_callback(self, email, conversation_text)
+
+    def attached_file_callback(self, email, file_name, filepath, content_type):
+        return self.on_attached_file_callback(self, email, file_name, filepath, content_type)
 
 
 #Helper functions
