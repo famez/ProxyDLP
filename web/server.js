@@ -222,7 +222,8 @@ app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
     const { client, db } = await connectToDB();
     const rule = await db.collection(collection).findOne({ _id: new ObjectId(id) });
     if (!rule) return res.status(404).send('Rule not found');
-    res.render('edit_rule', {title: "Edit Rule",  rule, type });
+    const render_page = type === 'regex' ? 'edit_regex_rule' : 'edit_topic_rule';
+    res.render(render_page, {title: "Edit Rule",  rule });
   } catch (err) {
     res.status(500).send('Error loading rule: ' + err);
   }
@@ -232,7 +233,6 @@ app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
 app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
   const { type, id } = req.params;
   const { name, pattern } = req.body;
-  const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
 
   // Optional regex validation for regex rules
   if (type === 'regex') {
@@ -242,11 +242,21 @@ app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
   }
 
   try {
+
     const { client, db } = await connectToDB();
-    await db.collection(collection).replaceOne(
-      { _id: new ObjectId(id) },
-      { [name]: pattern }
-    );
+
+    if(type === 'regex') {
+      await db.collection('regex_rules').replaceOne(
+        { _id: new ObjectId(id) },
+        { [name]: pattern }
+      );
+    } else {
+      await db.collection('cos_sim_rules').replaceOne(
+        { _id: new ObjectId(id) },
+        { name: name, pattern: pattern }
+      );
+    }
+    
     res.redirect('/rules');
   } catch (err) {
     res.status(500).send('Error updating rule');

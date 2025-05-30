@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Edit Rule</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-8">
+  <div class="max-w-xl mx-auto bg-white shadow-md rounded-lg p-6">
+    <h1 class="text-2xl font-bold mb-4">Edit Topic Rule</h1>
+        <form action="/rules/topic/edit/<%= rule._id %>" method="POST" class="space-y-4">
+        <div>
+            <label class="block text-sm font-medium">Name</label>
+            <input name="name" value="<%= rule.name %>" required class="w-full p-2 border rounded" />
+        </div>
+        <div>
+            <label class="block text-sm font-medium">Pattern</label>
+            <input name="pattern" value="<%= rule.pattern %>" required class="w-full p-2 border rounded font-mono" />
+        </div>
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Update</button>
+        <a href="/rules" class="ml-4 text-gray-600 hover:underline">Cancel</a>
+        </form>
+  </div>
+</body>
+</html>

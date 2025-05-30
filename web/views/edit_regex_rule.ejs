@@ -7,10 +7,10 @@
 </head>
 <body class="bg-gray-100 p-8">
   <div class="max-w-xl mx-auto bg-white shadow-md rounded-lg p-6">
-    <h1 class="text-2xl font-bold mb-4">Edit <%= type === 'regex' ? 'Regex' : 'Topic' %> Rule</h1>
+    <h1 class="text-2xl font-bold mb-4">Edit Regex Rule</h1>
     <% Object.entries(rule).forEach(function ([key, value]) { %>
         <% if (key != "_id") { %>
-        <form action="/rules/<%= type %>/edit/<%= rule._id %>" method="POST" class="space-y-4">
+        <form action="/rules/regex/edit/<%= rule._id %>" method="POST" class="space-y-4">
         <div>
             <label class="block text-sm font-medium">Name</label>
             <input name="name" value="<%= key %>" required class="w-full p-2 border rounded" />

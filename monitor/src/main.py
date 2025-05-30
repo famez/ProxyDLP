@@ -192,6 +192,7 @@ def on_event_added(event_id):
 
 def on_topic_rule_added(topic_rule_id):
     try:
+
         print(f"Started on_topic_rule_added for Topic Rule ID: {topic_rule_id}")
         topic_rule = cos_sim_collection.find_one({'_id': ObjectId(topic_rule_id)})
 
@@ -199,7 +200,12 @@ def on_topic_rule_added(topic_rule_id):
     
         encoded = embeddings_model.encode(topic_rule['pattern'], convert_to_tensor=True)
 
-        print(f"Topic Rule encoded: {encoded}")
+        cos_sim_collection.update_one(
+            {'_id': ObjectId(topic_rule_id)},  # Filter to find the document
+            {'$set': {'embeddings': encoded.tolist()}}  # Field to add or update
+        )
+
+        #print(f"Topic Rule encoded: {encoded}")
 
     except Exception as e:
         # Handle the exception
