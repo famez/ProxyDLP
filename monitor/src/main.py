@@ -121,7 +121,9 @@ def decode_file(filepath, content_type):
         image = Image.open(filepath)
         text = pytesseract.image_to_string(image)
 
-
+    elif content_type == "text/plain":
+        with open(filepath, 'r') as file:
+            text = file.read()
     
     return text
 
