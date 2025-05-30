@@ -13,6 +13,8 @@
     "bcryptjs": "^3.0.2",
     "jsonwebtoken": "^9.0.2",
     "cookie-parser": "^1.4.7",
-    "dotenv": "^16.5.0"
+    "dotenv": "^16.5.0",
+    "@grpc/grpc-js": "^1.13.4",
+    "@grpc/proto-loader": "^0.7.15"
   }
 }

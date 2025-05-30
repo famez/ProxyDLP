@@ -7,6 +7,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const authMiddleware = require('./middleware/authMiddleware');
+const grpc = require('@grpc/grpc-js');
+const protoLoader = require('@grpc/proto-loader');
 
 
 
@@ -21,6 +23,24 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
+
+
+// Load the protobuf
+const packageDefinition = protoLoader.loadSync(
+  path.resolve(__dirname, 'monitor.proto'),
+  {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true
+  }
+);
+
+const proto = grpc.loadPackageDefinition(packageDefinition).monitor;
+
+// Create the client
+const gRPC_client = new proto.Monitor('monitor:50051', grpc.credentials.createInsecure());
 
 function isValidRegex(pattern) {
   try {
@@ -162,7 +182,15 @@ app.post('/rules/topic/add', authMiddleware, async (req, res) => {
 
   try {
     const { client, db } = await connectToDB();
-    await db.collection('cos_sim_rules').insertOne({ [name]: pattern });
+    const result = await db.collection('cos_sim_rules').insertOne({ name: name, pattern: pattern });
+    gRPC_client.TopicRuleAdded({ id: result.insertedId }, (err, response) => {
+      if (err) {
+        console.error('Error:', err);
+      } else {
+        console.log('TopicRuleAdded. Result:', response.message);
+      }
+    });
+
     res.redirect('/rules');
   } catch (err) {
     console.error('Error adding text rule:', err);

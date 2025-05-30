@@ -4,9 +4,15 @@ package monitor;
 
 service Monitor {
   rpc EventAdded (EventID) returns (MonitorReply);
+  rpc TopicRuleAdded (TopicRuleID) returns (MonitorReply);
+
 }
 
 message EventID {
+  string id = 1;
+}
+
+message TopicRuleID {
   string id = 1;
 }
 

@@ -10,9 +10,9 @@ var regex_rules =
 
 var cos_sim_rules = 
 [
-    {"User manual": "User manual for engineering = YES"},
-    {"Specification": "Specification of requirements = YES"},
-    {"Assembly Manual": "Assembly instruction = YES"}
+    {name: "User manual", pattern: "User manual for engineering = YES"},
+    {name: "Specification", pattern: "Specification of requirements = YES"},
+    {name: "Assembly Manual", pattern: "Assembly instruction = YES"},
 ]
 
 db = db.getSiblingDB('proxyGPT'); // Creates database 'proxyGPT'

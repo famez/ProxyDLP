@@ -30,7 +30,7 @@ cos_sim_collection = db_client["proxyGPT"]["cos_sim_rules"]
 
 nlp = spacy.load("en_core_web_sm")
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+embeddings_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 target_label_embeddings = {}
 
@@ -38,7 +38,7 @@ for target_labels in cos_sim_collection.find():
     for key, label in target_labels.items():
         if key != "_id":
         #print(f"key: {key}, label: {label}")
-            target_label_embeddings[key] = model.encode(label, convert_to_tensor=True)
+            target_label_embeddings[key] = embeddings_model.encode(label, convert_to_tensor=True)
 
 def analyze_text_ner(text):
     doc = nlp(text)
@@ -47,7 +47,7 @@ def analyze_text_ner(text):
     
 def analyze_text_cosine_similarity(text):
     similarities = {}
-    feature_embedding = model.encode(text, convert_to_tensor=True)
+    feature_embedding = embeddings_model.encode(text, convert_to_tensor=True)
     for key, label_embedding in target_label_embeddings.items():
         similarity = util.cos_sim(feature_embedding, label_embedding).item()
         similarities[key] = similarity
@@ -148,9 +148,9 @@ def extract_images_from_docx(docx_path, output_folder="extracted_images"):
                     print(f"Saved image: {target_path}")
 
 
-def long_running_task(event_id):
+def on_event_added(event_id):
     try:
-        print(f"Started long task for Event ID: {event_id}")
+        print(f"Started on_event_added for Event ID: {event_id}")
         event = events_collection.find_one({'_id': ObjectId(event_id)})
 
         print(f"Event obtained: {event}")
@@ -190,10 +190,32 @@ def long_running_task(event_id):
         print(f"An error occurred: {e}")
 
 
+def on_topic_rule_added(topic_rule_id):
+    try:
+        print(f"Started on_topic_rule_added for Topic Rule ID: {topic_rule_id}")
+        topic_rule = cos_sim_collection.find_one({'_id': ObjectId(topic_rule_id)})
+
+        print(f"Topic Rule obtained: {topic_rule}")
+    
+        encoded = embeddings_model.encode(topic_rule['pattern'], convert_to_tensor=True)
+
+        print(f"Topic Rule encoded: {encoded}")
+
+    except Exception as e:
+        # Handle the exception
+        print(f"An error occurred: {e}")
+
+
 class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
+
     def EventAdded(self, request, context):
         print(f"Received Event ID: {request.id}")
-        background_executor.submit(long_running_task, request.id)
+        background_executor.submit(on_event_added, request.id)
+        return monitor_pb2.MonitorReply(result=0)       #Everythig ok :)
+    
+    def TopicRuleAdded(self, request, context):
+        print(f"Received Topic Rule ID: {request.id}")
+        background_executor.submit(on_topic_rule_added, request.id)
         return monitor_pb2.MonitorReply(result=0)       #Everythig ok :)
 
 
