@@ -3,7 +3,7 @@
 set -e
 
 # Output directories
-NGINX_DIR="./nginx"
+NGINX_DIR="./nginx_server"
 MITM_DIR="./proxy"
 ENV_FILE=".env"
 

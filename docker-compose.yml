@@ -33,7 +33,7 @@ services:
     image: nginx:1.28.0
     container_name: nginx-server
     build:
-      context: nginx/
+      context: nginx_server/
       dockerfile: Dockerfile
     ports:
       - "80:80"

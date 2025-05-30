@@ -1,6 +1,6 @@
 *.pyc
-nginx/server.crt
-nginx/server.key
+nginx_server/server.crt
+nginx_server/server.key
 proxy/mitmCA.pem
 proxy/mitmCA.key
 .gitignore

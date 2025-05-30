@@ -25,8 +25,8 @@ Roadmap
 - ./proxy/mitmCA.pem
 
 2. Optional: Generate certificate with private key for nginx WEB server signed by CA or autosigned and copy them to:
-- ./nginx/server.key
-- ./nginx/server.crt
+- ./nginx_server/server.key
+- ./nginx_server/server.crt
 
 3. Execute ./generate_secrets.sh. If the previous certificates were not generated, this command will generate and populate auto-signed certificates on the needed folders. This command also creates a random secret key for JWT token generation and MongoDB password.
 
