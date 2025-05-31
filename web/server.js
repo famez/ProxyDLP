@@ -193,8 +193,13 @@ app.post('/rules/topic/add', authMiddleware, async (req, res) => {
 
     res.redirect('/rules');
   } catch (err) {
-    console.error('Error adding text rule:', err);
-    res.status(500).send('Internal Server Error');
+    if (err.code === 11000) {
+      console.error('Error adding topic rule, key duplicated');
+      return res.status(400).send('Cannot add rule, because name is duplicated');  
+    }
+
+    console.error('Error adding topic rule:', err);
+    return res.status(500).send('Internal Server Error');
   }
 });
 

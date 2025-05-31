@@ -24,6 +24,9 @@ db.createCollection('regex_rules');
 db.createCollection('cos_sim_rules');
 db.createCollection('domains');
 
+db.cos_sim_rules.createIndex({ "name": 1 }, { unique: true })
+
+
 
 //Insert default admin user
 
