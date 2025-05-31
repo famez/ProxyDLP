@@ -1,5 +1,4 @@
 from mitmproxy import http, ctx
-from mitmproxy.http import Response
 import re
 import os
 from datetime import datetime, timezone
@@ -10,7 +9,7 @@ import monitor_pb2
 import monitor_pb2_grpc
 
 from proxy import Proxy
-from chatgpt import ChatGPT
+from sites.chatgpt import ChatGPT
 
 
 from mitm_term import launch_ws_term
