@@ -90,10 +90,10 @@
                   </span>
               </span>
               <% }) %>
-              <% Object.entries(event.leak.cos_sim).forEach(function ([key, value]) { %>
+              <% event.leak.topic.forEach(topic => { %>
               <span class="mt-2 tag-container">
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <%= key %>: <%= value %>
+                      <%= topic %>
                   </span>
               </span>
               <% }) %>

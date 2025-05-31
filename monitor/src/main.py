@@ -11,14 +11,13 @@ from sentence_transformers import SentenceTransformer, util
 import spacy
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-
+import numpy as np
 import grpc
 from concurrent import futures
-import threading
-import time
 import monitor_pb2
 import monitor_pb2_grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
+
 
 background_executor = futures.ThreadPoolExecutor(max_workers=15)
 
@@ -32,35 +31,101 @@ nlp = spacy.load("en_core_web_sm")
 
 embeddings_model = SentenceTransformer('all-MiniLM-L6-v2')
 
-target_label_embeddings = {}
 
-for target_labels in cos_sim_collection.find():
-    for key, label in target_labels.items():
-        if key != "_id":
-        #print(f"key: {key}, label: {label}")
-            target_label_embeddings[key] = embeddings_model.encode(label, convert_to_tensor=True)
+def chunk_text(text, chunk_size=500, overlap=50):
+    """Split text into chunks of `chunk_size` with optional `overlap`."""
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), chunk_size - overlap):
+        chunk = ' '.join(words[i:i + chunk_size])
+        chunks.append(chunk)
+    return chunks
+
 
 def analyze_text_ner(text):
     doc = nlp(text)
     return {ent.text: ent.label_ for ent in doc.ents}
+
+
+def detect_global_topics(S, sim_thresh=0.3, min_support=0.3, min_coverage=0.3):
+    """
+    S: np.ndarray of shape (num_topics, num_chunks)
+    Returns: List of topic indices that are 'global'
+    """
+
+    S = np.array(S)
+
+    global_topics = []
+    num_topics, num_chunks = S.shape
+
+    for i in range(num_topics):
+        sim_row = S[i]  # similarities for topic i across chunks
+        high_sim_idxs = np.where(sim_row >= sim_thresh)[0]
+
+        support = len(high_sim_idxs) / num_chunks
+
+        if len(high_sim_idxs) == 0:
+            coverage = 0
+        elif num_chunks == 1:
+            coverage = 1.0
+        else:
+            coverage = (high_sim_idxs[-1] - high_sim_idxs[0]) / (num_chunks - 1)
+
+
+        print(f"Coverage: {coverage}, support: {support}, high_sim_idxs: {high_sim_idxs}")
+
+        if support >= min_support and coverage >= min_coverage:
+            global_topics.append(i)
+
+    return global_topics
+
+
+def analyze_topic_leak(cosine_similarity_matrix):
+
+    #Detect with cosine similarity matrix if a topic is present along the text.
+    global_topics = detect_global_topics(cosine_similarity_matrix["matrix"])
+
+    #Obtain the ObjectIds of the matched topics in MongoDB on the global document.
+    topic_ids = [cosine_similarity_matrix["topics"][i] for i in global_topics]
+
+    #Obtain the name of the topics and return them.
+    topics = [ doc['name'] for doc in cos_sim_collection.find({"_id": {"$in": topic_ids}}) ]
+
+    return topics
         
     
-def analyze_text_cosine_similarity(text):
-    similarities = {}
-    feature_embedding = embeddings_model.encode(text, convert_to_tensor=True)
-    for key, label_embedding in target_label_embeddings.items():
-        similarity = util.cos_sim(feature_embedding, label_embedding).item()
-        similarities[key] = similarity
+def obtain_embeddings_from_text(text):
+    chunks = chunk_text(text)
+    embeddings = embeddings_model.encode(chunks, normalize_embeddings=True)
 
-    return similarities
+    linked_data = [{"chunk": chunk, "embedding": embedding.tolist()} for chunk, embedding in zip(chunks, embeddings)]
+
+    return linked_data
+
+
+def create_cos_sim_matrix(chunk_embeddings):
+    label_embeddings = [ doc['embeddings'] for doc in cos_sim_collection.find() ]
+    embeddings = [ embedding["embedding"] for embedding in chunk_embeddings ]
+
+    #Cosine similarity matrix between topic embeddings and the chunk embeddings
+    S = util.cos_sim(label_embeddings, embeddings)
+    
+    topic_ids = [doc['_id'] for doc in cos_sim_collection.find()]
+
+    cosine_similarity_matrix = {"topics": topic_ids, "matrix": S.tolist()}
+
+    return cosine_similarity_matrix
 
 
 def analyze_text(text):
-    retVal = {}
-    retVal['regex'] = analyze_text_regex(text)
-    retVal['ner'] = analyze_text_ner(text)
-    retVal['cos_sim'] = analyze_text_cosine_similarity(text)
-    return retVal
+    leak = {}
+    leak['regex'] = analyze_text_regex(text)
+    leak['ner'] = analyze_text_ner(text)
+    chunk_embeddings = obtain_embeddings_from_text(text)
+    cosine_similarity_matrix = create_cos_sim_matrix(chunk_embeddings)
+    leak['topic'] = analyze_topic_leak(cosine_similarity_matrix)
+
+    return leak, chunk_embeddings, cosine_similarity_matrix 
 
 def analyze_text_regex(text):
 
@@ -155,28 +220,28 @@ def on_event_added(event_id):
         print(f"Started on_event_added for Event ID: {event_id}")
         event = events_collection.find_one({'_id': ObjectId(event_id)})
 
-        print(f"Event obtained: {event}")
+        print(f"Event obtained")
     
         leak = {}
         result = {}
 
         if event['rational'] == "Conversation":
             print(f"Conversation, analysing: {event['content']}")
-            leak = analyze_text(event['content'])
+            leak, embeddings, cos_sim_matrix = analyze_text(event['content'])
             print(f"Done: {leak}")
 
 
             result = events_collection.update_one(
                 {"_id": ObjectId(event_id)},
-                {"$set": {"leak": leak}}
+                {"$set": {"leak": leak, "embeddings": embeddings, "cos_sim_matrix": cos_sim_matrix}}
             )
 
         elif event['rational'] == "Attached file":
-            text, leak = analyze_file(event['filepath'], event['content_type'])
+            text, leak, embeddings, cos_sim_matrix = analyze_file(event['filepath'], event['content_type'])
 
             result = events_collection.update_one(
                 {"_id": ObjectId(event_id)},
-                {"$set": {"leak": leak, "content": text}}
+                {"$set": {"leak": leak, "content": text, "embeddings": embeddings, "cos_sim_matrix": cos_sim_matrix}}
             )
 
 
@@ -200,7 +265,7 @@ def on_topic_rule_added(topic_rule_id):
 
         print(f"Topic Rule obtained: {topic_rule}")
     
-        encoded = embeddings_model.encode(topic_rule['pattern'], convert_to_tensor=True)
+        encoded = embeddings_model.encode(topic_rule['pattern'], normalize_embeddings=True)
 
         cos_sim_collection.update_one(
             {'_id': ObjectId(topic_rule_id)},  # Filter to find the document
