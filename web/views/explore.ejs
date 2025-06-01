@@ -161,8 +161,8 @@
         <div>
           <label class="block text-xs font-semibold text-gray-600 mb-1">Sort</label>
           <select name="order" class="w-full border rounded p-1">
-            <option value="desc" <%= filters.order !== 'asc' ? 'selected' : '' %>>Oldest first</option>
-            <option value="asc"  <%= filters.order === 'asc'  ? 'selected' : '' %>>Newest first</option>
+            <option value="desc" <%= filters.order !== 'asc' ? 'selected' : '' %>>Newest first</option>
+            <option value="asc"  <%= filters.order === 'asc'  ? 'selected' : '' %>>Oldest first</option>
           </select>
         </div>
 
@@ -178,9 +178,7 @@
     
     <% if (events && events.length > 0) { %>
       <ol class="relative border-l-2 border-indigo-300 pl-6 space-y-8">
-        <% for (let idx = events.length - 1; idx >= 0; idx--) { 
-          let event = events[idx]; 
-        %>
+        <% events.forEach(event => { %>
           <li data-pulse="false" onclick="window.location.href='/event/<%= event._id %>'" class="cursor-pointer hover:bg-indigo-50 transition p-2 rounded" title="View full event">
             <div class="absolute w-4 h-4 bg-indigo-500 rounded-full -left-2 border-2 border-white"></div>
             <time class="block text-sm text-gray-500"><%= event.timestamp %></time>
@@ -225,7 +223,7 @@
               <% }) %>
             <% } %>
           </li>
-        <% } %>
+        <% }) %>
       </ol>
     <% } else { %>
       <p class="text-gray-600">No events found</p>
