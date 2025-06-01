@@ -95,27 +95,10 @@ app.get('/dashboard', authMiddleware, async (req, res) => {
 
   try {
       
-      const { client, db } = await connectToDB();
-
-
-      const thirtyMinutesAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-      const recentUsers = await db.collection('events').aggregate([
-        { $match: { timestamp: { $gte: thirtyMinutesAgo } } },
-        { $group: { _id: "$user" } }
-      ]).toArray();
-
-      // Map to get an array of emails
-      const users = recentUsers.map(u => u._id);
-
-      //console.log("Users: "+ users);
-
-      res.render('dashboard', { title: 'Users', users });
-
-      await client.close();
+      res.render('dashboard', { title: 'Dashboard' });
 
     } catch (err) {
-      res.status(500).send('Error connecting to MongoDB: ' + err.message);
+      res.status(500).send('Error: ' + err.message);
     }
 
 });
@@ -124,20 +107,73 @@ app.get('/terminal', authMiddleware, (req, res) => {
   res.render('terminal', { title: 'Terminal' }); // renders views/terminal.ejs
 });
 
-app.get('/user/:username', authMiddleware, async (req, res) => {
+app.get('/explore', authMiddleware, async (req, res) => {
 
-  const username = req.params.username;
+  const {
+    start, end, user, site, rational,
+    filetype, content, leak, order = 'desc'
+  } = req.query;
+
+  const query = {};
+
+  // Date filter
+  if (start || end) {
+    query.timestamp = {};
+    if (start) query.timestamp.$gte = new Date(start);
+    if (end) query.timestamp.$lte = new Date(end);
+  }
+
+  // Simple text filters with regex (case insensitive)
+  if (user) query.user = { $regex: new RegExp(user, 'i') };
+  if (site) query.site = { $regex: new RegExp(site, 'i') };
+  if (rational) query.rational = { $regex: new RegExp(rational, 'i') };
+  if (content) query.content = { $regex: new RegExp(content, 'i') };
+
+  const sort = { timestamp: order === 'asc' ? 1 : -1 };
+
 
   try {
       
-    events = await getUserEvents(username);
+    const { client, db } = await connectToDB();
+    const event_collection = db.collection('events');
 
-    // Fetch user data if needed
-    res.render('user', { title: username + ' activity', username, events });
+    if (leak) {
+      const leakRegex = new RegExp(leak, 'i');
 
+      // Use aggregation pipeline when filtering by leak keys
+      const pipeline = [
+        { $match: query },
+        { $addFields: {
+            leakRegexArray: { $objectToArray: "$leak.regex" },
+            leakNerArray: { $objectToArray: "$leak.ner" }
+          }
+        },
+        { $match: {
+            $or: [
+              { "leakRegexArray.v": { $regex: leakRegex } },
+              { "leakNerArray.k": { $regex: leakRegex } },
+              { "leak.topic": leakRegex }
+            ]
+          }
+        },
+        { $sort: sort }
+      ];
+
+      const events = await event_collection.aggregate(pipeline).toArray();
+
+      res.render('explore', { title: 'Explore', events,
+        filters: req.query });
+
+    } else {
+      // If no leak filter, simple find + sort
+      const events = await event_collection.find(query).sort(sort).toArray();
+
+      res.render('explore', { title: 'Explore', events,
+        filters: req.query });
+    }
 
   } catch (err) {
-      res.status(500).send('Error connecting to MongoDB: ' + err.message);
+      res.status(500).send('Error: ' + err.message);
     }
   
 });

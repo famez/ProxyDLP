@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Active Users (Last day)</title>
+  <title>Dashboard</title>
   <!-- Tailwind CSS CDN for rapid styling -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -18,28 +18,64 @@
   </style>
 </head>
 <body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 min-h-screen flex items-center justify-center p-4">
-  <div class="backdrop-blur-md bg-white/70 shadow-2xl rounded-2xl w-full max-w-lg p-8">
-    <h2 class="text-3xl font-semibold text-indigo-700 text-center mb-6 tracking-wide flex items-center justify-center gap-2">
-      <!-- Heroicon: user group -->
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a7 7 0 00-14 0v2h5" />
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 12a5 5 0 100-10 5 5 0 000 10z" />
-      </svg>
-      Users connected in the last&nbsp;day&nbsp;
-    </h2>
+  <main class="flex-1 p-8 bg-gray-50">
+  <h2 class="text-3xl font-semibold text-indigo-700 mb-6">Dashboard</h2>
 
-    <!-- Dynamic list rendered by EJS -->
-    <ul class="space-y-3">
-      <% users.forEach(function(user, idx) { %>
-        <li class="flex items-center gap-4 p-4 bg-white shadow-sm rounded-xl border border-indigo-100 hover:shadow-md transition-shadow duration-300" data-pulse="<%= idx === 0 %>">
-          <!-- Avatar with user initial -->
-          <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center text-lg font-semibold shadow-inner">
-            <%= user.charAt(0).toUpperCase() %>
-          </div>
-          <a href="/user/<%= user %>" class="text-gray-700 font-medium hover:text-indigo-600 transition-colors duration-200"><%= user %></a>
-        </li>
-      <% }) %>
-    </ul>
+  <!-- Button Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+
+    <!-- Explore Card -->
+    <a href="/explore"
+       class="group p-6 bg-white rounded-xl shadow hover:shadow-md transition duration-300 border border-indigo-100 flex items-center gap-4 hover:bg-indigo-50">
+      <div class="p-3 bg-indigo-100 text-indigo-700 rounded-full">
+        <!-- Heroicon: user group -->
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17 20h5v-2a7 7 0 00-14 0v2h5"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 12a5 5 0 100-10 5 5 0 000 10z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-lg font-medium text-indigo-700 group-hover:underline">Explore</p>
+        <p class="text-sm text-gray-500">Browse users and activity</p>
+      </div>
+    </a>
+
+    <!-- Statistics Card -->
+    <a href="/statistics"
+       class="group p-6 bg-white rounded-xl shadow hover:shadow-md transition duration-300 border border-indigo-100 flex items-center gap-4 hover:bg-indigo-50">
+      <div class="p-3 bg-indigo-100 text-indigo-700 rounded-full">
+        <!-- Heroicon: chart bar -->
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 17v-6m4 6V7m4 10V4M5 17h14"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-lg font-medium text-indigo-700 group-hover:underline">Statistics</p>
+        <p class="text-sm text-gray-500">View data insights</p>
+      </div>
+    </a>
+
+    <!-- Settings Card -->
+    <!--
+    <a href="/settings"
+       class="group p-6 bg-white rounded-xl shadow hover:shadow-md transition duration-300 border border-indigo-100 flex items-center gap-4 hover:bg-indigo-50">
+      <div class="p-3 bg-indigo-100 text-indigo-700 rounded-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M11 17a4 4 0 104 0 4 4 0 00-4 0zm7.4-2a1.6 1.6 0 01.2-2l-1.4-2.4a1.6 1.6 0 01-.2-2l2-2a1.6 1.6 0 010-2.4l-2-2a1.6 1.6 0 01-2-.2L15 1.6a1.6 1.6 0 01-2-.2L11 0a1.6 1.6 0 01-2 .2L7.6 1.6a1.6 1.6 0 01-2 .2l-2 2a1.6 1.6 0 010 2.4l2 2a1.6 1.6 0 01.2 2L2.6 13a1.6 1.6 0 01.2 2L4.2 17a1.6 1.6 0 012 .2l2 2a1.6 1.6 0 012-.2l2 1.4a1.6 1.6 0 012 .2l2-2a1.6 1.6 0 01.2-2z"/>
+        </svg>
+      </div>
+      <div>
+        <p class="text-lg font-medium text-indigo-700 group-hover:underline">Settings</p>
+        <p class="text-sm text-gray-500">Configure your preferences</p>
+      </div>
+    </a>
+    -->
+
   </div>
+</main>
 </body>
 </html>
