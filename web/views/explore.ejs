@@ -187,7 +187,9 @@
             <div class="mt-1 text-lg font-medium text-gray-800">
               <%= event.rational %>
             <% if (event.rational == "Attached file") { %>
-              <a href="<%= event.filepath %>?name=<%= event.filename %>" class="download-link" download><%= event.filename %></a>
+              <a href="<%= event.filepath %>?name=<%= event.filename %>" class="download-link" download onclick="event.stopPropagation();">
+                <%= event.filename %>
+              </a>
             <% } %>
             <span class="text-sm text-blue-600 italic mt-1"><%= event.site %></span>
             <% if (event.user) { %>
