@@ -181,7 +181,7 @@
         <% for (let idx = events.length - 1; idx >= 0; idx--) { 
           let event = events[idx]; 
         %>
-          <li data-pulse="<%= idx === 0 %>">
+          <li data-pulse="false" onclick="window.location.href='/event/<%= event._id %>'" class="cursor-pointer hover:bg-indigo-50 transition p-2 rounded" title="View full event">
             <div class="absolute w-4 h-4 bg-indigo-500 rounded-full -left-2 border-2 border-white"></div>
             <time class="block text-sm text-gray-500"><%= event.timestamp %></time>
             <div class="mt-1 text-lg font-medium text-gray-800">
@@ -195,7 +195,9 @@
             <% } %>
             </div>
             <p class="text-gray-600">
-              <%= event.content.length > 100 ? event.content.slice(0, 100) + '…' : event.content %>
+              <% if (event.content) { %>
+                <%= event.content.length > 100 ? event.content.slice(0, 100) + '…' : event.content %>
+              <% } %>
             </p>
             <% if (event.leak) { %>
               <% Object.entries(event.leak.regex).forEach(function ([key, value]) { %>
@@ -279,5 +281,15 @@ setupAutocomplete({ inputId: 'siteInput', listId: 'siteSuggestions', field: 'sit
 setupAutocomplete({ inputId: 'rationalInput', listId: 'rationalSuggestions', field: 'rational' });
 setupAutocomplete({ inputId: 'filenameInput', listId: 'filenameSuggestions', field: 'filename' });
 setupAutocomplete({ inputId: 'filetypeInput', listId: 'filetypeSuggestions', field: 'content_type' });
+
+document.querySelectorAll("ol li").forEach(li => {
+  li.addEventListener("mouseenter", () => {
+    li.setAttribute("data-pulse", "true");
+  });
+  li.addEventListener("mouseleave", () => {
+    li.setAttribute("data-pulse", "false");
+  });
+});
+
 
 </script>

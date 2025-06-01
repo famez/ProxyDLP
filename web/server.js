@@ -509,6 +509,23 @@ app.get('/api/options', authMiddleware, async (req, res) => {
   } 
 });
 
+app.get('/event/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+
+    const { client, db } = await connectToDB();
+    const events_collection = db.collection('events');
+    const event = await events_collection.findOne({ _id: new ObjectId(id) });
+    if (!event) return res.status(404).send('Event not found');
+    res.render('event-detail', { title: "Event detail", event });
+  } catch (err) {
+    console.error('Error fetching event:', err);
+    res.status(500).send('Internal Server Error');
+  }
+
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
