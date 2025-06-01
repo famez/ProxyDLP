@@ -242,7 +242,7 @@ def on_event_added(event_id):
             )
 
         elif event['rational'] == "Attached file":
-            text, leak, embeddings, cos_sim_matrix = analyze_file(event['filepath'], event['content_type'])
+            text, (leak, embeddings, cos_sim_matrix) = analyze_file(event['filepath'], event['content_type'])
 
             result = events_collection.update_one(
                 {"_id": ObjectId(event_id)},
