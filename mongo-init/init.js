@@ -8,13 +8,6 @@ var regex_rules =
   {"Confidential label": "Contoso S.A - Confidential"}
 ]
 
-var cos_sim_rules = 
-[
-    {name: "User manual", pattern: "User manual for engineering = YES"},
-    {name: "Specification", pattern: "Specification of requirements = YES"},
-    {name: "Assembly Manual", pattern: "Assembly instruction = YES"},
-]
-
 db = db.getSiblingDB('proxyGPT'); // Creates database 'proxyGPT'
 
 db.createCollection('users');
@@ -33,4 +26,3 @@ db.cos_sim_rules.createIndex({ "name": 1 }, { unique: true })
 db.users.insertOne({username: "admin", password: "$2a$10$3lKl1v9l8Fe8PtAOCAEiaeXW.fTaCpKyCWJcuD1zELyFi2OZKIZBe"}) //Hashed password for "admin" password
 
 db.regex_rules.insertMany(regex_rules);
-db.cos_sim_rules.insertMany(cos_sim_rules);

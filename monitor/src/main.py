@@ -123,8 +123,12 @@ def analyze_text(text):
     #leak['ner'] = analyze_text_ner(text)
     leak['ner'] = {}                    #For the moment, don't use NER as it does not provide useful information.
     chunk_embeddings = obtain_embeddings_from_text(text)
-    cosine_similarity_matrix = create_cos_sim_matrix(chunk_embeddings)
-    leak['topic'] = analyze_topic_leak(cosine_similarity_matrix)
+    if cos_sim_collection.count_documents({}) == 0:     #If no topics to compare with, then return empty dicts.
+        cosine_similarity_matrix = {}
+        leak['topic'] = []
+    else:
+        cosine_similarity_matrix = create_cos_sim_matrix(chunk_embeddings)
+        leak['topic'] = analyze_topic_leak(cosine_similarity_matrix)
 
     return leak, chunk_embeddings, cosine_similarity_matrix 
 
