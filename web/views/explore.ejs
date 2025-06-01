@@ -76,31 +76,71 @@
         </div>
 
         <!-- User -->
-        <div>
+
+        <div class="relative">
           <label class="block text-xs font-semibold text-gray-600 mb-1">User</label>
-          <input  type="text" name="user" placeholder="username / email"
-                  value="<%= filters.user || '' %>" class="w-full border rounded p-1" />
+          <input id="userInput" type="text" name="user"
+                placeholder="username / email"
+                value="<%= filters.user || '' %>"
+                class="border p-2 rounded w-full"
+                autocomplete="off" />
+
+          <ul id="userSuggestions"
+              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
+            <!-- Suggestions will appear here -->
+          </ul>
         </div>
 
         <!-- Site -->
-        <div>
+        <div class="relative">
           <label class="block text-xs font-semibold text-gray-600 mb-1">Site</label>
-          <input  type="text" name="site" value="<%= filters.site || '' %>"
-                  class="w-full border rounded p-1" />
+          <input id="siteInput" type="text" name="site"
+                placeholder="e.g. ChatGPT"
+                value="<%= filters.site || '' %>"
+                class="border p-2 rounded w-full"
+                autocomplete="off" />
+          <ul id="siteSuggestions"
+              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
+          </ul>
         </div>
 
         <!-- Rational -->
-        <div>
+        <div class="relative">
           <label class="block text-xs font-semibold text-gray-600 mb-1">Rational</label>
-          <input  type="text" name="rational" value="<%= filters.rational || '' %>"
-                  class="w-full border rounded p-1" />
+          <input id="rationalInput" type="text" name="rational"
+                placeholder="e.g. Conversation"
+                value="<%= filters.rational || '' %>"
+                class="border p-2 rounded w-full"
+                autocomplete="off" />
+          <ul id="rationalSuggestions"
+              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
+          </ul>
+        </div>
+
+        <!-- Filename -->
+        <div class="relative">
+          <label class="block text-xs font-semibold text-gray-600 mb-1">File name</label>
+          <input id="filenameInput" type="text" name="filename"
+                placeholder="e.g. Confidential.docx"
+                value="<%= filters.filename || '' %>"
+                class="border p-2 rounded w-full"
+                autocomplete="off" />
+          <ul id="filenameSuggestions"
+              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
+          </ul>
         </div>
 
         <!-- File-type -->
-        <div>
+        <div class="relative">
           <label class="block text-xs font-semibold text-gray-600 mb-1">Filetype</label>
-          <input  type="text" name="filetype" placeholder=".pdf / .jpg"
-                  value="<%= filters.filetype || '' %>" class="w-full border rounded p-1" />
+          <input id="filetypeInput" type="text" name="filetype"
+                placeholder="e.g. text/plain"
+                value="<%= filters.filetype || '' %>"
+                class="border p-2 rounded w-full"
+                autocomplete="off" />
+          <ul id="filetypeSuggestions"
+              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
+          </ul>
         </div>
 
         <!-- Content contains -->
@@ -121,8 +161,8 @@
         <div>
           <label class="block text-xs font-semibold text-gray-600 mb-1">Sort</label>
           <select name="order" class="w-full border rounded p-1">
-            <option value="desc" <%= filters.order !== 'asc' ? 'selected' : '' %>>Newest first</option>
-            <option value="asc"  <%= filters.order === 'asc'  ? 'selected' : '' %>>Oldest first</option>
+            <option value="desc" <%= filters.order !== 'asc' ? 'selected' : '' %>>Oldest first</option>
+            <option value="asc"  <%= filters.order === 'asc'  ? 'selected' : '' %>>Newest first</option>
           </select>
         </div>
 
@@ -189,3 +229,55 @@
   </div>
 </body>
 </html>
+
+<script>
+function setupAutocomplete({ inputId, listId, field }) {
+  const input = document.getElementById(inputId);
+  const suggestions = document.getElementById(listId);
+
+  async function fetchSuggestions() {
+    const val = input.value;
+    try {
+      const res = await fetch(`/api/options?field=${field}&startsWith=${encodeURIComponent(val)}`);
+      const options = await res.json();
+
+      suggestions.innerHTML = '';
+      if (options.length > 0) {
+        options.forEach(option => {
+          const li = document.createElement('li');
+          li.textContent = option;
+          li.className = 'px-4 py-2 hover:bg-indigo-100 cursor-pointer';
+          li.onclick = () => {
+            input.value = option;
+            suggestions.innerHTML = '';
+            suggestions.classList.add('hidden');
+          };
+          suggestions.appendChild(li);
+        });
+        suggestions.classList.remove('hidden');
+      } else {
+        suggestions.classList.add('hidden');
+      }
+    } catch (err) {
+      console.error(`Failed to load ${field} options:`, err);
+    }
+  }
+
+  input.addEventListener('input', fetchSuggestions);
+  input.addEventListener('focus', fetchSuggestions);
+
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+      suggestions.classList.add('hidden');
+    }
+  });
+}
+
+// Initialize for each field
+setupAutocomplete({ inputId: 'userInput', listId: 'userSuggestions', field: 'user' });
+setupAutocomplete({ inputId: 'siteInput', listId: 'siteSuggestions', field: 'site' });
+setupAutocomplete({ inputId: 'rationalInput', listId: 'rationalSuggestions', field: 'rational' });
+setupAutocomplete({ inputId: 'filenameInput', listId: 'filenameSuggestions', field: 'filename' });
+setupAutocomplete({ inputId: 'filetypeInput', listId: 'filetypeSuggestions', field: 'content_type' });
+
+</script>

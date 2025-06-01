@@ -111,7 +111,7 @@ app.get('/explore', authMiddleware, async (req, res) => {
 
   const {
     start, end, user, site, rational,
-    filetype, content, leak, order = 'desc'
+    filename, filetype, content, leak, order = 'desc'
   } = req.query;
 
   const query = {};
@@ -128,6 +128,8 @@ app.get('/explore', authMiddleware, async (req, res) => {
   if (site) query.site = { $regex: new RegExp(site, 'i') };
   if (rational) query.rational = { $regex: new RegExp(rational, 'i') };
   if (content) query.content = { $regex: new RegExp(content, 'i') };
+  if (filename) query.filename = { $regex: new RegExp(filename, 'i') };
+  if (filetype) query.content_type = { $regex: new RegExp(filetype, 'i') };
 
   const sort = { timestamp: order === 'asc' ? 1 : -1 };
 
@@ -475,6 +477,36 @@ app.post('/delete-user', authMiddleware, async (req, res) => {
     console.error('Error deleting user:', err);
     res.status(500).send("Internal Server Error");
   }
+});
+
+
+app.get('/api/options', authMiddleware, async (req, res) => {
+  const { field, startsWith = '' } = req.query;
+  if (!field) return res.status(400).json({ error: 'Missing field' });
+
+  const allowedFields = ['user', 'site', 'rational', 'filename', 'content_type'];
+  if (!allowedFields.includes(field)) return res.status(400).json({ error: 'Invalid field' });
+
+  try {
+
+    const { client, db } = await connectToDB();
+    const events_collection = db.collection('events');
+
+    const pipeline = [
+      { $match: { [field]: { $regex: `^${startsWith}`, $options: '' } } },
+      { $group: { _id: `$${field}` } }
+    ];
+
+    const results = await events_collection.aggregate(pipeline).toArray();
+    const values = results.map(r => r._id).filter(Boolean);
+
+    await client.close();
+    
+    res.json(values);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch options' });
+  } 
 });
 
 
