@@ -65,13 +65,6 @@ async function connectToDB() {
   return { client, db };
 }
 
-async function getUserEvents(username) {
-  const { client, db } = await connectToDB();
-  const events = await db.collection('events').find({ user: username }).toArray();
-  await client.close();
-  return events;
-}
-
 async function getRegexRules() {
   const { client, db } = await connectToDB();
   const regexRules = await db.collection('regex_rules').find().toArray();
@@ -92,15 +85,12 @@ app.get('/', authMiddleware, (req, res) => {
 
 
 app.get('/dashboard', authMiddleware, async (req, res) => {
-
   try {
-      
-      res.render('dashboard', { title: 'Dashboard' });
-
-    } catch (err) {
-      res.status(500).send('Error: ' + err.message);
-    }
-
+    res.render('dashboard', { title: 'Dashboard' });
+  } catch (err) {
+    console.error('Error rendering dashboard:', err);
+    res.status(500).send('Internal Server Error');
+  }
 });
 
 app.get('/terminal', authMiddleware, (req, res) => {
@@ -133,10 +123,9 @@ app.get('/explore', authMiddleware, async (req, res) => {
 
   const sort = { timestamp: order === 'asc' ? 1 : -1 };
 
-
+  let client;
   try {
-      
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     const event_collection = db.collection('events');
 
     if (leak) {
@@ -163,31 +152,31 @@ app.get('/explore', authMiddleware, async (req, res) => {
 
       const events = await event_collection.aggregate(pipeline).toArray();
 
-      res.render('explore', { title: 'Explore', events,
-        filters: req.query });
-
+      res.render('explore', { title: 'Explore', events, filters: req.query });
     } else {
       // If no leak filter, simple find + sort
       const events = await event_collection.find(query).sort(sort).toArray();
 
-      res.render('explore', { title: 'Explore', events,
-        filters: req.query });
+      res.render('explore', { title: 'Explore', events, filters: req.query });
     }
-
   } catch (err) {
-      res.status(500).send('Error: ' + err.message);
-    }
-  
+    console.error('Error in /explore:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
 });
 
 app.get('/rules', authMiddleware, async (req, res) => {
-
-  regexRules = await getRegexRules();
-  cossimrules = await getTopicMatchRules();
-
-  res.render('rules', { title: "Rules Manager", regexRules, cossimrules });
+  try {
+    regexRules = await getRegexRules();
+    cossimrules = await getTopicMatchRules();
+    res.render('rules', { title: "Rules Manager", regexRules, cossimrules });
+  } catch (err) {
+    console.error('Error loading rules:', err);
+    res.status(500).send('Internal Server Error');
+  }
 });
-
 
 app.post('/rules/regex/add', authMiddleware, async (req, res) => {
   const { name, pattern } = req.body;
@@ -200,13 +189,16 @@ app.post('/rules/regex/add', authMiddleware, async (req, res) => {
     return res.status(400).send('Invalid regex pattern.');
   }
 
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     await db.collection('regex_rules').insertOne({ [name]: pattern });
     res.redirect('/rules');
   } catch (err) {
     console.error('Error adding regex rule:', err);
     res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
 });
 
@@ -217,9 +209,9 @@ app.post('/rules/topic/add', authMiddleware, async (req, res) => {
   if (!name || !pattern) {
     return res.status(400).send('Name and pattern are required.');
   }
-
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     const result = await db.collection('cos_sim_rules').insertOne({ name: name, pattern: pattern });
     gRPC_client.TopicRuleAdded({ id: result.insertedId }, (err, response) => {
       if (err) {
@@ -238,6 +230,8 @@ app.post('/rules/topic/add', authMiddleware, async (req, res) => {
 
     console.error('Error adding topic rule:', err);
     return res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
 });
 
@@ -246,29 +240,34 @@ app.post('/rules/:type/delete/:id', authMiddleware, async (req, res) => {
   const { type, id } = req.params;
 
   const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
-
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     await db.collection(collection).deleteOne({ _id: new ObjectId(id) });
     res.redirect('/rules');
   } catch (err) {
     console.error('Error deleting rule:', err);
     res.status(500).send('Error deleting rule');
+  } finally {
+    if (client) await client.close();
   }
 });
 
 app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
   const { type, id } = req.params;
   const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
-
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     const rule = await db.collection(collection).findOne({ _id: new ObjectId(id) });
     if (!rule) return res.status(404).send('Rule not found');
     const render_page = type === 'regex' ? 'edit_regex_rule' : 'edit_topic_rule';
     res.render(render_page, {title: "Edit Rule",  rule });
   } catch (err) {
-    res.status(500).send('Error loading rule: ' + err);
+    console.error('Error loading rule:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
 });
 
@@ -283,10 +282,10 @@ app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
       return res.status(400).send('Invalid regex pattern.');
     }
   }
-
+  let client;
   try {
 
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
 
     if(type === 'regex') {
       await db.collection('regex_rules').replaceOne(
@@ -303,64 +302,86 @@ app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
     res.redirect('/rules');
   } catch (err) {
     res.status(500).send('Error updating rule');
+  } finally {
+    if (client) await client.close();
   }
 });
-
+// Secure file download endpoint to prevent path traversal attacks
 app.get('/uploads/:file', authMiddleware, (req, res) => {
-  
-  const filepath = req.params.file;
+  const file = req.params.file;
   const filename = req.query.name;
-  console.log("Getting file..." + filepath);
-  res.download("/uploads/" + filepath, filename); // second argument is optional
 
+  // Only allow safe characters
+  if (!/^[\w\-\.]+$/.test(file)) {
+    return res.status(400).send('Invalid file name.');
+  }
+
+  // Resolve absolute paths
+  const uploadsDir = '/uploads';
+  const filePath = path.resolve(uploadsDir, file);
+
+  // Ensure path stays inside uploadsDir
+  if (!filePath.startsWith(uploadsDir + path.sep)) {
+    return res.status(403).send('Access denied.');
+  }
+
+  res.download(filePath, filename, (err) => {
+    if (err) {
+      console.error('File download error:', err);
+      res.status(404).send('File not found.');
+    }
+  });
 });
 
-app.get('/domains', authMiddleware, async (req, res) => {
 
+app.get('/domains', authMiddleware, async (req, res) => {
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     const domains = await db.collection("domains").find().toArray();
     res.render('domains', { title: "Domains", domains });
   } catch (err) {
-    res.status(500).send('Error loading rule: ' + err);
+    console.error('Error loading domains:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
-  
 });
 
 app.post('/domains/delete/:id', authMiddleware, async (req, res) => {
-  
   const id = req.params.id;
-
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     await db.collection("domains").deleteOne({ _id: new ObjectId(id) });
     res.redirect('/domains');
   } catch (err) {
     console.error('Error deleting domain:', err);
-    res.status(500).send('Error deleting domain');
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
 });
 
 app.post('/domains/add', authMiddleware, async (req, res) => {
   const { domain } = req.body;
-
   if (!domain) {
     return res.status(400).send('Domain is required.');
   }
-
   const regex = /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i;
-
   if (!regex.test(domain)) {
     return res.status(400).send('The value provided is not a domain');
   }
-
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     await db.collection('domains').insertOne({ content: domain });
     res.redirect('/domains');
   } catch (err) {
     console.error('Error adding domain:', err);
     res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
 });
 
@@ -368,9 +389,9 @@ app.get('/login', (req, res) => res.render('login', { layout: false }));
 
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     const user = await db.collection('users').findOne({ username: username });
     if (!user) return res.status(401).redirect('/login');
     const isMatch = await bcrypt.compare(password, user.password);
@@ -382,6 +403,8 @@ app.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Error in login:', err);
     res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
 
 });
@@ -392,68 +415,69 @@ app.get('/logout', authMiddleware, (req, res) => {
 });
 
 app.get('/user-management', authMiddleware, async (req, res) => {
-  const { client, db } = await connectToDB();
-  const users = await db.collection('users').find().toArray();  
-  res.render('user-management', {
-    title: "User management",
-    users
-  });
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+    const users = await db.collection('users').find().toArray();  
+    res.render('user-management', {
+      title: "User management",
+      users
+    });
+  } catch (err) {
+    console.error('Error loading user management:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
 });
 
 
 app.post('/add-user', authMiddleware, async (req, res) => {
   const { username, password } = req.body;
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     const user = await db.collection('users').findOne({ username: username });
-
-
     if (user) {
       return res.status(400).send("User already exists.");
     }
-
     if (!isStrongPassword(password)) {
       return res.status(400).send("Password must be at least 12 characters long and include uppercase, lowercase, number, and special character.");
     }
-
     await db.collection('users').insertOne({ username: username, password: await bcrypt.hash(password, 10) });
     res.redirect('/user-management');
-
   } catch (err) {
-    console.error('Error in add-user:', err);
+    console.error('Error adding user:', err);
     res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
-
 });
 
 app.post('/update-password', authMiddleware, async (req, res) => {
-
   const { username, newPassword } = req.body;
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
-  
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    ({ client, db } = await connectToDB());
     const user = await db.collection('users').findOne({ username: username });
-
     if (!user) {
       return res.status(400).send("User does not exist.");
     }
-
     if (!isStrongPassword(newPassword)) {
       return res.status(400).send("Password must be at least 12 characters long and include uppercase, lowercase, number, and special character.");
     }
-
     await db.collection('users').updateOne(
-          { username: username },
-          { $set: { password: hashedPassword } }
+      { username: username },
+      { $set: { password: hashedPassword } }
     );
     res.redirect('/user-management');
-
   } catch (err) {
-    console.error('Error in update-password:', err);
+    console.error('Error updating password:', err);
     res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
-
 });
 
 app.post('/delete-user', authMiddleware, async (req, res) => {
@@ -463,58 +487,52 @@ app.post('/delete-user', authMiddleware, async (req, res) => {
   if (username === res.locals.username) {
     return res.status(400).send("You cannot delete your own account.");
   }
-
+  let client;
   try {
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     const result = await db.collection('users').deleteOne({ username: username });
-
     if (result.deletedCount === 0) {
       return res.status(404).send("User not found.");
     }
-
     res.redirect('/user-management');
   } catch (err) {
     console.error('Error deleting user:', err);
     res.status(500).send("Internal Server Error");
+  } finally {
+    if (client) await client.close();
   }
 });
-
 
 app.get('/api/options', authMiddleware, async (req, res) => {
   const { field, startsWith = '' } = req.query;
   if (!field) return res.status(400).json({ error: 'Missing field' });
-
   const allowedFields = ['user', 'site', 'rational', 'filename', 'content_type'];
   if (!allowedFields.includes(field)) return res.status(400).json({ error: 'Invalid field' });
-
+  let client;
   try {
-
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     const events_collection = db.collection('events');
-
     const pipeline = [
       { $match: { [field]: { $regex: `^${startsWith}`, $options: '' } } },
       { $group: { _id: `$${field}` } }
     ];
-
     const results = await events_collection.aggregate(pipeline).toArray();
     const values = results.map(r => r._id).filter(Boolean);
-
     await client.close();
-    
     res.json(values);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch options' });
-  } 
+    console.error('Error fetching options:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    if (client) await client.close();
+  }
 });
 
 app.get('/event/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
-
+  let client;
   try {
-
-    const { client, db } = await connectToDB();
+    ({ client, db } = await connectToDB());
     const events_collection = db.collection('events');
     const event = await events_collection.findOne({ _id: new ObjectId(id) });
     if (!event) return res.status(404).send('Event not found');
@@ -522,8 +540,9 @@ app.get('/event/:id', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Error fetching event:', err);
     res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
-
 });
 
 
