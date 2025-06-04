@@ -20,7 +20,15 @@ class Proxy:
             for site_url in site.get_urls():
                 if site_url in url:
                     site.handle_request(flow)
-
+                    
+    def route_ws_from_client_to_server(self, flow, message):
+        url = flow.request.pretty_url
+        for site in self.sites:
+            for site_url in site.get_urls():
+                if site_url in url:
+                    site.handle_ws_from_client_to_server(flow, message)
+                    return
+    
 
 class EmailNotFoundException(Exception):
     def __init__(self, field, message):
@@ -45,8 +53,17 @@ class Site:
 
     def handle_request(self, flow):
         self.on_request_handle(flow)
+        
+    def handle_ws_from_client_to_server(self, flow, message):
+        # This method is called when a WebSocket message is sent from the client to the server
+        self.on_ws_from_client_to_server(flow, message)
+
 
     def on_request_handle(self, flow):
+        pass        #To be implement by child
+
+    
+    def on_ws_from_client_to_server(self, flow, message):
         pass        #To be implement by child
 
     def account_login_callback(self, email):

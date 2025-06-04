@@ -1,4 +1,4 @@
-from mitmproxy import http, ctx
+from mitmproxy import http, ctx, websocket
 import re
 import os
 from datetime import datetime, timezone
@@ -10,6 +10,8 @@ import monitor_pb2_grpc
 
 from proxy import Proxy
 from sites.chatgpt import ChatGPT
+#from sites.github_copilot import Github_Copilot
+from sites.microsoft_copilot import Microsoft_Copilot
 
 
 from mitm_term import launch_ws_term
@@ -77,6 +79,9 @@ proxy = Proxy(account_login_callback, account_check_callback, conversation_callb
 
 
 proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"])
+proxy.register_site(Microsoft_Copilot, ["substrate.office.com/m365Copilot/Chathub"])
+#proxy.register_site(Github_Copilot, ["githubcopilot.com"])
+
 
 
 channel = grpc.insecure_channel('monitor:50051')
@@ -85,3 +90,17 @@ stub = monitor_pb2_grpc.MonitorStub(channel)
 
 def request(flow: http.HTTPFlow) -> None:
     proxy.route_request(flow)
+
+
+class WSHandler:
+    def websocket_message(self, flow):
+        # This is called when a WebSocket message is received or sent.
+        message = flow.websocket.messages[-1]
+        if message.from_client:
+            #ctx.log.info(f"Client -> Server: {message.content}")
+            #ctx.log.info(f"Request URL: {flow.request.pretty_url}")
+            proxy.route_ws_from_client_to_server(flow, message)
+        
+
+addons = [WSHandler()]
+
