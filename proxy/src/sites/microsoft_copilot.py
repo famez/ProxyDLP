@@ -34,13 +34,7 @@ class Microsoft_Copilot(Site):
 
                     message_contents = [part for part in message_contents if part]
 
-                    for part in message_contents:
-                        filename = f"/tmp/copilot_message_{uuid.uuid4().hex}.txt"
-                        with open(filename, "wb") as f:
-                            f.write(part)
-                        #ctx.log.info(f"Message part: {part.decode('utf-8', errors='ignore')}")
-                        #ctx.log.info(f"Saved message part to {filename}")
-                        
+                                            
 
                     json_messages = [json.loads(part.decode('utf-8')) for part in message_contents]
 
