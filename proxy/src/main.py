@@ -79,7 +79,7 @@ proxy = Proxy(account_login_callback, account_check_callback, conversation_callb
 
 
 proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"])
-proxy.register_site(Microsoft_Copilot, ["substrate.office.com/m365Copilot/Chathub"])
+proxy.register_site(Microsoft_Copilot, ["substrate.office.com/m365Copilot/Chathub", "sharepoint.com/personal", "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:"])
 #proxy.register_site(Github_Copilot, ["githubcopilot.com"])
 
 
@@ -90,6 +90,9 @@ stub = monitor_pb2_grpc.MonitorStub(channel)
 
 def request(flow: http.HTTPFlow) -> None:
     proxy.route_request(flow)
+
+def response(flow: http.HTTPFlow) -> None:
+    proxy.route_response(flow)
 
 
 class WSHandler:
