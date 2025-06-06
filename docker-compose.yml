@@ -84,7 +84,6 @@ services:
     volumes:
       - mongodb-data:/data/db
       - ./mongo-init:/docker-entrypoint-initdb.d:ro
-      - uploaded-files:/uploads/
     networks:
       - internal-net
 
