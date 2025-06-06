@@ -24,10 +24,8 @@ class Microsoft_Copilot(Site):
             if tempauth.startswith("v1."):
                 #tempauth = tempauth[3:]
                 tempauth = tempauth.removeprefix("v1.")
-                ctx.log.info(f"Tempauth extracted: {tempauth}")
-                filename = f"/tmp/copilot_message_{uuid.uuid4().hex}.txt"
-                with open(filename, "wb") as f:
-                    f.write(tempauth.encode('utf-8'))
+                #ctx.log.info(f"Tempauth extracted: {tempauth}")
+                
 
                 decoded = decode_special_microsoft_token(tempauth)
 
