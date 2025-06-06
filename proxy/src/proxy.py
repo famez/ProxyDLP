@@ -20,6 +20,14 @@ class Proxy:
             for site_url in site.get_urls():
                 if site_url in url:
                     site.handle_request(flow)
+
+    def route_response(self, flow):
+        url = flow.request.pretty_url
+        for site in self.sites:
+            for site_url in site.get_urls():
+                if site_url in url:
+                    site.handle_response(flow)
+
                     
     def route_ws_from_client_to_server(self, flow, message):
         url = flow.request.pretty_url
@@ -53,6 +61,9 @@ class Site:
 
     def handle_request(self, flow):
         self.on_request_handle(flow)
+
+    def handle_response(self, flow):
+        self.on_response_handle(flow)
         
     def handle_ws_from_client_to_server(self, flow, message):
         # This method is called when a WebSocket message is sent from the client to the server
@@ -60,6 +71,9 @@ class Site:
 
 
     def on_request_handle(self, flow):
+        pass        #To be implement by child
+
+    def on_response_handle(self, flow):
         pass        #To be implement by child
 
     

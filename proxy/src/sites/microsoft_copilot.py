@@ -7,6 +7,8 @@ import base64
 import uuid
 import re
 import os
+import gzip
+from io import BytesIO
 
 class Microsoft_Copilot(Site):
 
@@ -43,24 +45,92 @@ class Microsoft_Copilot(Site):
                             break
                     
 
-            if user_email:
+            if not user_email or not self.account_check_callback(user_email):
 
-                content_type = flow.request.headers.get("Content-Type", "")
-                if "application/octet-stream" in content_type:
-                    unique_id = uuid.uuid4().hex
+                flow.response = Response.make(
+                    403,
+                    b"Blocked by proxy",  # Body
+                    {"Content-Type": "text/plain"}  # Headers
+                )
 
-                    filename = f"{unique_id}"
+                return
 
-                    filepath = os.path.join("/uploads", filename)
+            content_type = flow.request.headers.get("Content-Type", "")
+            
+            if "application/octet-stream" in content_type:
+                unique_id = uuid.uuid4().hex
 
-                    with open(filepath, "wb") as f:
-                        f.write(flow.request.raw_content)
+                filename = f"{unique_id}"
 
-                    self.attached_file_callback(user_email, 'file_name', filepath, 'content_type')
+                filepath = os.path.join("/uploads", filename)
+
+                with open(filepath, "wb") as f:
+                    f.write(flow.request.raw_content)
+
+                if user_email in self.uploaded_files:
+
+                    self.attached_file_callback(user_email, self.uploaded_files[email]['filename'], filepath, self.uploaded_files[email]['filetype'])
+                    del self.uploaded_files[email]
 
 
                 #ctx.log.info(f"Decoded tempauth: {json.dumps(tempauth, indent=2)}")
 
+        """
+        if flow.request.method == "GET" and "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:" in flow.request.pretty_url:
+            
+            auth_header = flow.request.headers.get("authorization")
+
+            if auth_header.startswith("Bearer "):
+            
+                jwt_token = auth_header[len("Bearer "):].strip()
+
+                email = get_email_from_auth_header(jwt_token)
+                #ctx.log.info(f"JWT Token extracted: {jwt_token}")
+
+                ctx.log.info(f"GET EMAIL: {email}")
+
+                match = re.search(r'[^/]+$', flow.request.pretty_url)
+
+                if match:
+                    filename = match.group()
+
+                    ctx.log.info(f"Filename: {filename}")
+
+                    #self.uploaded_files[email] = {"filename": filename}
+        """
+
+    def on_response_handle(self, flow):
+
+        #ctx.log.info(f"On response handle for {flow.request.pretty_url}")
+
+        if flow.request.method == "GET" and "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:" in flow.request.pretty_url:
+            
+            content_type = flow.response.headers.get("Content-Type", "")
+
+            #ctx.log.info(f"Content-Type: {content_type}")
+
+            #ctx.log.info(f"Response : {flow.response.content}")
+
+            if "application/json" in content_type.lower():
+
+                try:
+
+                    # Try to parse as JSON
+                    content = json.loads(flow.response.content.decode('utf-8'))
+                    #ctx.log.info("Parsed JSON Response:")
+                    #ctx.log.info(json.dumps(content, indent=2))  # pretty-print
+
+                    email = content['lastModifiedBy']['user']['email']
+                    filename = content['name']
+                    file_type = content['file']['mimeType']
+
+                    #ctx.log.info(f"Email: {email}, Filename: {filename}, File Type: {file_type}")
+
+                    self.uploaded_files[email] = {"filename": filename, "filetype": file_type}
+
+                except Exception as e:
+                    ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
+          
 
     def on_ws_from_client_to_server(self, flow, message):
         if flow.request.method == "GET" and "substrate.office.com/m365Copilot/Chathub" in flow.request.pretty_url:
