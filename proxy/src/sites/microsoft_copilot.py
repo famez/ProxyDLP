@@ -1,19 +1,68 @@
-from proxy import Site, EmailNotFoundException, decode_jwt, extract_substring_between
+from proxy import Site, EmailNotFoundException, decode_jwt, pad_b64
 from mitmproxy import http, ctx
 from mitmproxy.http import Response
 
 import json
-import os
+import base64
 import uuid
-
+import re
+import os
 
 class Microsoft_Copilot(Site):
 
     def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback):
         super().__init__("Microsoft Copilot", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback)
+        self.uploaded_files = {}
         
     def on_request_handle(self, flow):
-        pass
+        
+        if flow.request.method == "PUT" and "sharepoint.com/personal" in flow.request.pretty_url and "uploadSession" in flow.request.pretty_url:
+            
+            user_email = None
+
+            tempauth = flow.request.query.get("tempauth")
+            if tempauth.startswith("v1."):
+                #tempauth = tempauth[3:]
+                tempauth = tempauth.removeprefix("v1.")
+                ctx.log.info(f"Tempauth extracted: {tempauth}")
+                filename = f"/tmp/copilot_message_{uuid.uuid4().hex}.txt"
+                with open(filename, "wb") as f:
+                    f.write(tempauth.encode('utf-8'))
+
+                decoded = decode_special_microsoft_token(tempauth)
+
+                if not decoded:
+                    ctx.log.error("Failed to decode tempauth token")
+                    return
+
+                if "app_displayname" in decoded['header'] and decoded['header']["app_displayname"] == "M365ChatClient" and 'Emails' in decoded['payload_strings'] and len(decoded['payload_strings']['Emails']) > 0:
+                    emails = decoded['payload_strings']['Emails']
+
+                    for email in emails:
+                        if not 'live.comz' in email:
+                            ctx.log.info(f"Email extracted from tempauth: {email}")
+                            user_email = email
+                            break
+                    
+
+            if user_email:
+
+                content_type = flow.request.headers.get("Content-Type", "")
+                if "application/octet-stream" in content_type:
+                    unique_id = uuid.uuid4().hex
+
+                    filename = f"{unique_id}"
+
+                    filepath = os.path.join("/uploads", filename)
+
+                    with open(filepath, "wb") as f:
+                        f.write(flow.request.raw_content)
+
+                    self.attached_file_callback(user_email, 'file_name', filepath, 'content_type')
+
+
+                #ctx.log.info(f"Decoded tempauth: {json.dumps(tempauth, indent=2)}")
+
 
     def on_ws_from_client_to_server(self, flow, message):
         if flow.request.method == "GET" and "substrate.office.com/m365Copilot/Chathub" in flow.request.pretty_url:
@@ -33,8 +82,6 @@ class Microsoft_Copilot(Site):
                     message_contents = message.content.split(b'\x1e')
 
                     message_contents = [part for part in message_contents if part]
-
-                                            
 
                     json_messages = [json.loads(part.decode('utf-8')) for part in message_contents]
 
@@ -85,3 +132,37 @@ def get_email_from_auth_header(auth_query_param):
 
     raise EmailNotFoundException("JWT", "Email not found on jwt token")
 
+def decode_special_microsoft_token(token: str):
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        header = json.loads(base64.urlsafe_b64decode(pad_b64(parts[0])).decode())
+
+        encoded_payload = parts[1].strip().split(".")[0]
+
+        missing_padding = len(encoded_payload) % 4
+        if missing_padding:
+            encoded_payload += "=" * (4 - missing_padding)
+
+        raw_payload = base64.urlsafe_b64decode(encoded_payload)
+
+        payload_text = raw_payload.decode('latin1', errors='ignore')  # latin1 avoids decode errors
+
+        patterns = {
+            "Emails": r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
+            "UUIDs": r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}",
+            "IP addresses": r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+            "Readable strings": r"[a-zA-Z0-9\.\-_\@\s]{4,}",
+        }
+
+        payload_strings = {}
+        for name, pattern in patterns.items():
+            matches = re.findall(pattern, payload_text)
+            payload_strings[name] = list(set(matches))  # remove duplicates
+
+        return {"header": header, "payload_strings": payload_strings}
+    
+    except Exception as e:
+        ctx.log.warn(f"JWT decoding error: {str(e)}")
+        return None
