@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DLP Statistics Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 30px;
+      background: #f9f9f9;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+    .chart-container {
+      width: 80%;
+      margin: 30px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background-color: #f2f2f2;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Data Leak Prevention (DLP) Dashboard</h1>
+
+  <!-- Top 5 Leak Topics Chart -->
+  <div class="chart-container">
+    <h2>Top 5 Leak Topics</h2>
+    <canvas id="topicsChart"></canvas>
+  </div>
+
+  <!-- Tool Usage Chart -->
+  <div class="chart-container">
+    <h2>Tool Usage</h2>
+    <canvas id="toolsChart"></canvas>
+  </div>
+
+  <!-- Top Users with Risky Events -->
+  <div class="chart-container">
+    <h2>Top 5 Users with Risky Events (cos_sim > 0.75)</h2>
+    <canvas id="usersChart"></canvas>
+  </div>
+
+  <!-- Risky Events Trend -->
+  <div class="chart-container">
+    <h2>Daily Risky Events Trend</h2>
+    <canvas id="trendChart"></canvas>
+  </div>
+
+  <!-- Top 10 Risky Events Table -->
+  <div class="chart-container">
+    <h2>Top 10 Risky Events (cos_sim > 0.9)</h2>
+    <table>
+      <thead>
+        <tr><th>User</th><th>Timestamp</th><th>Cosine Similarity</th><th>Content</th><th>Site</th></tr>
+      </thead>
+      <tbody>
+        <% if (riskyEvents && riskyEvents.length) { %>
+          <% riskyEvents.forEach(event => { %>
+            <tr>
+              <td><%= event.user %></td>
+              <td><%= new Date(event.timestamp).toLocaleString() %></td>
+              <td><%= event.cos_score.toFixed(3) %></td>
+              <td><%= event.content %></td>
+              <td><%= event.site %></td>
+            </tr>
+          <% }) %>
+        <% } else { %>
+          <tr><td colspan="5">No risky events found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Chart Rendering Script -->
+  <script>
+    // Leak Topics
+    const topicLabels = <%- JSON.stringify(topicStats.map(t => t._id)) %>;
+    const topicData = <%- JSON.stringify(topicStats.map(t => t.count)) %>;
+
+    new Chart(document.getElementById('topicsChart'), {
+      type: 'bar',
+      data: {
+        labels: topicLabels,
+        datasets: [{
+          label: 'Mentions',
+          data: topicData,
+          backgroundColor: 'rgba(255, 99, 132, 0.6)'
+        }]
+      }
+    });
+
+    // Tool Usage
+    const toolLabels = <%- JSON.stringify(toolUsage.map(t => t._id)) %>;
+    const toolData = <%- JSON.stringify(toolUsage.map(t => t.count)) %>;
+
+    new Chart(document.getElementById('toolsChart'), {
+      type: 'bar',
+      data: {
+        labels: toolLabels,
+        datasets: [{
+          label: 'Usage Count',
+          data: toolData,
+          backgroundColor: 'rgba(54, 162, 235, 0.6)'
+        }]
+      }
+    });
+
+    // Risky Users
+    const userLabels = <%- JSON.stringify(userStats.map(u => u._id)) %>;
+    const userData = <%- JSON.stringify(userStats.map(u => u.count)) %>;
+
+    new Chart(document.getElementById('usersChart'), {
+      type: 'bar',
+      data: {
+        labels: userLabels,
+        datasets: [{
+          label: 'Risky Events',
+          data: userData,
+          backgroundColor: 'rgba(255, 206, 86, 0.6)'
+        }]
+      }
+    });
+
+    // Risky Event Trend
+    const trendLabels = <%- JSON.stringify(trendDates) %>;
+    const trendCounts = <%- JSON.stringify(trendCounts) %>;
+
+    new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: trendLabels,
+        datasets: [{
+          label: 'Risky Events Per Day',
+          data: trendCounts,
+          borderColor: 'rgba(75, 192, 192, 0.8)',
+          fill: false,
+          tension: 0.2
+        }]
+      }
+    });
+  </script>
+</body>
+</html>

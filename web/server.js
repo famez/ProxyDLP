@@ -545,6 +545,123 @@ app.get('/event/:id', authMiddleware, async (req, res) => {
   }
 });
 
+app.get('/stats', authMiddleware, async (req, res) => {
+
+  let client;
+
+  try {
+
+    ({ client, db } = await connectToDB());
+
+    const riskyEvents = await db.collection('events').aggregate([
+    {
+      $addFields: {
+        cos_scores_flat: {
+          $reduce: {
+            input: "$cos_sim_matrix.matrix",
+            initialValue: [],
+            in: { $concatArrays: ["$$value", "$$this"] }
+          }
+        }
+      }
+    },
+    {
+      $addFields: {
+        cos_score: { $max: "$cos_scores_flat" }
+      }
+    },
+    { $match: { cos_score: { $gt: 0.2 } } },
+    { $sort: { cos_score: -1 } },
+    { $limit: 10 }
+  ]).toArray();
+
+    const topicStats = await db.collection('events').aggregate([
+      { $unwind: '$leak.topic' },                  // unwind the array
+      { $group: { _id: '$leak.topic', count: { $sum: 1 } } },  // group by each topic string
+      { $sort: { count: -1 } },                    // sort by descending count
+      { $limit: 5 }                                // limit top 5 topics
+    ]).toArray();
+
+
+    const toolUsage = await db.collection('events').aggregate([
+      { $group: { _id: '$site', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]).toArray();
+
+
+
+    const userStats = await db.collection('events').aggregate([
+        {
+          $addFields: {
+            cos_scores_flat: {
+              $reduce: {
+                input: "$cos_sim_matrix.matrix",
+                initialValue: [],
+                in: { $concatArrays: ["$$value", "$$this"] }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            cos_score: { $max: "$cos_scores_flat" }
+          }
+        },
+        { $match: { cos_score: { $gt: 0.3 } } },
+        { $group: { _id: '$user', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 }
+      ]).toArray();
+
+    const trendData = await db.collection('events').aggregate([
+        {
+          $addFields: {
+            cos_scores_flat: {
+              $reduce: {
+                input: "$cos_sim_matrix.matrix",
+                initialValue: [],
+                in: { $concatArrays: ["$$value", "$$this"] }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            cos_score: { $max: "$cos_scores_flat" }
+          }
+        },
+        { $match: { cos_score: { $gt: 0.30 } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { "_id": 1 } }
+      ]).toArray();
+
+
+    await client.close();
+
+    res.render('stats', {title: "Statistics", 
+      riskyEvents,
+      topicStats,
+      toolUsage,
+      userStats,
+      trendDates: trendData.map(d => d._id),
+      trendCounts: trendData.map(d => d.count)
+    });
+
+  } catch (err) {
+    console.error('Error fetching stats:', err);
+    res.status(500).send('Internal Server Error');
+  }
+  finally {
+    if (client) await client.close();
+  }
+
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
