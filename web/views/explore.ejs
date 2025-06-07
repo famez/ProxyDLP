@@ -166,6 +166,25 @@
           </select>
         </div>
 
+        <!-- Page number -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Page</label>
+          <input type="number" name="page" min="1"
+                value="<%= filters.page || 1 %>"
+                class="w-full border rounded p-1" />
+        </div>
+
+        <!-- Limit results -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Limit</label>
+          <select name="limit" class="w-full border rounded p-1">
+            <option value="10" <%= filters.limit == 10 ? 'selected' : '' %>>10</option>
+            <option value="50" <%= filters.limit == 50 ? 'selected' : '' %>>50</option>
+            <option value="100" <%= filters.limit == 100 ? 'selected' : '' %>>100</option>
+            <option value="250" <%= filters.limit == 250 ? 'selected' : '' %>>250</option>
+          </select>
+        </div>
+
         <!-- Submit -->
         <div class="sm:col-span-2 md:col-span-3 lg:col-span-4 flex gap-2 mt-2">
           <button type="submit"

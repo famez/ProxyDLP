@@ -120,8 +120,15 @@ app.get('/explore', authMiddleware, async (req, res) => {
   if (content) query.content = { $regex: new RegExp(content, 'i') };
   if (filename) query.filename = { $regex: new RegExp(filename, 'i') };
   if (filetype) query.content_type = { $regex: new RegExp(filetype, 'i') };
+  
 
   const sort = { timestamp: order === 'asc' ? 1 : -1 };
+
+  const limit = parseInt(req.query.limit, 10) || 50;
+  const page = parseInt(req.query.page, 10) || 1;
+  const skip = (page - 1) * limit;
+
+
 
   let client;
   try {
@@ -147,7 +154,9 @@ app.get('/explore', authMiddleware, async (req, res) => {
             ]
           }
         },
-        { $sort: sort }
+        { $sort: sort },
+        { $skip: skip },
+        { $limit: limit }
       ];
 
       const events = await event_collection.aggregate(pipeline).toArray();
@@ -155,7 +164,7 @@ app.get('/explore', authMiddleware, async (req, res) => {
       res.render('explore', { title: 'Explore', events, filters: req.query });
     } else {
       // If no leak filter, simple find + sort
-      const events = await event_collection.find(query).sort(sort).toArray();
+      const events = await event_collection.find(query).sort(sort).skip(skip).limit(limit).toArray();
 
       res.render('explore', { title: 'Explore', events, filters: req.query });
     }
