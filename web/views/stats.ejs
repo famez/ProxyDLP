@@ -14,7 +14,8 @@
       margin-bottom: 50px;
     }
     .chart-container {
-      width: 80%;
+      width: 90%;
+      max-width: 1200px;
       margin: 30px auto;
       background: #fff;
       padding: 20px;
@@ -78,7 +79,7 @@
               <td><%= event.user %></td>
               <td><%= new Date(event.timestamp).toLocaleString() %></td>
               <td><%= event.cos_score.toFixed(3) %></td>
-              <td><%= event.content %></td>
+              <td><%= event.content && event.content.length > 100 ? event.content.substring(0, 100) + '...' : event.content %></td>
               <td><%= event.site %></td>
             </tr>
           <% }) %>
@@ -88,6 +89,12 @@
       </tbody>
     </table>
   </div>
+
+  <div class="chart-container">
+    <h2>Regex Match Categories</h2>
+    <canvas id="regexLabelCloud" width="1000" height="400"></canvas>
+  </div>
+
 
   <!-- Chart Rendering Script -->
   <script>
@@ -157,5 +164,21 @@
       }
     });
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js"></script>
+<script>
+  const regexLabels = <%- JSON.stringify(regexLabelStats.map(r => [r._id, r.count])) %>;
+
+  WordCloud(document.getElementById('regexLabelCloud'), {
+    list: regexLabels,
+    gridSize: Math.round(16 * document.getElementById('regexLabelCloud').width / 1024),
+    weightFactor: 3.5,
+    rotateRatio: 0,
+
+    fontFamily: 'Segoe UI',
+    color: 'random-dark',
+    backgroundColor: '#f9f9f9'
+  });
+</script>
+
 </body>
 </html>

@@ -640,6 +640,18 @@ app.get('/stats', authMiddleware, async (req, res) => {
         { $sort: { "_id": 1 } }
       ]).toArray();
 
+      const regexLabelStats = await db.collection('events').aggregate([
+        {
+          $project: {
+            regexLabels: { $objectToArray: "$leak.regex" }
+          }
+        },
+        { $unwind: "$regexLabels" },
+        { $group: { _id: "$regexLabels.v", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 50 }
+      ]).toArray();
+
 
     await client.close();
 
@@ -649,7 +661,8 @@ app.get('/stats', authMiddleware, async (req, res) => {
       toolUsage,
       userStats,
       trendDates: trendData.map(d => d._id),
-      trendCounts: trendData.map(d => d.count)
+      trendCounts: trendData.map(d => d.count),
+      regexLabelStats
     });
 
   } catch (err) {
