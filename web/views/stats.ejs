@@ -2,154 +2,108 @@
 <html>
 <head>
   <title>DLP Statistics Dashboard</title>
+  <meta charset="UTF-8">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      margin: 30px;
-      background: #f9f9f9;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 50px;
-    }
-    .chart-container {
-      width: 90%;
-      max-width: 1200px;
-      margin: 30px auto;
-      background: #fff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
-      padding: 12px;
-      border-bottom: 1px solid #ddd;
-    }
-    th {
-      background-color: #f2f2f2;
-      text-align: left;
-    }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
-<body>
+<body class="bg-gray-50 text-gray-800 font-sans">
 
-  <h1>Data Leak Prevention (DLP) Dashboard</h1>
+  <h1 class="text-2xl font-semibold text-center mt-6 mb-10">DLP Statistics Dashboard</h1>
 
-  <!-- Top 5 Leak Topics Chart -->
-  <div class="chart-container">
-    <h2>Top 5 Leak Topics</h2>
-    <canvas id="topicsChart"></canvas>
+  <!-- Chart Grid -->
+  <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 px-4">
+
+    <!-- Top 5 Leak Topics -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-medium mb-2">Top 5 Leak Topics</h2>
+      <canvas id="topicsChart" class="w-full h-48"></canvas>
+    </div>
+
+    <!-- Tool Usage -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-medium mb-2">Tool Usage</h2>
+      <canvas id="toolsChart" class="w-full h-48"></canvas>
+    </div>
+
+    <!-- Top Users with Risky Events -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-medium mb-2">Top Risky Users</h2>
+      <canvas id="usersChart" class="w-full h-48"></canvas>
+    </div>
+
+    <!-- Risky Events Trend -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-medium mb-2">Daily Risky Events Trend</h2>
+      <canvas id="trendChart" class="w-full h-48"></canvas>
+    </div>
+
+    <!-- Regex Label Word Cloud -->
+    <div class="bg-white p-4 rounded-lg shadow md:col-span-2">
+      <h2 class="text-lg font-medium mb-2">Regex Match Categories</h2>
+      <canvas id="regexLabelCloud" width="1000" height="300" class="mx-auto"></canvas>
+    </div>
   </div>
 
-  <!-- Tool Usage Chart -->
-  <div class="chart-container">
-    <h2>Tool Usage</h2>
-    <canvas id="toolsChart"></canvas>
-  </div>
-
-  <!-- Top Users with Risky Events -->
-  <div class="chart-container">
-    <h2>Top 5 Users with Risky Events (cos_sim > 0.75)</h2>
-    <canvas id="usersChart"></canvas>
-  </div>
-
-  <!-- Risky Events Trend -->
-  <div class="chart-container">
-    <h2>Daily Risky Events Trend</h2>
-    <canvas id="trendChart"></canvas>
-  </div>
-
-  <!-- Top 10 Risky Events Table -->
-  <div class="chart-container">
-    <h2>Top 10 Risky Events (cos_sim > 0.9)</h2>
-    <table>
-      <thead>
-        <tr><th>User</th><th>Timestamp</th><th>Cosine Similarity</th><th>Content</th><th>Site</th></tr>
+  <!-- Risky Events Table -->
+  <div class="max-w-7xl mx-auto mt-8 bg-white p-4 rounded-lg shadow px-4 overflow-x-auto">
+    <h2 class="text-lg font-medium mb-3">Top 10 Risky Events (cos_sim > 0.9)</h2>
+    <table class="min-w-full text-sm text-left">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="px-4 py-2">User</th>
+          <th class="px-4 py-2">Timestamp</th>
+          <th class="px-4 py-2">Cos Sim</th>
+          <th class="px-4 py-2">Content</th>
+          <th class="px-4 py-2">Site</th>
+        </tr>
       </thead>
       <tbody>
         <% if (riskyEvents && riskyEvents.length) { %>
           <% riskyEvents.forEach(event => { %>
-            <tr>
-              <td><%= event.user %></td>
-              <td><%= new Date(event.timestamp).toLocaleString() %></td>
-              <td><%= event.cos_score.toFixed(3) %></td>
-              <td><%= event.content && event.content.length > 100 ? event.content.substring(0, 100) + '...' : event.content %></td>
-              <td><%= event.site %></td>
+            <tr class="border-b">
+              <td class="px-4 py-2"><%= event.user %></td>
+              <td class="px-4 py-2"><%= new Date(event.timestamp).toLocaleString() %></td>
+              <td class="px-4 py-2"><%= event.cos_score.toFixed(3) %></td>
+              <td class="px-4 py-2"><%= event.content && event.content.length > 100 ? event.content.substring(0, 100) + '...' : event.content %></td>
+              <td class="px-4 py-2"><%= event.site %></td>
             </tr>
           <% }) %>
         <% } else { %>
-          <tr><td colspan="5">No risky events found.</td></tr>
+          <tr><td colspan="5" class="px-4 py-2 text-center">No risky events found.</td></tr>
         <% } %>
       </tbody>
     </table>
   </div>
 
-  <div class="chart-container">
-    <h2>Regex Match Categories</h2>
-    <canvas id="regexLabelCloud" width="1000" height="400"></canvas>
-  </div>
-
-
-  <!-- Chart Rendering Script -->
+  <!-- Chart.js Config -->
   <script>
-    // Leak Topics
     const topicLabels = <%- JSON.stringify(topicStats.map(t => t._id)) %>;
     const topicData = <%- JSON.stringify(topicStats.map(t => t.count)) %>;
-
     new Chart(document.getElementById('topicsChart'), {
       type: 'bar',
-      data: {
-        labels: topicLabels,
-        datasets: [{
-          label: 'Mentions',
-          data: topicData,
-          backgroundColor: 'rgba(255, 99, 132, 0.6)'
-        }]
-      }
+      data: { labels: topicLabels, datasets: [{ label: 'Mentions', data: topicData, backgroundColor: '#ef4444' }] },
+      options: { plugins: { legend: { display: false } }, responsive: true }
     });
 
-    // Tool Usage
     const toolLabels = <%- JSON.stringify(toolUsage.map(t => t._id)) %>;
     const toolData = <%- JSON.stringify(toolUsage.map(t => t.count)) %>;
-
     new Chart(document.getElementById('toolsChart'), {
       type: 'bar',
-      data: {
-        labels: toolLabels,
-        datasets: [{
-          label: 'Usage Count',
-          data: toolData,
-          backgroundColor: 'rgba(54, 162, 235, 0.6)'
-        }]
-      }
+      data: { labels: toolLabels, datasets: [{ label: 'Usage Count', data: toolData, backgroundColor: '#3b82f6' }] },
+      options: { plugins: { legend: { display: false } }, responsive: true }
     });
 
-    // Risky Users
     const userLabels = <%- JSON.stringify(userStats.map(u => u._id)) %>;
     const userData = <%- JSON.stringify(userStats.map(u => u.count)) %>;
-
     new Chart(document.getElementById('usersChart'), {
       type: 'bar',
-      data: {
-        labels: userLabels,
-        datasets: [{
-          label: 'Risky Events',
-          data: userData,
-          backgroundColor: 'rgba(255, 206, 86, 0.6)'
-        }]
-      }
+      data: { labels: userLabels, datasets: [{ label: 'Risky Events', data: userData, backgroundColor: '#facc15' }] },
+      options: { plugins: { legend: { display: false } }, responsive: true }
     });
 
-    // Risky Event Trend
     const trendLabels = <%- JSON.stringify(trendDates) %>;
     const trendCounts = <%- JSON.stringify(trendCounts) %>;
-
     new Chart(document.getElementById('trendChart'), {
       type: 'line',
       data: {
@@ -157,28 +111,25 @@
         datasets: [{
           label: 'Risky Events Per Day',
           data: trendCounts,
-          borderColor: 'rgba(75, 192, 192, 0.8)',
+          borderColor: '#10b981',
           fill: false,
-          tension: 0.2
+          tension: 0.3
         }]
-      }
+      },
+      options: { responsive: true }
+    });
+
+    const regexLabels = <%- JSON.stringify(regexLabelStats.map(r => [r._id, r.count])) %>;
+    WordCloud(document.getElementById('regexLabelCloud'), {
+      list: regexLabels,
+      gridSize: 8,
+      weightFactor: 3.2,
+      fontFamily: 'Segoe UI',
+      rotateRatio: 0,
+      color: 'random-dark',
+      backgroundColor: '#ffffff'
     });
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js"></script>
-<script>
-  const regexLabels = <%- JSON.stringify(regexLabelStats.map(r => [r._id, r.count])) %>;
-
-  WordCloud(document.getElementById('regexLabelCloud'), {
-    list: regexLabels,
-    gridSize: Math.round(16 * document.getElementById('regexLabelCloud').width / 1024),
-    weightFactor: 3.5,
-    rotateRatio: 0,
-
-    fontFamily: 'Segoe UI',
-    color: 'random-dark',
-    backgroundColor: '#f9f9f9'
-  });
-</script>
 
 </body>
 </html>
