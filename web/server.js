@@ -554,26 +554,26 @@ app.get('/stats', authMiddleware, async (req, res) => {
     ({ client, db } = await connectToDB());
 
     const riskyEvents = await db.collection('events').aggregate([
-    {
-      $addFields: {
-        cos_scores_flat: {
-          $reduce: {
-            input: "$cos_sim_matrix.matrix",
-            initialValue: [],
-            in: { $concatArrays: ["$$value", "$$this"] }
+      {
+        $addFields: {
+          cos_scores_flat: {
+            $reduce: {
+              input: "$cos_sim_matrix.matrix",
+              initialValue: [],
+              in: { $concatArrays: ["$$value", "$$this"] }
+            }
           }
         }
-      }
-    },
-    {
-      $addFields: {
-        cos_score: { $max: "$cos_scores_flat" }
-      }
-    },
-    { $match: { cos_score: { $gt: 0.2 } } },
-    { $sort: { cos_score: -1 } },
-    { $limit: 10 }
-  ]).toArray();
+      },
+      {
+        $addFields: {
+          cos_score: { $max: "$cos_scores_flat" }
+        }
+      },
+      { $sort: { cos_score: -1 } },
+      { $limit: 10 }
+    ]).toArray();
+
 
     const topicStats = await db.collection('events').aggregate([
       { $unwind: '$leak.topic' },                  // unwind the array
@@ -607,11 +607,18 @@ app.get('/stats', authMiddleware, async (req, res) => {
             cos_score: { $max: "$cos_scores_flat" }
           }
         },
-        { $match: { cos_score: { $gt: 0.3 } } },
-        { $group: { _id: '$user', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
+        {
+          $group: {
+            _id: '$user',
+            count: { $sum: 1 },
+            avg_score: { $avg: "$cos_score" },
+            max_score: { $max: "$cos_score" }
+          }
+        },
+        { $sort: { max_score: -1 } },
         { $limit: 5 }
       ]).toArray();
+
 
     const trendData = await db.collection('events').aggregate([
         {
@@ -630,15 +637,16 @@ app.get('/stats', authMiddleware, async (req, res) => {
             cos_score: { $max: "$cos_scores_flat" }
           }
         },
-        { $match: { cos_score: { $gt: 0.30 } } },
         {
           $group: {
             _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
-            count: { $sum: 1 }
+            count: { $sum: 1 },
+            avg_score: { $avg: "$cos_score" }
           }
         },
         { $sort: { "_id": 1 } }
       ]).toArray();
+
 
       const regexLabelStats = await db.collection('events').aggregate([
         {
