@@ -53,7 +53,7 @@
         <tr>
           <th class="px-4 py-2">User</th>
           <th class="px-4 py-2">Timestamp</th>
-          <th class="px-4 py-2">Cos Sim</th>
+          <th class="px-4 py-2">Topic Similarity</th>
           <th class="px-4 py-2">Content</th>
           <th class="px-4 py-2">Site</th>
           <th class="px-4 py-2">Most Relevant Topic</th>
@@ -77,6 +77,44 @@
       </tbody>
     </table>
   </div>
+
+  <!-- Events With Most Regex Matches -->
+  <div class="max-w-7xl mx-auto mt-8 bg-white p-4 rounded-lg shadow px-4 overflow-x-auto">
+    <h2 class="text-lg font-medium mb-3">Top 10 Events with Most Regex Matches</h2>
+    <table class="min-w-full text-sm text-left">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="px-4 py-2">User</th>
+          <th class="px-4 py-2">Timestamp</th>
+          <th class="px-4 py-2">Regex Count</th>
+          <th class="px-4 py-2">Site</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (regexHeavyEvents && regexHeavyEvents.length) { %>
+          <% regexHeavyEvents.forEach(event => { %>
+            <tr class="border-b">
+              <td class="px-4 py-2"><%= event.user %></td>
+              <td class="px-4 py-2"><%= new Date(event.timestamp).toLocaleString() %></td>
+              <td class="px-4 py-2"><%= event.regexCount %></td>
+              <td class="px-4 py-2"><%= event.site %></td>
+            </tr>
+          <% }) %>
+        <% } else { %>
+          <tr><td colspan="6" class="px-4 py-2 text-center">No regex matches found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Top Matched Regex Words -->
+  <div class="bg-white p-4 rounded-lg shadow max-w-4xl mx-auto mt-6">
+    <h2 class="text-base font-medium mb-2 text-gray-700">Top Regex Matches (Word + Category)</h2>
+    <canvas id="regexWordsChart" class="w-full h-56"></canvas>
+  </div>
+
+
+
 
   <!-- Chart.js Config -->
   <script>
@@ -131,6 +169,31 @@
       color: 'random-dark',
       backgroundColor: '#ffffff'
     });
+
+    const regexWordLabels = <%- JSON.stringify(topMatchedWords.map(w => `${w._id.word}: ${w._id.name}`)) %>;
+    const regexWordCounts = <%- JSON.stringify(topMatchedWords.map(w => w.count)) %>;
+
+    new Chart(document.getElementById('regexWordsChart'), {
+      type: 'bar',
+      data: {
+        labels: regexWordLabels,
+        datasets: [{
+          label: 'Occurrences',
+          data: regexWordCounts,
+          backgroundColor: '#6366f1'
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false }
+        },
+        responsive: true
+      }
+    });
+
+
+
   </script>
 
 </body>

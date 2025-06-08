@@ -727,6 +727,61 @@ app.get('/stats', authMiddleware, async (req, res) => {
       ]).toArray();
 
 
+      const regexHeavyEvents = await db.collection('events').aggregate([
+        {
+          $match: {
+            "leak.regex": { $type: "object" }
+          }
+        },
+        {
+          $addFields: {
+            regexArray: { $objectToArray: "$leak.regex" },
+            regexCount: { $size: { $objectToArray: "$leak.regex" } }
+          }
+        },
+    
+        {
+          $sort: { regexCount: -1 }
+        },
+        {
+          $limit: 10
+        },
+        {
+          $project: {
+            user: 1,
+            timestamp: 1,
+            site: 1,
+            content: 1,
+            regexCount: 1,
+          }
+        }
+      ]).toArray();
+
+      const topMatchedWords = await db.collection('events').aggregate([
+        {
+          $match: {
+            "leak.regex": { $type: "object" }
+          }
+        },
+        {
+          $project: {
+            regexArray: { $objectToArray: "$leak.regex" }
+          }
+        },
+        { $unwind: "$regexArray" }, // regexArray.k = matched word, regexArray.v = regex name
+        {
+          $group: {
+            _id: {
+              word: "$regexArray.k",
+              name: "$regexArray.v" // now this is the label
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { count: -1 } },
+        { $limit: 10 }
+      ]).toArray();
+  
     await client.close();
 
     res.render('stats', {title: "Statistics", 
@@ -736,7 +791,9 @@ app.get('/stats', authMiddleware, async (req, res) => {
       userStats,
       trendDates: trendData.map(d => d._id),
       trendCounts: trendData.map(d => d.count),
-      regexLabelStats
+      regexLabelStats,
+      regexHeavyEvents,
+      topMatchedWords
     });
 
   } catch (err) {
