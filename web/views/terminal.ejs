@@ -31,9 +31,10 @@
     const terminalEl = document.getElementById('terminal');
     term.open(terminalEl);
 
-    document.fonts.ready.then(() => {
-      fitAddon.fit(); // fits after font load ensures terminal can measure rows/cols correctly
-    });
+    setTimeout(() => {
+      fitAddon.fit();
+    }, 100); // try tweaking delay: 50–150ms
+
 
 
     window.addEventListener("resize", () => {
