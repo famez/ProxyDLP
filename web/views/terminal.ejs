@@ -28,7 +28,13 @@
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
 
-    term.open(document.getElementById('terminal'));
+    const terminalEl = document.getElementById('terminal');
+    term.open(terminalEl);
+
+    document.fonts.ready.then(() => {
+      fitAddon.fit(); // fits after font load ensures terminal can measure rows/cols correctly
+    });
+
 
     window.addEventListener("resize", () => {
       fitAddon.fit();
