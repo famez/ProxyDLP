@@ -306,6 +306,14 @@ app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
         { _id: new ObjectId(id) },
         { name: name, pattern: pattern }
       );
+      
+      gRPC_client.TopicRuleAdded({ id: id }, (err, response) => {
+        if (err) {
+          console.error('Error:', err);
+        } else {
+          console.log('TopicRuleAdded. Result:', response.message);
+        }
+      });
     }
     
     res.redirect('/rules');
