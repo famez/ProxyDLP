@@ -7,11 +7,18 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
   <style>
     body, html { margin: 0; height: 100%; }
-    #terminal { height: 100vh; width: 100vw; }
+    #terminal {
+      width: 100%;
+      height: 100%;
+      /* Or */
+      min-height: 0;  /* This helps flexbox sizing inside overflow-auto containers */
+    }
+
   </style>
 </head>
 <body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 min-h-screen flex items-center justify-center p-4">
-  <div id="terminal"></div>
+  <div id="terminal" class="w-full h-full min-h-0"></div>
+
 
   <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
@@ -58,16 +65,6 @@
     term.onResize(({cols, rows}) => {
         socket.send(JSON.stringify({type: 'resize', cols, rows}));
     });
-
-    const ro = new ResizeObserver(() => {
-      fitAddon.fit();  // this sets correct term.cols/rows
-      socket.send(JSON.stringify({
-        type: "resize",
-        cols: term.cols,
-        rows: term.rows
-      }));
-    });
-    ro.observe(container);
 
   </script>
 </body>
