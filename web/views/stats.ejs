@@ -28,26 +28,26 @@
 
     <!-- Top Users with Risky Events -->
     <div class="bg-white p-4 rounded-lg shadow">
-      <h2 class="text-lg font-medium mb-2">Top Risky Users</h2>
+      <h2 class="text-lg font-medium mb-2">Top Risky Users With More Leaked Topics</h2>
       <canvas id="usersChart" class="w-full h-48"></canvas>
     </div>
 
     <!-- Risky Events Trend -->
     <div class="bg-white p-4 rounded-lg shadow">
-      <h2 class="text-lg font-medium mb-2">Daily Leaked Events Trend</h2>
+      <h2 class="text-lg font-medium mb-2">Daily Leaked Topic Events Trend</h2>
       <canvas id="trendChart" class="w-full h-48"></canvas>
     </div>
 
     <!-- Regex Label Word Cloud -->
     <div class="bg-white p-4 rounded-lg shadow md:col-span-2">
-      <h2 class="text-lg font-medium mb-2">Regex Match Categories</h2>
+      <h2 class="text-lg font-medium mb-2">Regular Expression Match Categories</h2>
       <canvas id="regexLabelCloud" width="1000" height="300" class="mx-auto"></canvas>
     </div>
   </div>
 
   <!-- Risky Events Table -->
   <div class="max-w-7xl mx-auto mt-8 bg-white p-4 rounded-lg shadow px-4 overflow-x-auto">
-    <h2 class="text-lg font-medium mb-3">Top 10 Leaked Events</h2>
+    <h2 class="text-lg font-medium mb-3">Top 10 Leaked Topic Events</h2>
     <table class="min-w-full text-sm text-left">
       <thead class="bg-gray-100">
         <tr>
@@ -56,6 +56,7 @@
           <th class="px-4 py-2">Cos Sim</th>
           <th class="px-4 py-2">Content</th>
           <th class="px-4 py-2">Site</th>
+          <th class="px-4 py-2">Most Relevant Topic</th>
         </tr>
       </thead>
       <tbody>
@@ -67,6 +68,7 @@
               <td class="px-4 py-2"><%= event.cos_score.toFixed(3) %></td>
               <td class="px-4 py-2"><%= event.content && event.content.length > 100 ? event.content.substring(0, 100) + '...' : event.content %></td>
               <td class="px-4 py-2"><%= event.site %></td>
+              <td class="px-4 py-2"><%= event.topicName || 'N/A' %></td>
             </tr>
           <% }) %>
         <% } else { %>

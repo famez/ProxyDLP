@@ -554,25 +554,91 @@ app.get('/stats', authMiddleware, async (req, res) => {
     ({ client, db } = await connectToDB());
 
     const riskyEvents = await db.collection('events').aggregate([
-      {
-        $addFields: {
-          cos_scores_flat: {
-            $reduce: {
-              input: "$cos_sim_matrix.matrix",
-              initialValue: [],
-              in: { $concatArrays: ["$$value", "$$this"] }
+          // Step 1: Flatten the 2D matrix to 1D, safely handle missing matrix
+          {
+            $addFields: {
+              flatScores: {
+                $reduce: {
+                  input: { $ifNull: ["$cos_sim_matrix.matrix", []] },
+                  initialValue: [],
+                  in: { $concatArrays: ["$$value", "$$this"] }
+                }
+              }
+            }
+          },
+          // Step 2: Compute max score and flat index
+          {
+            $addFields: {
+              maxScore: { $max: "$flatScores" },
+              flatIndex: { $indexOfArray: ["$flatScores", { $max: "$flatScores" }] }
+            }
+          },
+          // Step 3: Derive numCols and compute topicIndex safely
+          {
+            $addFields: {
+              numCols: {
+                $cond: {
+                  if: { $gt: [{ $size: { $ifNull: ["$cos_sim_matrix.matrix", []] } }, 0] },
+                  then: { $size: { $arrayElemAt: ["$cos_sim_matrix.matrix", 0] } },
+                  else: 1 // prevent division by zero
+                }
+              }
+            }
+          },
+          {
+            $addFields: {
+              topicIndex: {
+                $cond: {
+                  if: { $gt: ["$numCols", 0] },
+                  then: { $floor: { $divide: ["$flatIndex", "$numCols"] } },
+                  else: null
+                }
+              }
+            }
+          },
+          // Step 4: Get topic ID from topics array
+          {
+            $addFields: {
+              topicId: {
+                $arrayElemAt: [
+                  { $ifNull: ["$cos_sim_matrix.topics", []] },
+                  "$topicIndex"
+                ]
+              }
+            }
+          },
+          // Step 5: Lookup the rule by topicId
+          {
+            $lookup: {
+              from: "cos_sim_rules",
+              localField: "topicId",
+              foreignField: "_id",
+              as: "matchedRule"
+            }
+          },
+          // Step 6: Extract the name of the matched rule
+          {
+            $addFields: {
+              topicName: { $arrayElemAt: ["$matchedRule.name", 0] }
+            }
+          },
+          // Step 7: Sort and limit
+          { $sort: { maxScore: -1 } },
+          { $limit: 10 },
+          // Step 8: Project only relevant fields
+          {
+            $project: {
+              user: 1,
+              timestamp: 1,
+              site: 1,
+              content: 1,
+              cos_score: "$maxScore",
+              topicName: 1
             }
           }
-        }
-      },
-      {
-        $addFields: {
-          cos_score: { $max: "$cos_scores_flat" }
-        }
-      },
-      { $sort: { cos_score: -1 } },
-      { $limit: 10 }
-    ]).toArray();
+        ]).toArray();
+
+
 
 
     const topicStats = await db.collection('events').aggregate([
