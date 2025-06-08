@@ -554,6 +554,267 @@ app.get('/event/:id', authMiddleware, async (req, res) => {
   }
 });
 
+app.get('/stats', authMiddleware, async (req, res) => {
+
+  let client;
+
+  try {
+
+    ({ client, db } = await connectToDB());
+
+    const riskyEvents = await db.collection('events').aggregate([
+          // Step 1: Flatten the 2D matrix to 1D, safely handle missing matrix
+          {
+            $addFields: {
+              flatScores: {
+                $reduce: {
+                  input: { $ifNull: ["$cos_sim_matrix.matrix", []] },
+                  initialValue: [],
+                  in: { $concatArrays: ["$$value", "$$this"] }
+                }
+              }
+            }
+          },
+          // Step 2: Compute max score and flat index
+          {
+            $addFields: {
+              maxScore: { $max: "$flatScores" },
+              flatIndex: { $indexOfArray: ["$flatScores", { $max: "$flatScores" }] }
+            }
+          },
+          // Step 3: Derive numCols and compute topicIndex safely
+          {
+            $addFields: {
+              numCols: {
+                $cond: {
+                  if: { $gt: [{ $size: { $ifNull: ["$cos_sim_matrix.matrix", []] } }, 0] },
+                  then: { $size: { $arrayElemAt: ["$cos_sim_matrix.matrix", 0] } },
+                  else: 1 // prevent division by zero
+                }
+              }
+            }
+          },
+          {
+            $addFields: {
+              topicIndex: {
+                $cond: {
+                  if: { $gt: ["$numCols", 0] },
+                  then: { $floor: { $divide: ["$flatIndex", "$numCols"] } },
+                  else: null
+                }
+              }
+            }
+          },
+          // Step 4: Get topic ID from topics array
+          {
+            $addFields: {
+              topicId: {
+                $arrayElemAt: [
+                  { $ifNull: ["$cos_sim_matrix.topics", []] },
+                  "$topicIndex"
+                ]
+              }
+            }
+          },
+          // Step 5: Lookup the rule by topicId
+          {
+            $lookup: {
+              from: "cos_sim_rules",
+              localField: "topicId",
+              foreignField: "_id",
+              as: "matchedRule"
+            }
+          },
+          // Step 6: Extract the name of the matched rule
+          {
+            $addFields: {
+              topicName: { $arrayElemAt: ["$matchedRule.name", 0] }
+            }
+          },
+          // Step 7: Sort and limit
+          { $sort: { maxScore: -1 } },
+          { $limit: 10 },
+          // Step 8: Project only relevant fields
+          {
+            $project: {
+              user: 1,
+              timestamp: 1,
+              site: 1,
+              content: 1,
+              cos_score: "$maxScore",
+              topicName: 1
+            }
+          }
+        ]).toArray();
+
+
+
+
+    const topicStats = await db.collection('events').aggregate([
+      { $unwind: '$leak.topic' },                  // unwind the array
+      { $group: { _id: '$leak.topic', count: { $sum: 1 } } },  // group by each topic string
+      { $sort: { count: -1 } },                    // sort by descending count
+      { $limit: 5 }                                // limit top 5 topics
+    ]).toArray();
+
+
+    const toolUsage = await db.collection('events').aggregate([
+      { $group: { _id: '$site', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]).toArray();
+
+
+
+    const userStats = await db.collection('events').aggregate([
+        {
+          $addFields: {
+            cos_scores_flat: {
+              $reduce: {
+                input: "$cos_sim_matrix.matrix",
+                initialValue: [],
+                in: { $concatArrays: ["$$value", "$$this"] }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            cos_score: { $max: "$cos_scores_flat" }
+          }
+        },
+        {
+          $group: {
+            _id: '$user',
+            count: { $sum: 1 },
+            avg_score: { $avg: "$cos_score" },
+            max_score: { $max: "$cos_score" }
+          }
+        },
+        { $sort: { max_score: -1 } },
+        { $limit: 5 }
+      ]).toArray();
+
+
+    const trendData = await db.collection('events').aggregate([
+        {
+          $addFields: {
+            cos_scores_flat: {
+              $reduce: {
+                input: "$cos_sim_matrix.matrix",
+                initialValue: [],
+                in: { $concatArrays: ["$$value", "$$this"] }
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            cos_score: { $max: "$cos_scores_flat" }
+          }
+        },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+            count: { $sum: 1 },
+            avg_score: { $avg: "$cos_score" }
+          }
+        },
+        { $sort: { "_id": 1 } }
+      ]).toArray();
+
+
+      const regexLabelStats = await db.collection('events').aggregate([
+        {
+          $project: {
+            regexLabels: { $objectToArray: "$leak.regex" }
+          }
+        },
+        { $unwind: "$regexLabels" },
+        { $group: { _id: "$regexLabels.v", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 50 }
+      ]).toArray();
+
+
+      const regexHeavyEvents = await db.collection('events').aggregate([
+        {
+          $match: {
+            "leak.regex": { $type: "object" }
+          }
+        },
+        {
+          $addFields: {
+            regexArray: { $objectToArray: "$leak.regex" },
+            regexCount: { $size: { $objectToArray: "$leak.regex" } }
+          }
+        },
+    
+        {
+          $sort: { regexCount: -1 }
+        },
+        {
+          $limit: 10
+        },
+        {
+          $project: {
+            user: 1,
+            timestamp: 1,
+            site: 1,
+            content: 1,
+            regexCount: 1,
+          }
+        }
+      ]).toArray();
+
+      const topMatchedWords = await db.collection('events').aggregate([
+        {
+          $match: {
+            "leak.regex": { $type: "object" }
+          }
+        },
+        {
+          $project: {
+            regexArray: { $objectToArray: "$leak.regex" }
+          }
+        },
+        { $unwind: "$regexArray" }, // regexArray.k = matched word, regexArray.v = regex name
+        {
+          $group: {
+            _id: {
+              word: "$regexArray.k",
+              name: "$regexArray.v" // now this is the label
+            },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { count: -1 } },
+        { $limit: 10 }
+      ]).toArray();
+  
+    await client.close();
+
+    res.render('stats', {title: "Statistics", 
+      riskyEvents,
+      topicStats,
+      toolUsage,
+      userStats,
+      trendDates: trendData.map(d => d._id),
+      trendCounts: trendData.map(d => d.count),
+      regexLabelStats,
+      regexHeavyEvents,
+      topMatchedWords
+    });
+
+  } catch (err) {
+    console.error('Error fetching stats:', err);
+    res.status(500).send('Internal Server Error');
+  }
+  finally {
+    if (client) await client.close();
+  }
+
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

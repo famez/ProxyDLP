@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DLP Statistics Dashboard</title>
+  <meta charset="UTF-8">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+  <h1 class="text-2xl font-semibold text-center mt-6 mb-10">DLP Statistics Dashboard</h1>
+
+  <!-- Chart Grid -->
+  <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 px-4">
+
+    <!-- Top 5 Leak Topics -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-medium mb-2">Top 5 Leak Topics</h2>
+      <canvas id="topicsChart" class="w-full h-48"></canvas>
+    </div>
+
+    <!-- Tool Usage -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-medium mb-2">Tool Usage</h2>
+      <canvas id="toolsChart" class="w-full h-48"></canvas>
+    </div>
+
+    <!-- Top Users with Risky Events -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-medium mb-2">Top Risky Users With More Leaked Topics</h2>
+      <canvas id="usersChart" class="w-full h-48"></canvas>
+    </div>
+
+    <!-- Risky Events Trend -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h2 class="text-lg font-medium mb-2">Daily Leaked Topic Events Trend</h2>
+      <canvas id="trendChart" class="w-full h-48"></canvas>
+    </div>
+
+    <!-- Regex Label Word Cloud -->
+    <div class="bg-white p-4 rounded-lg shadow md:col-span-2">
+      <h2 class="text-lg font-medium mb-2">Regular Expression Match Categories</h2>
+      <canvas id="regexLabelCloud" width="1000" height="300" class="mx-auto"></canvas>
+    </div>
+  </div>
+
+  <!-- Risky Events Table -->
+  <div class="max-w-7xl mx-auto mt-8 bg-white p-4 rounded-lg shadow px-4 overflow-x-auto">
+    <h2 class="text-lg font-medium mb-3">Top 10 Leaked Topic Events</h2>
+    <table class="min-w-full text-sm text-left">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="px-4 py-2">User</th>
+          <th class="px-4 py-2">Timestamp</th>
+          <th class="px-4 py-2">Topic Similarity</th>
+          <th class="px-4 py-2">Content</th>
+          <th class="px-4 py-2">Site</th>
+          <th class="px-4 py-2">Most Relevant Topic</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (riskyEvents && riskyEvents.length) { %>
+          <% riskyEvents.forEach(event => { %>
+            <tr class="border-b">
+              <td class="px-4 py-2"><%= event.user %></td>
+              <td class="px-4 py-2"><%= new Date(event.timestamp).toLocaleString() %></td>
+              <td class="px-4 py-2"><%= event.cos_score.toFixed(3) %></td>
+              <td class="px-4 py-2"><%= event.content && event.content.length > 100 ? event.content.substring(0, 100) + '...' : event.content %></td>
+              <td class="px-4 py-2"><%= event.site %></td>
+              <td class="px-4 py-2"><%= event.topicName || 'N/A' %></td>
+            </tr>
+          <% }) %>
+        <% } else { %>
+          <tr><td colspan="5" class="px-4 py-2 text-center">No risky events found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Events With Most Regex Matches -->
+  <div class="max-w-7xl mx-auto mt-8 bg-white p-4 rounded-lg shadow px-4 overflow-x-auto">
+    <h2 class="text-lg font-medium mb-3">Top 10 Events with Most Regex Matches</h2>
+    <table class="min-w-full text-sm text-left">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="px-4 py-2">User</th>
+          <th class="px-4 py-2">Timestamp</th>
+          <th class="px-4 py-2">Regex Count</th>
+          <th class="px-4 py-2">Site</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (regexHeavyEvents && regexHeavyEvents.length) { %>
+          <% regexHeavyEvents.forEach(event => { %>
+            <tr class="border-b">
+              <td class="px-4 py-2"><%= event.user %></td>
+              <td class="px-4 py-2"><%= new Date(event.timestamp).toLocaleString() %></td>
+              <td class="px-4 py-2"><%= event.regexCount %></td>
+              <td class="px-4 py-2"><%= event.site %></td>
+            </tr>
+          <% }) %>
+        <% } else { %>
+          <tr><td colspan="6" class="px-4 py-2 text-center">No regex matches found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Top Matched Regex Words -->
+  <div class="bg-white p-4 rounded-lg shadow max-w-4xl mx-auto mt-6">
+    <h2 class="text-base font-medium mb-2 text-gray-700">Top Regex Matches (Word + Category)</h2>
+    <canvas id="regexWordsChart" class="w-full h-56"></canvas>
+  </div>
+
+
+
+
+  <!-- Chart.js Config -->
+  <script>
+    const topicLabels = <%- JSON.stringify(topicStats.map(t => t._id)) %>;
+    const topicData = <%- JSON.stringify(topicStats.map(t => t.count)) %>;
+    new Chart(document.getElementById('topicsChart'), {
+      type: 'bar',
+      data: { labels: topicLabels, datasets: [{ label: 'Mentions', data: topicData, backgroundColor: '#ef4444' }] },
+      options: { plugins: { legend: { display: false } }, responsive: true }
+    });
+
+    const toolLabels = <%- JSON.stringify(toolUsage.map(t => t._id)) %>;
+    const toolData = <%- JSON.stringify(toolUsage.map(t => t.count)) %>;
+    new Chart(document.getElementById('toolsChart'), {
+      type: 'bar',
+      data: { labels: toolLabels, datasets: [{ label: 'Usage Count', data: toolData, backgroundColor: '#3b82f6' }] },
+      options: { plugins: { legend: { display: false } }, responsive: true }
+    });
+
+    const userLabels = <%- JSON.stringify(userStats.map(u => u._id)) %>;
+    const userData = <%- JSON.stringify(userStats.map(u => u.count)) %>;
+    new Chart(document.getElementById('usersChart'), {
+      type: 'bar',
+      data: { labels: userLabels, datasets: [{ label: 'Risky Events', data: userData, backgroundColor: '#facc15' }] },
+      options: { plugins: { legend: { display: false } }, responsive: true }
+    });
+
+    const trendLabels = <%- JSON.stringify(trendDates) %>;
+    const trendCounts = <%- JSON.stringify(trendCounts) %>;
+    new Chart(document.getElementById('trendChart'), {
+      type: 'line',
+      data: {
+        labels: trendLabels,
+        datasets: [{
+          label: 'Risky Events Per Day',
+          data: trendCounts,
+          borderColor: '#10b981',
+          fill: false,
+          tension: 0.3
+        }]
+      },
+      options: { responsive: true }
+    });
+
+    const regexLabels = <%- JSON.stringify(regexLabelStats.map(r => [r._id, r.count])) %>;
+    WordCloud(document.getElementById('regexLabelCloud'), {
+      list: regexLabels,
+      gridSize: 8,
+      weightFactor: 3.2,
+      fontFamily: 'Segoe UI',
+      rotateRatio: 0,
+      color: 'random-dark',
+      backgroundColor: '#ffffff'
+    });
+
+    const regexWordLabels = <%- JSON.stringify(topMatchedWords.map(w => `${w._id.word}: ${w._id.name}`)) %>;
+    const regexWordCounts = <%- JSON.stringify(topMatchedWords.map(w => w.count)) %>;
+
+    new Chart(document.getElementById('regexWordsChart'), {
+      type: 'bar',
+      data: {
+        labels: regexWordLabels,
+        datasets: [{
+          label: 'Occurrences',
+          data: regexWordCounts,
+          backgroundColor: '#6366f1'
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false }
+        },
+        responsive: true
+      }
+    });
+
+
+
+  </script>
+
+</body>
+</html>
