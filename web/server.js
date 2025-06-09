@@ -642,6 +642,13 @@ app.get('/stats', authMiddleware, async (req, res) => {
           // Step 7: Sort and limit
           { $sort: { maxScore: -1 } },
           { $limit: 10 },
+          // ✅ Step 8: Filter out events with missing or invalid maxScore
+
+          {
+            $match: {
+              maxScore: { $type: "number" }
+            }
+          },
           // Step 8: Project only relevant fields
           {
             $project: {
