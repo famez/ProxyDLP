@@ -53,9 +53,7 @@ class Github_Copilot(Site):
 
             except json.JSONDecodeError:
                 ctx.log.info(f"Request body (raw): {body}")
-            # Save json_body to a file
-            with open("/tmp/copilot_json_body.json", "w") as f:
-                json.dump(json_body, f, indent=2)
+            
 
     def on_response_handle(self, flow):
 
