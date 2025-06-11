@@ -10,7 +10,7 @@ import monitor_pb2_grpc
 
 from proxy import Proxy
 from sites.chatgpt import ChatGPT
-#from sites.github_copilot import Github_Copilot
+from sites.github_copilot import Github_Copilot
 from sites.microsoft_copilot import Microsoft_Copilot
 
 
@@ -80,9 +80,7 @@ proxy = Proxy(account_login_callback, account_check_callback, conversation_callb
 
 proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"])
 proxy.register_site(Microsoft_Copilot, ["substrate.office.com/m365Copilot/Chathub", "sharepoint.com/personal", "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:"])
-#proxy.register_site(Github_Copilot, ["githubcopilot.com"])
-
-
+proxy.register_site(Github_Copilot, ["githubcopilot.com", "api.github.com/user"])
 
 channel = grpc.insecure_channel('monitor:50051')
 stub = monitor_pb2_grpc.MonitorStub(channel)
