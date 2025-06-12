@@ -76,11 +76,54 @@
           <span class="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full"><%= t %></span>
         <% }) %>
       </div>
+      <div class="mt-6 flex items-center space-x-2">
+        <button
+          id="markSensitiveBtn"
+          class="bg-red-500 hover:bg-red-600 text-white text-sm font-medium py-2 px-4 rounded-full shadow transition duration-200"
+        >
+          Mark content as sensitive
+        </button>
+
+        <!-- Tooltip icon with explanation -->
+        <div class="relative group">
+          <span
+            class="inline-block bg-gray-300 text-white rounded-full w-5 h-5 text-center text-xs cursor-default"
+            title="Click to mark this content for internal monitoring. It will be used to detect similar content using AI similarity matching."
+          >
+            ?
+          </span>
+        </div>
+      </div>
     <% } %>
 
     <div class="mt-6">
       <a href="/explore" class="text-sm text-indigo-600 underline hover:text-indigo-800">← Back to activity</a>
     </div>
   </div>
+
+  <script>
+  document.getElementById("markSensitiveBtn").addEventListener("click", async () => {
+    try {
+      const response = await fetch("/mark-sensitive", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          event_id: "<%= event._id %>",
+        })
+      });
+
+      if (response.ok) {
+        alert("Content marked as sensitive.");
+      } else {
+        alert("Failed to mark content. Please try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error occurred. Please check console.");
+    }
+  });
+</script>
 </body>
 </html>

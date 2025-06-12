@@ -65,6 +65,7 @@ services:
       MONGO_URI: mongodb://root:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/
     volumes:
       - uploaded-files:/uploads/
+      - faiss-data:/var/faiss/
     networks:
       - internal-net
 
@@ -116,6 +117,7 @@ services:
 volumes:
   mongodb-data:
   uploaded-files:
+  faiss-data:
 
 networks:
   internal-net:

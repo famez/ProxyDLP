@@ -5,6 +5,7 @@ package monitor;
 service Monitor {
   rpc EventAdded (EventID) returns (MonitorReply);
   rpc TopicRuleAdded (TopicRuleID) returns (MonitorReply);
+  rpc EventAddedToMonitor (EventID) returns (MonitorReply);
 
 }
 

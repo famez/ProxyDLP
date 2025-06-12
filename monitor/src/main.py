@@ -8,8 +8,8 @@ import pytesseract
 import io
 import zipfile
 from sentence_transformers import SentenceTransformer, util
-import spacy
-from pymongo import MongoClient
+#import spacy
+from pymongo import MongoClient, ReturnDocument
 from bson.objectid import ObjectId
 import numpy as np
 import grpc
@@ -17,7 +17,10 @@ from concurrent import futures
 import monitor_pb2
 import monitor_pb2_grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
+import faiss
 
+
+INDEX_PATH = '/var/faiss/faiss_index.index'
 
 background_executor = futures.ThreadPoolExecutor(max_workers=15)
 
@@ -25,11 +28,20 @@ db_client = MongoClient(os.getenv("MONGO_URI"))
 events_collection = db_client["proxyGPT"]["events"]
 regex_collection = db_client["proxyGPT"]["regex_rules"]
 cos_sim_collection = db_client["proxyGPT"]["cos_sim_rules"]
+counter_collection = db_client["proxyGPT"]["faiss_id_counters"]
 
-
-nlp = spacy.load("en_core_web_sm")
+#nlp = spacy.load("en_core_web_sm")
 
 embeddings_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+def get_next_faiss_id():
+    counter = counter_collection.find_one_and_update(
+        {"_id": "faiss_id_counter"},
+        {"$inc": {"last_id": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER
+    )
+    return counter["last_id"]
 
 
 def chunk_text(text, chunk_size=500, overlap=50):
@@ -41,11 +53,11 @@ def chunk_text(text, chunk_size=500, overlap=50):
         chunks.append(chunk)
     return chunks
 
-
+"""
 def analyze_text_ner(text):
     doc = nlp(text)
     return {ent.text: ent.label_ for ent in doc.ents}
-
+"""
 
 def detect_global_topics(S, sim_thresh=0.3, min_support=0.3, min_coverage=0.3):
     """
@@ -229,6 +241,7 @@ def on_event_added(event_id):
     
         leak = {}
         result = {}
+        embeddings = []
 
         if event['rational'] == "Conversation":
             print(f"Conversation, analysing: {event['content']}")
@@ -254,6 +267,15 @@ def on_event_added(event_id):
             print("Document updated successfully.")
         else:
             print("No changes made or document not found.")
+
+
+        # Let's check if the is similarity with the faiss index
+        embedding_vectors = np.array([emb['embedding'] for emb in embeddings], dtype='float32')
+        for embedding in embedding_vectors:
+            scores, indices = faiss_index.search(embedding.reshape(1, -1), 10)  # Search for top 10 similar embeddings
+            for score, idx in zip(scores[0], indices[0]):
+                if score >= 0.3:
+                    print(f"Found similar embedding with score {score} at index {idx}")
 
         print(f"Finished long task for Event ID: {event_id}")
 
@@ -284,20 +306,76 @@ def on_topic_rule_added(topic_rule_id):
         print(f"An error occurred: {e}")
 
 
+def on_event_added_to_monitor(event_id):
+    print(f"Started on_event_added_to_monitor for Event ID: {event_id}")
+    #Faiss stuff
+
+    try:
+        event = events_collection.find_one({'_id': ObjectId(event_id)})
+
+        if not event or 'embeddings' not in event or not event['embeddings']:
+            print(f"No embeddings found for Event ID: {event_id}, skipping FAISS index update.")
+            return
+        
+        # Iterate through documents and add faiss_id to each embedding
+        updated_embeddings = []
+        for emb in event.get("embeddings", []):
+            emb['faiss_id'] = get_next_faiss_id()  # Get a new FAISS ID
+            updated_embeddings.append(emb)
+
+        # Prepare data
+        vectors = np.array([emb['embedding'] for emb in updated_embeddings], dtype='float32')
+        ids = np.array([emb['faiss_id'] for emb in updated_embeddings], dtype='int64')
+
+        #Add embeddings to FAISS index
+        faiss_index.add_with_ids(vectors, ids)
+
+        #Save the FAISS index to disk
+        faiss.write_index(faiss_index, INDEX_PATH)
+
+        # Update the document with faiss_id
+        events_collection.update_one(
+            {"_id": ObjectId(event_id)},
+            {"$set": {"embeddings": updated_embeddings}}
+        )
+
+
+    except Exception as e:
+        # Handle the exception
+        print(f"An error occurred while adding event to monitor: {e}")
+        
+
 class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
     def EventAdded(self, request, context):
         print(f"Received Event ID: {request.id}")
         background_executor.submit(on_event_added, request.id)
-        return monitor_pb2.MonitorReply(result=0)       #Everythig ok :)
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
     
     def TopicRuleAdded(self, request, context):
         print(f"Received Topic Rule ID: {request.id}")
         background_executor.submit(on_topic_rule_added, request.id)
-        return monitor_pb2.MonitorReply(result=0)       #Everythig ok :)
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
+    
+    def EventAddedToMonitor(self, request, context):
+        print(f"Received Event ID: {request.id}")
+        background_executor.submit(on_event_added_to_monitor, request.id)
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
 
 
 def main():
+
+    #Load FAISS index if it exists
+    if os.path.exists(INDEX_PATH):
+        print("📦 Loading existing FAISS index...")
+        global faiss_index
+        faiss_index = faiss.read_index(INDEX_PATH)
+    else:   #Inizialize it
+        print("🔍 No existing FAISS index found, starting fresh...")
+        dim = 384   # Dimension of the embeddings (for 'all-MiniLM-L6-v2')
+        flat = faiss.IndexFlatIP(dim)   # Use Inner Product (IP) for similarity search
+        faiss_index = faiss.IndexIDMap2(flat) # Create an index with ID mapping
+
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     monitor_pb2_grpc.add_MonitorServicer_to_server(MonitorServicer(), server)
 

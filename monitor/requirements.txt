@@ -2,12 +2,10 @@ python-magic
 pymupdf
 openpyxl
 python-docx
-SpeechRecognition
-pocketsphinx
 sentence-transformers
-spacy
 pillow
 pymongo
 pytesseract
 grpcio
 grpcio-tools
+faiss-cpu
