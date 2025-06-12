@@ -272,6 +272,7 @@ def on_event_added(event_id):
         # Let's check if the is similarity with the faiss index
         embedding_vectors = np.array([emb['embedding'] for emb in embeddings], dtype='float32')
         for embedding in embedding_vectors:
+            #faiss_index.hnsw.efSearch = 16  # Query time accuracy/speed tradeoff, default is 16
             scores, indices = faiss_index.search(embedding.reshape(1, -1), 10)  # Search for top 10 similar embeddings
             for score, idx in zip(scores[0], indices[0]):
                 if score >= 0.3:
@@ -374,6 +375,8 @@ def main():
         print("🔍 No existing FAISS index found, starting fresh...")
         dim = 384   # Dimension of the embeddings (for 'all-MiniLM-L6-v2')
         flat = faiss.IndexFlatIP(dim)   # Use Inner Product (IP) for similarity search
+        #flat = faiss.IndexHNSWFlat(dim, 32, faiss.METRIC_INNER_PRODUCT)  # Using Inner Product (cosine similarity with normalized vectors)
+        #flat.hnsw.efConstruction = 40  # Construction time/search accuracy tradeoff, default is 40
         faiss_index = faiss.IndexIDMap2(flat) # Create an index with ID mapping
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
