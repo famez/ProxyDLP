@@ -27,7 +27,7 @@ background_executor = futures.ThreadPoolExecutor(max_workers=15)
 db_client = MongoClient(os.getenv("MONGO_URI"))
 events_collection = db_client["proxyGPT"]["events"]
 regex_collection = db_client["proxyGPT"]["regex_rules"]
-cos_sim_collection = db_client["proxyGPT"]["cos_sim_rules"]
+topics_collection = db_client["proxyGPT"]["topic_rules"]
 counter_collection = db_client["proxyGPT"]["faiss_id_counters"]
 
 #nlp = spacy.load("en_core_web_sm")
@@ -53,58 +53,38 @@ def chunk_text(text, chunk_size=500, overlap=50):
         chunks.append(chunk)
     return chunks
 
-"""
-def analyze_text_ner(text):
-    doc = nlp(text)
-    return {ent.text: ent.label_ for ent in doc.ents}
-"""
-
-def detect_global_topics(S, sim_thresh=0.3, min_support=0.3, min_coverage=0.3):
-    """
-    S: np.ndarray of shape (num_topics, num_chunks)
-    Returns: List of topic indices that are 'global'
-    """
-
-    S = np.array(S)
-
-    global_topics = []
-    num_topics, num_chunks = S.shape
-
-    for i in range(num_topics):
-        sim_row = S[i]  # similarities for topic i across chunks
-        high_sim_idxs = np.where(sim_row >= sim_thresh)[0]
-
-        support = len(high_sim_idxs) / num_chunks
-
-        if len(high_sim_idxs) == 0:
-            coverage = 0
-        elif num_chunks == 1:
-            coverage = 1.0
-        else:
-            coverage = (high_sim_idxs[-1] - high_sim_idxs[0]) / (num_chunks - 1)
 
 
-        print(f"Coverage: {coverage}, support: {support}, high_sim_idxs: {high_sim_idxs}")
+def analyze_topic_leak(text):
 
-        if support >= min_support and coverage >= min_coverage:
-            global_topics.append(i)
+    leaked_topics = []
+    chunk_embeddings = obtain_embeddings_from_text(text)
+    
+    # Let's check if the is similarity with the faiss index
+    embedding_vectors = np.array([emb['embedding'] for emb in chunk_embeddings], dtype='float32')
+    for embedding in embedding_vectors:
+        #faiss_index.hnsw.efSearch = 16  # Query time accuracy/speed tradeoff, default is 16
+        scores, indices = faiss_index.search(embedding.reshape(1, -1), 10)  # Search for top 10 similar embeddings
+        for score, idx in zip(scores[0], indices[0]):
+            if score >= 0.3:        #Cosine similarity threshold higher or equals to 0.3
+                print(f"Found similar embedding with score {score} at index {idx}")
 
-    return global_topics
+                doc = topics_collection.find_one(
+                    {"faiss_indexes.faiss_id": int(idx)},
+                    {"faiss_indexes.$": 1, "name": 1}  # Only project the matched index with the chunk
+                )
+
+                
+                if doc:
+                    print("Matched Document ID:", doc["_id"])
+                    leaked_topics.append({"name": doc['name'], "faiss_id": int(idx), "score": float(score)})
+
+                else:
+                    print("No matching document found.")
 
 
-def analyze_topic_leak(cosine_similarity_matrix):
+    return leaked_topics
 
-    #Detect with cosine similarity matrix if a topic is present along the text.
-    global_topics = detect_global_topics(cosine_similarity_matrix["matrix"])
-
-    #Obtain the ObjectIds of the matched topics in MongoDB on the global document.
-    topic_ids = [cosine_similarity_matrix["topics"][i] for i in global_topics]
-
-    #Obtain the name of the topics and return them.
-    topics = [ doc['name'] for doc in cos_sim_collection.find({"_id": {"$in": topic_ids}}) ]
-
-    return topics
-        
     
 def obtain_embeddings_from_text(text):
     chunks = chunk_text(text)
@@ -115,34 +95,13 @@ def obtain_embeddings_from_text(text):
     return linked_data
 
 
-def create_cos_sim_matrix(chunk_embeddings):
-    label_embeddings = [ doc['embeddings'] for doc in cos_sim_collection.find() ]
-    embeddings = [ embedding["embedding"] for embedding in chunk_embeddings ]
-
-    #Cosine similarity matrix between topic embeddings and the chunk embeddings
-    S = util.cos_sim(label_embeddings, embeddings)
-    
-    topic_ids = [doc['_id'] for doc in cos_sim_collection.find()]
-
-    cosine_similarity_matrix = {"topics": topic_ids, "matrix": S.tolist()}
-
-    return cosine_similarity_matrix
-
 
 def analyze_text(text):
     leak = {}
     leak['regex'] = analyze_text_regex(text)
-    #leak['ner'] = analyze_text_ner(text)
-    leak['ner'] = {}                    #For the moment, don't use NER as it does not provide useful information.
-    chunk_embeddings = obtain_embeddings_from_text(text)
-    if cos_sim_collection.count_documents({}) == 0:     #If no topics to compare with, then return empty dicts.
-        cosine_similarity_matrix = {}
-        leak['topic'] = []
-    else:
-        cosine_similarity_matrix = create_cos_sim_matrix(chunk_embeddings)
-        leak['topic'] = analyze_topic_leak(cosine_similarity_matrix)
+    leak['topic'] = analyze_topic_leak(text)
 
-    return leak, chunk_embeddings, cosine_similarity_matrix 
+    return leak
 
 def analyze_text_regex(text):
 
@@ -241,25 +200,24 @@ def on_event_added(event_id):
     
         leak = {}
         result = {}
-        embeddings = []
 
         if event['rational'] == "Conversation":
             print(f"Conversation, analysing: {event['content']}")
-            leak, embeddings, cos_sim_matrix = analyze_text(event['content'])
+            leak = analyze_text(event['content'])
             print(f"Done: {leak}")
 
 
             result = events_collection.update_one(
                 {"_id": ObjectId(event_id)},
-                {"$set": {"leak": leak, "embeddings": embeddings, "cos_sim_matrix": cos_sim_matrix}}
+                {"$set": {"leak": leak}}
             )
 
         elif event['rational'] == "Attached file":
-            text, (leak, embeddings, cos_sim_matrix) = analyze_file(event['filepath'], event['content_type'])
+            text, leak = analyze_file(event['filepath'], event['content_type'])
 
             result = events_collection.update_one(
                 {"_id": ObjectId(event_id)},
-                {"$set": {"leak": leak, "content": text, "embeddings": embeddings, "cos_sim_matrix": cos_sim_matrix}}
+                {"$set": {"leak": leak}}
             )
 
 
@@ -268,15 +226,6 @@ def on_event_added(event_id):
         else:
             print("No changes made or document not found.")
 
-
-        # Let's check if the is similarity with the faiss index
-        embedding_vectors = np.array([emb['embedding'] for emb in embeddings], dtype='float32')
-        for embedding in embedding_vectors:
-            #faiss_index.hnsw.efSearch = 16  # Query time accuracy/speed tradeoff, default is 16
-            scores, indices = faiss_index.search(embedding.reshape(1, -1), 10)  # Search for top 10 similar embeddings
-            for score, idx in zip(scores[0], indices[0]):
-                if score >= 0.3:
-                    print(f"Found similar embedding with score {score} at index {idx}")
 
         print(f"Finished long task for Event ID: {event_id}")
 
@@ -289,15 +238,26 @@ def on_topic_rule_added(topic_rule_id):
     try:
 
         print(f"Started on_topic_rule_added for Topic Rule ID: {topic_rule_id}")
-        topic_rule = cos_sim_collection.find_one({'_id': ObjectId(topic_rule_id)})
+        topic_rule = topics_collection.find_one({'_id': ObjectId(topic_rule_id)})
 
         print(f"Topic Rule obtained: {topic_rule}")
-    
-        encoded = embeddings_model.encode(topic_rule['pattern'], normalize_embeddings=True)
 
-        cos_sim_collection.update_one(
+        chunks = chunk_text(topic_rule['pattern'])
+        embeddings = embeddings_model.encode(chunks, normalize_embeddings=True)
+        faiss_indexes = [{"chunk": chunk, "faiss_id": get_next_faiss_id()} for chunk in chunks]
+
+        # Prepare data
+        ids = np.array([index['faiss_id'] for index in faiss_indexes], dtype='int64')
+
+        #Add embeddings to FAISS index
+        faiss_index.add_with_ids(embeddings, ids)
+
+        #Save the FAISS index to disk
+        faiss.write_index(faiss_index, INDEX_PATH)
+
+        topics_collection.update_one(
             {'_id': ObjectId(topic_rule_id)},  # Filter to find the document
-            {'$set': {'embeddings': encoded.tolist()}}  # Field to add or update
+            {'$set': {'faiss_indexes': faiss_indexes}}  # Field to add or update
         )
 
         #print(f"Topic Rule encoded: {encoded}")

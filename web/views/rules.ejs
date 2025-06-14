@@ -52,7 +52,7 @@
       <div class="bg-white shadow-lg rounded-xl p-6">
         <h2 class="text-xl font-semibold mb-4">Topic Match Rules</h2>
         <ul class="space-y-4 mb-6">
-          <% cossimrules.forEach(rule => { %>
+          <% topicRules.forEach(rule => { %>
                     <li class="border rounded-lg p-4 bg-gray-50">
                     <div class="font-bold"><%= rule.name %></div>
                     <div class="text-sm text-gray-700"><code><%= rule.pattern %></code></div>
@@ -78,7 +78,7 @@
             <input name="pattern" required class="w-full border rounded p-2 font-mono" />
           </div>
           <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-            Add Text Rule
+            Add Topic Rule
           </button>
         </form>
       </div>

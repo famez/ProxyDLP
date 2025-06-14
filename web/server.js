@@ -74,7 +74,7 @@ async function getRegexRules() {
 
 async function getTopicMatchRules() {
   const { client, db } = await connectToDB();
-  const topicRules = await db.collection('cos_sim_rules').find().toArray();
+  const topicRules = await db.collection('topic_rules').find().toArray();
   await client.close();
   return topicRules;
 }
@@ -179,8 +179,8 @@ app.get('/explore', authMiddleware, async (req, res) => {
 app.get('/rules', authMiddleware, async (req, res) => {
   try {
     regexRules = await getRegexRules();
-    cossimrules = await getTopicMatchRules();
-    res.render('rules', { title: "Rules Manager", regexRules, cossimrules });
+    topicRules = await getTopicMatchRules();
+    res.render('rules', { title: "Rules Manager", regexRules, topicRules });
   } catch (err) {
     console.error('Error loading rules:', err);
     res.status(500).send('Internal Server Error');
@@ -221,7 +221,7 @@ app.post('/rules/topic/add', authMiddleware, async (req, res) => {
   let client;
   try {
     ({ client, db } = await connectToDB());
-    const result = await db.collection('cos_sim_rules').insertOne({ name: name, pattern: pattern });
+    const result = await db.collection('topic_rules').insertOne({ name: name, pattern: pattern });
     gRPC_client.TopicRuleAdded({ id: result.insertedId }, (err, response) => {
       if (err) {
         console.error('Error:', err);
@@ -248,7 +248,7 @@ app.post('/rules/topic/add', authMiddleware, async (req, res) => {
 app.post('/rules/:type/delete/:id', authMiddleware, async (req, res) => {
   const { type, id } = req.params;
 
-  const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
+  const collection = type === 'regex' ? 'regex_rules' : 'topic_rules';
   let client;
   try {
     ({ client, db } = await connectToDB());
@@ -264,7 +264,7 @@ app.post('/rules/:type/delete/:id', authMiddleware, async (req, res) => {
 
 app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
   const { type, id } = req.params;
-  const collection = type === 'regex' ? 'regex_rules' : 'cos_sim_rules';
+  const collection = type === 'regex' ? 'regex_rules' : 'topic_rules';
   let client;
   try {
     ({ client, db } = await connectToDB());
@@ -302,7 +302,7 @@ app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
         { [name]: pattern }
       );
     } else {
-      await db.collection('cos_sim_rules').replaceOne(
+      await db.collection('topic_rules').replaceOne(
         { _id: new ObjectId(id) },
         { name: name, pattern: pattern }
       );
@@ -627,7 +627,7 @@ app.get('/stats', authMiddleware, async (req, res) => {
           // Step 5: Lookup the rule by topicId
           {
             $lookup: {
-              from: "cos_sim_rules",
+              from: "topic_rules",
               localField: "topicId",
               foreignField: "_id",
               as: "matchedRule"

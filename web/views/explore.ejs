@@ -236,17 +236,10 @@
                   </span>
               </span>
               <% }) %>
-              <% Object.entries(event.leak.ner).forEach(function ([key, value]) { %>
-              <span class="mt-2 tag-container">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      <%= key %>: <%= value %>
-                  </span>
-              </span>
-              <% }) %>
               <% event.leak.topic.forEach(topic => { %>
               <span class="mt-2 tag-container">
                   <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <%= topic %>
+                      <%= topic.name %>
                   </span>
               </span>
               <% }) %>
