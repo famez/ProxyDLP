@@ -30,7 +30,7 @@
           <% users.forEach(user => { %>
             <tr class="border-t">
               <td class="py-3 px-4"><%= user.username %></td>
-              <td class="py-3 px-4 flex gap-2">
+              <td class="py-3 px-4 flex flex-wrap gap-2 items-center">
                 <!-- Edit Password -->
                 <form method="POST" action="/update-password" class="flex gap-2 items-center">
                   <input type="hidden" name="username" value="<%= user.username %>">
@@ -43,7 +43,14 @@
                   <input type="hidden" name="username" value="<%= user.username %>">
                   <button type="submit" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Delete</button>
                 </form>
+
+                <!-- Manage Permissions -->
+                <form method="GET" action="/manage-permissions">
+                  <input type="hidden" name="username" value="<%= user.username %>">
+                  <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">Manage Permissions</button>
+                </form>
               </td>
+
             </tr>
           <% }) %>
         </tbody>
