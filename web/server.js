@@ -571,106 +571,71 @@ app.get('/stats', authMiddleware, async (req, res) => {
     ({ client, db } = await connectToDB());
 
     const riskyEvents = await db.collection('events').aggregate([
-          // Step 1: Flatten the 2D matrix to 1D, safely handle missing matrix
-          {
-            $addFields: {
-              flatScores: {
-                $reduce: {
-                  input: { $ifNull: ["$cos_sim_matrix.matrix", []] },
-                  initialValue: [],
-                  in: { $concatArrays: ["$$value", "$$this"] }
-                }
+      // Step 1: Extract max score from leak.topic array
+      {
+        $addFields: {
+          maxScore: { 
+            $max: {
+              $map: {
+                input: { $ifNull: ["$leak.topic", []] }, // safely get leak.topic
+                as: "t",
+                in: "$$t.score"
               }
-            }
-          },
-          // Step 2: Compute max score and flat index
-          {
-            $addFields: {
-              maxScore: { $max: "$flatScores" },
-              flatIndex: { $indexOfArray: ["$flatScores", { $max: "$flatScores" }] }
-            }
-          },
-          // Step 3: Derive numCols and compute topicIndex safely
-          {
-            $addFields: {
-              numCols: {
-                $cond: {
-                  if: { $gt: [{ $size: { $ifNull: ["$cos_sim_matrix.matrix", []] } }, 0] },
-                  then: { $size: { $arrayElemAt: ["$cos_sim_matrix.matrix", 0] } },
-                  else: 1 // prevent division by zero
-                }
-              }
-            }
-          },
-          {
-            $addFields: {
-              topicIndex: {
-                $cond: {
-                  if: { $gt: ["$numCols", 0] },
-                  then: { $floor: { $divide: ["$flatIndex", "$numCols"] } },
-                  else: null
-                }
-              }
-            }
-          },
-          // Step 4: Get topic ID from topics array
-          {
-            $addFields: {
-              topicId: {
-                $arrayElemAt: [
-                  { $ifNull: ["$cos_sim_matrix.topics", []] },
-                  "$topicIndex"
-                ]
-              }
-            }
-          },
-          // Step 5: Lookup the rule by topicId
-          {
-            $lookup: {
-              from: "topic_rules",
-              localField: "topicId",
-              foreignField: "_id",
-              as: "matchedRule"
-            }
-          },
-          // Step 6: Extract the name of the matched rule
-          {
-            $addFields: {
-              topicName: { $arrayElemAt: ["$matchedRule.name", 0] }
-            }
-          },
-          // Step 7: Sort and limit
-          { $sort: { maxScore: -1 } },
-          { $limit: 10 },
-          // ✅ Step 8: Filter out events with missing or invalid maxScore
-
-          {
-            $match: {
-              maxScore: { $type: "number" }
-            }
-          },
-          // Step 8: Project only relevant fields
-          {
-            $project: {
-              user: 1,
-              timestamp: 1,
-              site: 1,
-              content: 1,
-              cos_score: "$maxScore",
-              topicName: 1
             }
           }
-        ]).toArray();
-
-
-
+        }
+      },
+      // Step 2: Filter events that have a valid maxScore
+      {
+        $match: {
+          maxScore: { $type: "number" }
+        }
+      },
+      // Step 3: Sort by maxScore descending
+      {
+        $sort: { maxScore: -1 }
+      },
+      // Step 4: Limit to top 10 events
+      {
+        $limit: 10
+      },
+      // Step 5: Find the topic object with the maxScore inside leak.topic
+      {
+        $addFields: {
+          topTopic: {
+            $arrayElemAt: [
+              {
+                $filter: {
+                  input: "$leak.topic",
+                  as: "t",
+                  cond: { $eq: ["$$t.score", "$maxScore"] }
+                }
+              },
+              0
+            ]
+          }
+        }
+      },
+      // Step 6: Project the fields you want to return
+      {
+        $project: {
+          user: 1,
+          timestamp: 1,
+          site: 1,
+          content: 1,
+          cos_score: "$maxScore",
+          topicName: "$topTopic.name",
+        }
+      }
+    ]).toArray();
 
     const topicStats = await db.collection('events').aggregate([
-      { $unwind: '$leak.topic' },                  // unwind the array
-      { $group: { _id: '$leak.topic', count: { $sum: 1 } } },  // group by each topic string
-      { $sort: { count: -1 } },                    // sort by descending count
-      { $limit: 5 }                                // limit top 5 topics
+      { $unwind: '$leak.topic' },                                
+      { $group: { _id: '$leak.topic.name', count: { $sum: 1 } } }, 
+      { $sort: { count: -1 } },
+      { $limit: 5 }
     ]).toArray();
+
 
 
     const toolUsage = await db.collection('events').aggregate([
@@ -681,61 +646,81 @@ app.get('/stats', authMiddleware, async (req, res) => {
 
 
     const userStats = await db.collection('events').aggregate([
-        {
-          $addFields: {
-            cos_scores_flat: {
-              $reduce: {
-                input: "$cos_sim_matrix.matrix",
-                initialValue: [],
-                in: { $concatArrays: ["$$value", "$$this"] }
+      // Step 1: Extract max score from leak.topic
+      {
+        $addFields: {
+          cos_score: {
+            $max: {
+              $map: {
+                input: { $ifNull: ["$leak.topic", []] },
+                as: "t",
+                in: "$$t.score"
               }
             }
           }
-        },
-        {
-          $addFields: {
-            cos_score: { $max: "$cos_scores_flat" }
-          }
-        },
-        {
-          $group: {
-            _id: '$user',
-            count: { $sum: 1 },
-            avg_score: { $avg: "$cos_score" },
-            max_score: { $max: "$cos_score" }
-          }
-        },
-        { $sort: { max_score: -1 } },
-        { $limit: 5 }
-      ]).toArray();
+        }
+      },
+      // Step 2: Filter events with a valid score
+      {
+        $match: {
+          cos_score: { $type: "number" }
+        }
+      },
+      // Step 3: Group by user and compute stats
+      {
+        $group: {
+          _id: '$user',
+          count: { $sum: 1 },
+          avg_score: { $avg: "$cos_score" },
+          max_score: { $max: "$cos_score" }
+        }
+      },
+      // Step 4: Sort and limit
+      {
+        $sort: { max_score: -1 }
+      },
+      {
+        $limit: 5
+      }
+    ]).toArray();
+
 
 
     const trendData = await db.collection('events').aggregate([
-        {
-          $addFields: {
-            cos_scores_flat: {
-              $reduce: {
-                input: "$cos_sim_matrix.matrix",
-                initialValue: [],
-                in: { $concatArrays: ["$$value", "$$this"] }
+      // Step 1: Compute max score from leak.topic
+      {
+        $addFields: {
+          cos_score: {
+            $max: {
+              $map: {
+                input: { $ifNull: ["$leak.topic", []] },
+                as: "t",
+                in: "$$t.score"
               }
             }
           }
-        },
-        {
-          $addFields: {
-            cos_score: { $max: "$cos_scores_flat" }
-          }
-        },
-        {
-          $group: {
-            _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
-            count: { $sum: 1 },
-            avg_score: { $avg: "$cos_score" }
-          }
-        },
-        { $sort: { "_id": 1 } }
-      ]).toArray();
+        }
+      },
+      // Step 2: Filter valid scores
+      {
+        $match: {
+          cos_score: { $type: "number" }
+        }
+      },
+      // Step 3: Group by date string
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+          count: { $sum: 1 },
+          avg_score: { $avg: "$cos_score" }
+        }
+      },
+      // Step 4: Sort by date
+      {
+        $sort: { "_id": 1 }
+      }
+    ]).toArray();
+
 
 
       const regexLabelStats = await db.collection('events').aggregate([
