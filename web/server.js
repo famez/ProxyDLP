@@ -553,7 +553,16 @@ app.get('/event/:id', authMiddleware, async (req, res) => {
     const events_collection = db.collection('events');
     const event = await events_collection.findOne({ _id: new ObjectId(id) });
     if (!event) return res.status(404).send('Event not found');
-    res.render('event-detail', { title: "Event detail", event });
+
+    // Get the Referer URL, or fallback to '/explore'
+    let backUrl = req.get('Referer') || '/explore';
+    const expectedPrefix = `https://${req.hostname}/explore`;
+    if (!backUrl.startsWith(expectedPrefix)) {
+      backUrl = '/explore';
+    }
+
+    res.render('event-detail', { title: "Event detail", event, backUrl });
+
   } catch (err) {
     console.error('Error fetching event:', err);
     res.status(500).send('Internal Server Error');
