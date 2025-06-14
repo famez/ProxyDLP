@@ -267,44 +267,7 @@ def on_topic_rule_added(topic_rule_id):
         print(f"An error occurred: {e}")
 
 
-def on_event_added_to_monitor(event_id):
-    print(f"Started on_event_added_to_monitor for Event ID: {event_id}")
-    #Faiss stuff
 
-    try:
-        event = events_collection.find_one({'_id': ObjectId(event_id)})
-
-        if not event or 'embeddings' not in event or not event['embeddings']:
-            print(f"No embeddings found for Event ID: {event_id}, skipping FAISS index update.")
-            return
-        
-        # Iterate through documents and add faiss_id to each embedding
-        updated_embeddings = []
-        for emb in event.get("embeddings", []):
-            emb['faiss_id'] = get_next_faiss_id()  # Get a new FAISS ID
-            updated_embeddings.append(emb)
-
-        # Prepare data
-        vectors = np.array([emb['embedding'] for emb in updated_embeddings], dtype='float32')
-        ids = np.array([emb['faiss_id'] for emb in updated_embeddings], dtype='int64')
-
-        #Add embeddings to FAISS index
-        faiss_index.add_with_ids(vectors, ids)
-
-        #Save the FAISS index to disk
-        faiss.write_index(faiss_index, INDEX_PATH)
-
-        # Update the document with faiss_id
-        events_collection.update_one(
-            {"_id": ObjectId(event_id)},
-            {"$set": {"embeddings": updated_embeddings}}
-        )
-
-
-    except Exception as e:
-        # Handle the exception
-        print(f"An error occurred while adding event to monitor: {e}")
-        
 
 class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
@@ -318,10 +281,6 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
         background_executor.submit(on_topic_rule_added, request.id)
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
     
-    def EventAddedToMonitor(self, request, context):
-        print(f"Received Event ID: {request.id}")
-        background_executor.submit(on_event_added_to_monitor, request.id)
-        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
 
 
 def main():
