@@ -23,7 +23,7 @@ Please **do not** open a public issue for security vulnerabilities.
 
 ## Response Process
 
-- We acknowledge receipt within 2 business days  
+- We acknowledge receipt as soon as possible (cannot ensure a period of time)  
 - We will evaluate the issue and keep you informed of the progress  
 - We aim to release a fix or mitigation as soon as possible  
 - Once fixed, we will publicly disclose the vulnerability with credit (if agreed)
