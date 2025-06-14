@@ -1,41 +1,112 @@
-# ProxyGPT
-A proxy to detect and monitor Data Leakage through AI tools
+# ProxyGPT 🔒
 
-The idea is to let in an enterprise or organization, the employees to use free AI tools for speeding productivity while at the same time, ensuring a minimal of privacy and confidentiality on the conversations and attached files on AI tools.
+**ProxyGPT** is an open-source monitoring proxy designed for **security engineers** in enterprise environments. It enables secure, auditable use of AI tools like ChatGPT while detecting and preventing potential data leaks through user conversations and file uploads.
 
-Roadmap
+Its allows enterprise users to access AI tools like ChatGPT while ensuring **visibility**, **data security**, and **compliance**. It enables organizations to benefit from AI productivity tools without sacrificing confidentiality or control over sensitive information.
 
-- Detect if we are using a company account or a personal account
-- Monitor uploaded files and decode/parse PDFs, excels to plain text 
-- Detect embedded images and standalone images and apply OCR to extract text
-- Monitor conversations.
-- Apply configurable regular expressions to detect data leakage.
-- Apply ML detection based on Name Entity Recognition and sentence-transformers with cosine similarity.
-- Get telemetry / user behaviour of the AI applications on a dashboard to have more visibility on your company
+> ⚠️ This is **not a privacy or anonymization tool** — ProxyGPT is built to **observe and control** AI tool usage across an organization.
 
-- Integration with ChatGPT --> On GOING
-- Integration with Microsoft Copilot
-- Integration with DeepSeek
-- ???
+---
 
-# Instructions
+## 🎯 Purpose
 
-1. Optional: Generate auto-signed certificate (Root CA used by Mitmproxy to generate certificates on the fly for the sites) with private key and copy them to:
-- ./proxy/mitmCA.key
-- ./proxy/mitmCA.pem
+ProxyGPT helps organizations:
+- Monitor and inspect conversations with AI assistants
+- Detect confidential or sensitive data in uploads and messages
+- Link AI usage to individual users or accounts
+- Provide a centralized interface for reviewing activity and enforcing policy
 
-2. Optional: Generate certificate with private key for nginx WEB server signed by CA or autosigned and copy them to:
-- ./nginx_server/server.key
-- ./nginx_server/server.crt
+---
 
-3. Execute ./generate_secrets.sh. If the previous certificates were not generated, this command will generate and populate auto-signed certificates on the needed folders. This command also creates a random secret key for JWT token generation and MongoDB password.
+## ⚙️ Key Features
 
-4. Execute docker-compose up
+- **Proxy-based inspection** — AI-related traffic is routed through a local MiTM proxy (port `8080`)  
+- **Conversation monitoring** — Intercept and inspect chat requests and responses  
+- **File inspection** — Decode, extract, and analyze contents of uploaded PDFs, Excel files, and images (OCR)  
+- **Pattern-based detection** — Configurable regular expressions detect potential data leaks  
+- **Semantic topic matching** — Discover and match topics in conversations and files using Faiss vector indexes for efficient similarity search  
+- **Dashboard interface** — Real-time view of events, traffic, and alerts for security engineers (available on HTTP `80` and HTTPS `443`)
 
-This will build all the containers.
+---
 
-The Web page is available on https port 443 and the MiTM proxy, on port 8080.
+## 🚀 Quickstart
 
-You must ensure that the traffic to the monitored sites from the workstations reaches de proxy, by system proxy general configuration or by using PAC file. This can be easily achieved in Windows via Global Policy Objects.
+### 🔧 Prerequisites
 
-You must also configure the CA certificate mitmCA.pem as a trusted certificate on Windows workstations via Global Policy Objects. 
+- Docker + docker-compose
+- (Optional) Custom TLS/CA certificates
+
+### 🧪 Setup Steps
+
+```bash
+# 1. Generate certificates and secrets
+./generate_secrets.sh
+
+# 2. Launch services
+docker-compose up
+```
+
+### 🌐 Ports
+
+| Component             | Port  | Description                                  |
+|----------------------|-------|----------------------------------------------|
+| **ProxyGPT UI**      | 443   | Secure web interface for monitoring (HTTPS)  |
+|                      | 80    | Web interface (HTTP fallback)                |
+| **Monitoring Proxy** | 8080  | MiTM proxy for AI traffic                    |
+
+> Make sure client traffic to AI tools is routed through the proxy, e.g., via system proxy settings or PAC files.
+
+---
+
+## 🔒 Deployment Notes
+
+- The proxy intercepts TLS traffic using a custom Root CA (`mitmCA.pem`)
+- You must configure your client machines to trust this CA certificate
+- The proxy inspects and decodes traffic from supported AI platforms
+- All activity is logged and linked to the user or session that initiated it
+
+---
+
+## 👥 Target Audience
+
+ProxyGPT is aimed at:
+- **Security engineers**
+- **SOC analysts**
+- **IT compliance teams**
+
+It is intended for use inside organizations that wish to **embrace AI tools** without sacrificing **security oversight**.
+
+---
+
+## 🤝 Contributing
+
+We welcome community contributions!
+
+### 🛠️ How to Contribute
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b my-feature`
+3. Make your changes
+4. Commit and push: `git commit -m "Add feature"` → `git push`
+5. Open a Pull Request
+
+> We recommend keeping PRs focused and writing meaningful commit messages.
+
+### 🧪 Suggestions for Contribution
+
+- Add support for more AI tools
+- Improve PDF, Excel, and OCR parsing
+- Enhance the dashboard UI/UX
+- Add log filtering, alerting, or export options
+
+---
+
+## 🛡️ Reporting Vulnerabilities
+
+If you discover a security vulnerability, please report it **privately**:
+
+- Contact: f.amez1992@gmail.com
+- Do not create public issues for security-related matters
+- We follow responsible disclosure best practices
+
+---
