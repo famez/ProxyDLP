@@ -815,46 +815,6 @@ app.get('/stats', authMiddleware, async (req, res) => {
 
 });
 
-app.post('/mark-sensitive', authMiddleware, async (req, res) => {
-  const { event_id } = req.body;
-  console.log('Marking event as sensitive:', event_id);
-
-  let client;
-  try {
-    ({ client, db } = await connectToDB());
-    
-    // Update the event to mark it as sensitive
-    result = await db.collection('events').updateOne(
-      { _id: new ObjectId(event_id) },
-      { $set: { sensitive: true } }
-    );
-
-    if (result.modifiedCount === 0) {
-      return res.status(404).send('Event not found or already marked as sensitive');
-    }
-    
-    console.log('Event marked as sensitive:', event_id);
-
-    gRPC_client.EventAddedToMonitor({ id: event_id }, (err, response) => {
-      if (err) {
-        console.error('Error:', err);
-      } else {
-        console.log('EventAddedToMonitor. Result:', response.message);
-      }
-     });
-
-  res.status(200).send('Event marked as sensitive'); // Placeholder response
-
-  } catch (err) {
-    console.error('Error marking event as sensitive:', err);
-    res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
-  }
-  
-
-});
-
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
