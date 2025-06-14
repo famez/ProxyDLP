@@ -176,33 +176,59 @@ app.get('/explore', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/rules', authMiddleware, async (req, res) => {
+app.get('/rules', authMiddleware, (req, res) => {
+  res.render('rules-menu', { title: "Rules Dashboard" });
+});
+
+
+// ========== View Routes ==========
+
+app.get('/rules/regex', authMiddleware, async (req, res) => {
   try {
-    regexRules = await getRegexRules();
-    topicRules = await getTopicMatchRules();
-    res.render('rules', { title: "Rules Manager", regexRules, topicRules });
+    const regexRules = await getRegexRules();
+    res.render('regex-rules', { title: "Regex Rules", regexRules });
   } catch (err) {
-    console.error('Error loading rules:', err);
+    console.error('Error loading regex rules:', err);
     res.status(500).send('Internal Server Error');
   }
 });
 
+app.get('/rules/topic', authMiddleware, async (req, res) => {
+  try {
+    const topicRules = await getTopicMatchRules();
+    res.render('topic-rules', { title: "Topic Match Rules", topicRules });
+  } catch (err) {
+    console.error('Error loading topic rules:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.get('/rules/yara', authMiddleware, async (req, res) => {
+  try {
+    const { client, db } = await connectToDB();
+    const yaraRules = await db.collection('yara_rules').find().toArray();
+    await client.close();
+    res.render('yara-rules', { title: "YARA Rules", yaraRules });
+  } catch (err) {
+    console.error('Error loading YARA rules:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+
+// ========== Add Routes ==========
+
 app.post('/rules/regex/add', authMiddleware, async (req, res) => {
   const { name, pattern } = req.body;
-
-  if (!name || !pattern) {
-    return res.status(400).send('Name and pattern are required.');
-  }
-
-  if (!isValidRegex(pattern)) {
-    return res.status(400).send('Invalid regex pattern.');
+  if (!name || !pattern || !isValidRegex(pattern)) {
+    return res.status(400).send('Invalid input or regex.');
   }
 
   let client;
   try {
     ({ client, db } = await connectToDB());
     await db.collection('regex_rules').insertOne({ [name]: pattern });
-    res.redirect('/rules');
+    res.redirect('/rules/regex');
   } catch (err) {
     console.error('Error adding regex rule:', err);
     res.status(500).send('Internal Server Error');
@@ -211,69 +237,42 @@ app.post('/rules/regex/add', authMiddleware, async (req, res) => {
   }
 });
 
-
 app.post('/rules/topic/add', authMiddleware, async (req, res) => {
   const { name, pattern } = req.body;
-
   if (!name || !pattern) {
     return res.status(400).send('Name and pattern are required.');
   }
+
   let client;
   try {
     ({ client, db } = await connectToDB());
-    const result = await db.collection('topic_rules').insertOne({ name: name, pattern: pattern });
-    gRPC_client.TopicRuleAdded({ id: result.insertedId }, (err, response) => {
-      if (err) {
-        console.error('Error:', err);
-      } else {
-        console.log('TopicRuleAdded. Result:', response.message);
-      }
-    });
-
-    res.redirect('/rules');
+    const result = await db.collection('topic_rules').insertOne({ name, pattern });
+    gRPC_client.TopicRuleAdded({ id: result.insertedId }, () => {});
+    res.redirect('/rules/topic');
   } catch (err) {
     if (err.code === 11000) {
-      console.error('Error adding topic rule, key duplicated');
-      return res.status(400).send('Cannot add rule, because name is duplicated');  
+      return res.status(400).send('Name is duplicated');
     }
-
     console.error('Error adding topic rule:', err);
-    return res.status(500).send('Internal Server Error');
+    res.status(500).send('Internal Server Error');
   } finally {
     if (client) await client.close();
   }
 });
 
-
-app.post('/rules/:type/delete/:id', authMiddleware, async (req, res) => {
-  const { type, id } = req.params;
-
-  const collection = type === 'regex' ? 'regex_rules' : 'topic_rules';
-  let client;
-  try {
-    ({ client, db } = await connectToDB());
-    await db.collection(collection).deleteOne({ _id: new ObjectId(id) });
-    res.redirect('/rules');
-  } catch (err) {
-    console.error('Error deleting rule:', err);
-    res.status(500).send('Error deleting rule');
-  } finally {
-    if (client) await client.close();
+app.post('/rules/yara/add', authMiddleware, async (req, res) => {
+  const { name, content } = req.body;
+  if (!name || !content) {
+    return res.status(400).send('Name and content are required.');
   }
-});
 
-app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
-  const { type, id } = req.params;
-  const collection = type === 'regex' ? 'regex_rules' : 'topic_rules';
   let client;
   try {
     ({ client, db } = await connectToDB());
-    const rule = await db.collection(collection).findOne({ _id: new ObjectId(id) });
-    if (!rule) return res.status(404).send('Rule not found');
-    const render_page = type === 'regex' ? 'edit_regex_rule' : 'edit_topic_rule';
-    res.render(render_page, {title: "Edit Rule",  rule });
+    await db.collection('yara_rules').insertOne({ name, content });
+    res.redirect('/rules/yara');
   } catch (err) {
-    console.error('Error loading rule:', err);
+    console.error('Error adding YARA rule:', err);
     res.status(500).send('Internal Server Error');
   } finally {
     if (client) await client.close();
@@ -281,48 +280,97 @@ app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
 });
 
 
-app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
-  const { type, id } = req.params;
-  const { name, pattern } = req.body;
+// ========== Delete Route (Shared) ==========
 
-  // Optional regex validation for regex rules
-  if (type === 'regex') {
-    if (!isValidRegex(pattern)) {
-      return res.status(400).send('Invalid regex pattern.');
-    }
-  }
+app.post('/rules/:type/delete/:id', authMiddleware, async (req, res) => {
+  const { type, id } = req.params;
+  const validTypes = ['regex', 'topic', 'yara'];
+  if (!validTypes.includes(type)) return res.status(400).send('Invalid rule type.');
+
   let client;
   try {
-
     ({ client, db } = await connectToDB());
-
-    if(type === 'regex') {
-      await db.collection('regex_rules').replaceOne(
-        { _id: new ObjectId(id) },
-        { [name]: pattern }
-      );
-    } else {
-      await db.collection('topic_rules').replaceOne(
-        { _id: new ObjectId(id) },
-        { name: name, pattern: pattern }
-      );
-      
-      gRPC_client.TopicRuleAdded({ id: id }, (err, response) => {
-        if (err) {
-          console.error('Error:', err);
-        } else {
-          console.log('TopicRuleAdded. Result:', response.message);
-        }
-      });
-    }
-    
-    res.redirect('/rules');
+    await db.collection(`${type}_rules`).deleteOne({ _id: new ObjectId(id) });
+    res.redirect(`/rules/${type}`);
   } catch (err) {
+    console.error(`Error deleting ${type} rule:`, err);
+    res.status(500).send('Error deleting rule');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
+// ========== Edit GET Route (Shared) ==========
+
+app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
+  const { type, id } = req.params;
+  const collectionMap = {
+    regex: 'regex_rules',
+    topic: 'topic_rules',
+    yara: 'yara_rules'
+  };
+
+  const pageMap = {
+    regex: 'edit_regex_rule',
+    topic: 'edit_topic_rule',
+    yara: 'edit_yara_rule'
+  };
+
+  if (!collectionMap[type]) return res.status(400).send('Invalid rule type.');
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+    const rule = await db.collection(collectionMap[type]).findOne({ _id: new ObjectId(id) });
+    if (!rule) return res.status(404).send('Rule not found');
+    res.render(pageMap[type], { title: "Edit Rule", rule });
+  } catch (err) {
+    console.error(`Error loading ${type} rule:`, err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
+// ========== Edit POST Route (Shared) ==========
+
+app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
+  const { type, id } = req.params;
+  const { name, pattern, content } = req.body;
+
+  let updateData;
+  if (type === 'regex') {
+    if (!isValidRegex(pattern)) return res.status(400).send('Invalid regex pattern.');
+    updateData = { [name]: pattern };
+  } else if (type === 'topic') {
+    updateData = { name, pattern };
+  } else if (type === 'yara') {
+    updateData = { name, content };
+  } else {
+    return res.status(400).send('Invalid rule type.');
+  }
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+    await db.collection(`${type}_rules`).replaceOne({ _id: new ObjectId(id) }, updateData);
+
+    if (type === 'topic') {
+      gRPC_client.TopicRuleAdded({ id }, () => {});
+    }
+
+    res.redirect(`/rules/${type}`);
+  } catch (err) {
+    console.error(`Error updating ${type} rule:`, err);
     res.status(500).send('Error updating rule');
   } finally {
     if (client) await client.close();
   }
 });
+
+
 // Secure file download endpoint to prevent path traversal attacks
 app.get('/uploads/:file', authMiddleware, (req, res) => {
   const file = req.params.file;

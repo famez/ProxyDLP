@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>YARA Rules</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-8">
+  <div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold text-center mb-8">YARA Rules</h1>
+
+    <div class="bg-white shadow-lg rounded-xl p-6">
+      <h2 class="text-xl font-semibold mb-4">YARA Rules</h2>
+
+      <ul class="space-y-4 mb-6">
+        <% yaraRules.forEach(rule => { %>
+          <li class="border rounded-lg p-4 bg-gray-50">
+            <div class="font-bold"><%= rule.name %></div>
+            <pre class="text-sm text-gray-700 bg-gray-100 rounded p-2 overflow-x-auto"><code><%= rule.content %></code></pre>
+            <div class="flex gap-2 mt-2">
+              <form action="/rules/yara/delete/<%= rule._id %>" method="POST">
+                <button class="text-red-600 hover:underline" onclick="return confirm('Delete this rule?')">Delete</button>
+              </form>
+              <a href="/rules/yara/edit/<%= rule._id %>" class="text-blue-600 hover:underline">Edit</a>
+            </div>
+          </li>
+        <% }) %>
+      </ul>
+
+      <!-- Add YARA Rule Form -->
+      <form action="/rules/yara/add" method="POST" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Name</label>
+          <input name="name" required class="w-full border rounded p-2" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">YARA Content</label>
+          <textarea name="content" rows="8" required class="w-full border rounded p-2 font-mono"></textarea>
+        </div>
+        <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+          Add YARA Rule
+        </button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Edit YARA Rule</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-8">
+  <div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-lg">
+    <h1 class="text-2xl font-bold mb-6">Edit YARA Rule</h1>
+
+    <form action="/rules/yara/edit/<%= rule._id %>" method="POST" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Rule Name</label>
+        <input type="text" name="name" value="<%= rule.name %>" required class="w-full border rounded p-2" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">YARA Content</label>
+        <textarea name="content" rows="10" required class="w-full border rounded p-2 font-mono"><%= rule.content %></textarea>
+      </div>
+
+      <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+        Save Changes
+      </button>
+      <a href="/rules/yara" class="ml-4 text-sm text-gray-600 hover:underline">Cancel</a>
+    </form>
+  </div>
+</body>
+</html>
