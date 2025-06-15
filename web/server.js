@@ -9,7 +9,7 @@ const cookieParser = require('cookie-parser');
 const authMiddleware = require('./middleware/authMiddleware');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
-
+const multer = require('multer');
 
 
 const app = express();
@@ -23,6 +23,8 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
+
+const upload = multer({ dest: '/uploads/' });
 
 
 // Load the protobuf
@@ -101,8 +103,10 @@ app.get('/explore', authMiddleware, async (req, res) => {
 
   const {
     start, end, user, site, rational,
-    filename, filetype, content, leak, order = 'desc'
+    filename, filetype, content, leak, order = 'desc',
+    playground
   } = req.query;
+
 
   const query = {};
 
@@ -115,7 +119,12 @@ app.get('/explore', authMiddleware, async (req, res) => {
 
   // Simple text filters with regex (case insensitive)
   if (user) query.user = { $regex: new RegExp(user, 'i') };
-  if (site) query.site = { $regex: new RegExp(site, 'i') };
+  if (site) {
+    query.site = { $regex: new RegExp(site, 'i') };
+  } else if (playground !== '1') {    //Exclude Playground site if not specified
+    query.site = { $ne: 'Playground' };
+  }
+
   if (rational) query.rational = { $regex: new RegExp(rational, 'i') };
   if (content) query.content = { $regex: new RegExp(content, 'i') };
   if (filename) query.filename = { $regex: new RegExp(filename, 'i') };
@@ -870,6 +879,61 @@ app.get('/stats', authMiddleware, async (req, res) => {
     if (client) await client.close();
   }
 
+});
+
+app.get('/playground', authMiddleware, async (req, res) => {
+
+  res.render('playground', { title: "Playground" });
+
+});
+
+app.post('/playground', authMiddleware, upload.single('fileUpload'), async (req, res) => {
+  const { username, textContent } = req.body;
+  const file = req.file;
+
+  // Logging for debug/demo
+  console.log('Received DLP submission:');
+  console.log('Username:', username);
+  console.log('Text Content:', textContent);
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+    const result = await db.collection('events').insertOne({
+      "timestamp": new Date(), 
+      "user": username, 
+      "rational": "Conversation", 
+      "content": textContent, 
+      "site": "Playground"
+    });
+
+    gRPC_client.EventAdded({ id: result.insertedId }, () => {});
+
+    if (file) {
+      console.log('Uploaded file:', file.originalname);
+      console.log('Stored at:', file.path);
+      const result = await db.collection('events').insertOne({
+        "timestamp": new Date(), 
+        "user": username, 
+        "rational": "Attached file", 
+        "filename" : file.originalname,
+        "filepath" : file.path, 
+        "content_type": file.mimetype, 
+        "site": "Playground"
+      });
+      gRPC_client.EventAdded({ id: result.insertedId }, () => {});
+    }
+
+    res.redirect('/playground');
+
+  } catch (err) {
+    console.error('Error adding regex rule:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+
+  
 });
 
 

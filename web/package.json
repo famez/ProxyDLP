@@ -15,6 +15,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.5.0",
     "@grpc/grpc-js": "^1.13.4",
-    "@grpc/proto-loader": "^0.7.15"
+    "@grpc/proto-loader": "^0.7.15",
+    "multer": "^2.0.1"
   }
 }

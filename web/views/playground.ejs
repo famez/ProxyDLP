@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Playground</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="max-w-2xl mx-auto py-10 px-4">
+    <h1 class="text-3xl font-bold text-indigo-700 mb-6">Playground</h1>
+    <p class="text-center text-gray-600 mb-2">You can add here text to simulate conversations and upload files, to create fictional events in order to test the rules that are setup</p>
+
+    <form action="/playground" method="POST" enctype="multipart/form-data" class="bg-white p-6 rounded-lg shadow space-y-4">
+      
+      <!-- Username -->
+      <div>
+        <label for="username" class="block text-xs font-semibold text-gray-600 mb-1">Username</label>
+        <input type="text" id="username" name="username" placeholder="Enter username or email"
+               class="w-full border rounded p-2" required />
+      </div>
+
+      <!-- Text Area -->
+      <div>
+        <label for="textContent" class="block text-xs font-semibold text-gray-600 mb-1">Conversation</label>
+        <textarea id="textContent" name="textContent" rows="6"
+                  placeholder="Paste the content you want to send to the AI"
+                  class="w-full border rounded p-2 resize-y"></textarea>
+      </div>
+
+      <!-- File Upload -->
+      <div>
+        <label for="fileUpload" class="block text-xs font-semibold text-gray-600 mb-1">Upload a file</label>
+        <input type="file" id="fileUpload" name="fileUpload"
+               class="block w-full text-sm text-gray-700
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-full file:border-0
+                      file:text-sm file:font-semibold
+                      file:bg-indigo-100 file:text-indigo-700
+                      hover:file:bg-indigo-200" />
+      </div>
+
+      <!-- Submit Button -->
+      <div class="pt-2">
+        <button type="submit"
+                class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">
+          Submit
+        </button>
+      </div>
+    </form>
+
+    
+  </div>
+</body>
+</html>

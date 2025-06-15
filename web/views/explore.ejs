@@ -184,6 +184,12 @@
             <option value="250" <%= filters.limit == 250 ? 'selected' : '' %>>250</option>
           </select>
         </div>
+        <div class="flex items-center mt-2">
+          <input type="checkbox" id="playground" name="playground" value="1"
+                <%= filters.playground ? 'checked' : '' %>
+                class="mr-2">
+          <label for="playground" class="text-sm text-gray-700 font-medium">Show Playground Events</label>
+        </div>
 
         <!-- Submit -->
         <div class="sm:col-span-2 md:col-span-3 lg:col-span-4 flex gap-2 mt-2">
