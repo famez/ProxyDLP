@@ -1,8 +1,7 @@
-mitmproxy
-python-magic
-pymongo
-websockets
-asyncio
-grpcio
-grpcio-tools
-PyJWT
+mitmproxy==11.0.2
+python-magic==0.4.27
+pymongo==4.13.1
+websockets==15.0.1
+grpcio==1.73.0
+grpcio-tools==1.73.0
+PyJWT==2.10.1
