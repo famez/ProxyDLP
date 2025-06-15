@@ -44,6 +44,20 @@
           Add Regex Rule
         </button>
       </form>
+      <!-- Import/Export Buttons -->
+      <div class="flex gap-4 mt-6">
+        <form action="/rules/regex/import" method="POST" enctype="multipart/form-data">
+          <label class="inline-block bg-green-600 text-white px-4 py-2 rounded cursor-pointer hover:bg-green-700">
+            <input type="file" name="file" accept=".json" onchange="this.form.submit()" class="hidden">
+            Import Regex Rules
+          </label>
+        </form>
+        <form action="/rules/regex/export" method="GET">
+          <button type="submit" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
+            Export Regex Rules
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 </body>
