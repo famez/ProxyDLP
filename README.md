@@ -64,6 +64,7 @@ docker-compose up
 - You must configure your client machines to trust this CA certificate
 - The proxy inspects and decodes traffic from supported AI platforms
 - All activity is logged and linked to the user or session that initiated it
+- Default user is admin and password is admin (can be changed after installation)
 
 ---
 
