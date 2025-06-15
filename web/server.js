@@ -936,6 +936,26 @@ app.post('/playground', authMiddleware, upload.single('fileUpload'), async (req,
   
 });
 
+app.get('/sites', authMiddleware, async (req, res) => {
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+    const site_docs = await db.collection('sites').find().toArray();
+
+    console.log('Loaded sites:', site_docs);
+
+    res.render('sites', { title: "Sites", site_docs});
+
+  } catch (err) {
+    console.error('Error showing sites:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }  
+
+});
+
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

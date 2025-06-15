@@ -36,6 +36,9 @@ class Proxy:
                 if site_url in url:
                     site.handle_ws_from_client_to_server(flow, message)
                     return
+                
+    def get_sites(self):
+        return self.sites
     
 
 class EmailNotFoundException(Exception):
