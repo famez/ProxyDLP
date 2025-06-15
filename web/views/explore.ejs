@@ -230,7 +230,7 @@
             <% } %>
             </div>
             <p class="text-gray-600">
-              <% if (event.content) { %>
+              <% if (event.content && permissions.includes('conversation')) { %>
                 <%= event.content.length > 100 ? event.content.slice(0, 100) + '…' : event.content %>
               <% } %>
             </p>

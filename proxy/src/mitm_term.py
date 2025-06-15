@@ -36,6 +36,10 @@ async def pty_session(websocket):
         secret_key = os.getenv("JWT_SECRET")
         payload = jwt.decode(cookies['token'], secret_key, algorithms=["HS256"])
 
+        if not 'permissions' in payload or 'mitmterminal' not in payload['permissions']:
+            
+            return
+
     except jwt.ExpiredSignatureError:
         print("Token has expired.")     #If token expired, then return
         return

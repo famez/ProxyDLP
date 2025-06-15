@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Manage Permissions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+  <div class="max-w-xl mx-auto bg-white p-8 rounded-xl shadow">
+    <h2 class="text-2xl font-bold text-indigo-700 mb-4">Manage Permissions for <%= user.username %></h2>
+
+    <form method="POST" action="/manage-permissions" class="space-y-4">
+      <input type="hidden" name="username" value="<%= user.username %>">
+
+      <div class="grid grid-cols-2 gap-2">
+        <% allPermissions.forEach(permission => { %>
+          <label class="inline-flex items-center">
+            <input
+              type="checkbox"
+              name="permissions"
+              value="<%= permission %>"
+              class="form-checkbox text-indigo-600"
+              <%= (user.permissions || []).includes(permission) ? 'checked' : '' %>
+            >
+            <span class="ml-2 capitalize"><%= permission.replace(/_/g, ' ') %></span>
+          </label>
+        <% }) %>
+      </div>
+
+      <div class="mt-4 flex justify-between">
+        <a href="/user-management" class="text-gray-600 hover:underline">← Back</a>
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+          Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

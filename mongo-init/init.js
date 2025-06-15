@@ -25,6 +25,8 @@ db.sites.createIndex({ "name": 1 }, { unique: true })
 
 //Insert default admin user
 
-db.users.insertOne({username: "admin", password: "$2a$10$3lKl1v9l8Fe8PtAOCAEiaeXW.fTaCpKyCWJcuD1zELyFi2OZKIZBe"}) //Hashed password for "admin" password
+db.users.insertOne({username: "admin", password: "$2a$10$3lKl1v9l8Fe8PtAOCAEiaeXW.fTaCpKyCWJcuD1zELyFi2OZKIZBe",
+  permissions: ["playground", "mitmterminal", "user_management", "rules","events", "domains", "sites", "statistics", "alerts", "conversations"],
+}) //Hashed password for "admin" password
 
 db.regex_rules.insertMany(regex_rules);

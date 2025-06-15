@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const authMiddleware = require('./middleware/authMiddleware');
+const requirePermission = require('./middleware/requirePermission');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const multer = require('multer');
@@ -95,11 +96,11 @@ app.get('/dashboard', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/terminal', authMiddleware, (req, res) => {
+app.get('/terminal', authMiddleware, requirePermission("mitmterminal"), (req, res) => {
   res.render('terminal', { title: 'Terminal' }); // renders views/terminal.ejs
 });
 
-app.get('/explore', authMiddleware, async (req, res) => {
+app.get('/explore', authMiddleware, requirePermission("events"), async (req, res) => {
 
   const {
     start, end, user, site, rational,
@@ -185,14 +186,14 @@ app.get('/explore', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/rules', authMiddleware, (req, res) => {
+app.get('/rules', authMiddleware, requirePermission("rules"), (req, res) => {
   res.render('rules-menu', { title: "Rules Dashboard" });
 });
 
 
 // ========== View Routes ==========
 
-app.get('/rules/regex', authMiddleware, async (req, res) => {
+app.get('/rules/regex', authMiddleware, requirePermission("rules"), async (req, res) => {
   try {
     const regexRules = await getRegexRules();
     res.render('regex-rules', { title: "Regex Rules", regexRules });
@@ -202,7 +203,7 @@ app.get('/rules/regex', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/rules/topic', authMiddleware, async (req, res) => {
+app.get('/rules/topic', authMiddleware, requirePermission("rules"), async (req, res) => {
   try {
     const topicRules = await getTopicMatchRules();
     res.render('topic-rules', { title: "Topic Match Rules", topicRules });
@@ -212,7 +213,7 @@ app.get('/rules/topic', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/rules/yara', authMiddleware, async (req, res) => {
+app.get('/rules/yara', authMiddleware, requirePermission("rules"), async (req, res) => {
   try {
     const { client, db } = await connectToDB();
     const yaraRules = await db.collection('yara_rules').find().toArray();
@@ -227,7 +228,7 @@ app.get('/rules/yara', authMiddleware, async (req, res) => {
 
 // ========== Add Routes ==========
 
-app.post('/rules/regex/add', authMiddleware, async (req, res) => {
+app.post('/rules/regex/add', authMiddleware, requirePermission("rules"), async (req, res) => {
   const { name, pattern } = req.body;
   if (!name || !pattern || !isValidRegex(pattern)) {
     return res.status(400).send('Invalid input or regex.');
@@ -246,7 +247,7 @@ app.post('/rules/regex/add', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/rules/topic/add', authMiddleware, async (req, res) => {
+app.post('/rules/topic/add', authMiddleware, requirePermission("rules"), async (req, res) => {
   const { name, pattern } = req.body;
   if (!name || !pattern) {
     return res.status(400).send('Name and pattern are required.');
@@ -269,7 +270,7 @@ app.post('/rules/topic/add', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/rules/yara/add', authMiddleware, async (req, res) => {
+app.post('/rules/yara/add', authMiddleware, requirePermission("rules"), async (req, res) => {
   const { name, content } = req.body;
   if (!name || !content) {
     return res.status(400).send('Name and content are required.');
@@ -291,7 +292,7 @@ app.post('/rules/yara/add', authMiddleware, async (req, res) => {
 
 // ========== Delete Route (Shared) ==========
 
-app.post('/rules/:type/delete/:id', authMiddleware, async (req, res) => {
+app.post('/rules/:type/delete/:id', authMiddleware, requirePermission("rules"), async (req, res) => {
   const { type, id } = req.params;
   const validTypes = ['regex', 'topic', 'yara'];
   if (!validTypes.includes(type)) return res.status(400).send('Invalid rule type.');
@@ -312,7 +313,7 @@ app.post('/rules/:type/delete/:id', authMiddleware, async (req, res) => {
 
 // ========== Edit GET Route (Shared) ==========
 
-app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
+app.get('/rules/:type/edit/:id', authMiddleware, requirePermission("rules"), async (req, res) => {
   const { type, id } = req.params;
   const collectionMap = {
     regex: 'regex_rules',
@@ -345,7 +346,7 @@ app.get('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
 
 // ========== Edit POST Route (Shared) ==========
 
-app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
+app.post('/rules/:type/edit/:id', authMiddleware, requirePermission("rules"), async (req, res) => {
   const { type, id } = req.params;
   const { name, pattern, content } = req.body;
 
@@ -381,7 +382,7 @@ app.post('/rules/:type/edit/:id', authMiddleware, async (req, res) => {
 
 
 // Secure file download endpoint to prevent path traversal attacks
-app.get('/uploads/:file', authMiddleware, (req, res) => {
+app.get('/uploads/:file', authMiddleware, requirePermission("events"), (req, res) => {
   const file = req.params.file;
   const filename = req.query.name;
 
@@ -408,7 +409,7 @@ app.get('/uploads/:file', authMiddleware, (req, res) => {
 });
 
 
-app.get('/domains', authMiddleware, async (req, res) => {
+app.get('/domains', authMiddleware, requirePermission("domains"), async (req, res) => {
   let client;
   try {
     ({ client, db } = await connectToDB());
@@ -422,7 +423,7 @@ app.get('/domains', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/domains/delete/:id', authMiddleware, async (req, res) => {
+app.post('/domains/delete/:id', authMiddleware, requirePermission("domains"), async (req, res) => {
   const id = req.params.id;
   let client;
   try {
@@ -437,7 +438,7 @@ app.post('/domains/delete/:id', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/domains/add', authMiddleware, async (req, res) => {
+app.post('/domains/add', authMiddleware, requirePermission("domains"), async (req, res) => {
   const { domain } = req.body;
   if (!domain) {
     return res.status(400).send('Domain is required.');
@@ -470,7 +471,7 @@ app.post('/login', async (req, res) => {
     if (!user) return res.status(401).redirect('/login');
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).redirect('/login');
-    const token = jwt.sign({ id: user._id, username }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: user._id, username, permissions: user.permissions }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.cookie('token', token, { httpOnly: true });
     res.redirect('/');
 
@@ -488,7 +489,7 @@ app.get('/logout', authMiddleware, (req, res) => {
   res.redirect('/login');
 });
 
-app.get('/user-management', authMiddleware, async (req, res) => {
+app.get('/user-management', authMiddleware, requirePermission("user_management"), async (req, res) => {
   let client;
   try {
     ({ client, db } = await connectToDB());
@@ -506,7 +507,7 @@ app.get('/user-management', authMiddleware, async (req, res) => {
 });
 
 
-app.post('/add-user', authMiddleware, async (req, res) => {
+app.post('/add-user', authMiddleware, requirePermission("user_management"), async (req, res) => {
   const { username, password } = req.body;
   let client;
   try {
@@ -528,7 +529,7 @@ app.post('/add-user', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/update-password', authMiddleware, async (req, res) => {
+app.post('/update-password', authMiddleware, requirePermission("user_management"), async (req, res) => {
   const { username, newPassword } = req.body;
   let client;
   try {
@@ -554,7 +555,7 @@ app.post('/update-password', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/delete-user', authMiddleware, async (req, res) => {
+app.post('/delete-user', authMiddleware, requirePermission("user_management"), async (req, res) => {
   const { username } = req.body;
 
   // Prevent self-deletion
@@ -577,7 +578,7 @@ app.post('/delete-user', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/options', authMiddleware, async (req, res) => {
+app.get('/api/options', authMiddleware, requirePermission("events"), async (req, res) => {
   const { field, startsWith = '' } = req.query;
   if (!field) return res.status(400).json({ error: 'Missing field' });
   const allowedFields = ['user', 'site', 'rational', 'filename', 'content_type'];
@@ -602,7 +603,7 @@ app.get('/api/options', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/event/:id', authMiddleware, async (req, res) => {
+app.get('/event/:id', authMiddleware, requirePermission("events"), async (req, res) => {
   const { id } = req.params;
   let client;
   try {
@@ -628,7 +629,7 @@ app.get('/event/:id', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/stats', authMiddleware, async (req, res) => {
+app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, res) => {
 
   let client;
 
@@ -881,13 +882,13 @@ app.get('/stats', authMiddleware, async (req, res) => {
 
 });
 
-app.get('/playground', authMiddleware, async (req, res) => {
+app.get('/playground', authMiddleware, requirePermission("playground"), async (req, res) => {
 
   res.render('playground', { title: "Playground" });
 
 });
 
-app.post('/playground', authMiddleware, upload.single('fileUpload'), async (req, res) => {
+app.post('/playground', authMiddleware, requirePermission("playground"), upload.single('fileUpload'), async (req, res) => {
   const { username, textContent } = req.body;
   const file = req.file;
 
@@ -936,7 +937,7 @@ app.post('/playground', authMiddleware, upload.single('fileUpload'), async (req,
   
 });
 
-app.get('/sites', authMiddleware, async (req, res) => {
+app.get('/sites', authMiddleware, requirePermission("sites"), async (req, res) => {
 
   let client;
   try {
@@ -953,6 +954,59 @@ app.get('/sites', authMiddleware, async (req, res) => {
   } finally {
     if (client) await client.close();
   }  
+
+});
+
+const allPermissions = [
+  "playground", "mitmterminal", "user_management", "rules",
+  "events", "domains", "sites", "statistics", "alerts", "conversations"
+];
+
+// GET /manage-permissions
+app.get('/manage-permissions', authMiddleware, requirePermission("user_management"), async (req, res) => {
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+
+    const { username } = req.query;
+    const user = await db.collection('users').findOne({ username: username });
+    if (!user) return res.status(404).send('User not found');
+
+    res.render('manage-permissions', { title: "Manage permissions", user, allPermissions });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  } finally {
+    if (client) await client.close();
+  }  
+});
+
+// POST /update-permissions
+app.post('/manage-permissions', authMiddleware, requirePermission("user_management"), async (req, res) => {
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+    const users = db.collection('users');
+
+    const { username, permissions } = req.body;
+    const updated = Array.isArray(permissions) ? permissions : [permissions];
+
+    const result = await users.updateOne(
+      { username },
+      { $set: { permissions: updated } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send('User not found');
+    }
+
+    res.redirect('/manage-permissions?username=' + encodeURIComponent(username));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  } finally {
+    if (client) await client.close();
+  }
 
 });
 
