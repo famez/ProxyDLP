@@ -18,6 +18,7 @@ import monitor_pb2
 import monitor_pb2_grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 import faiss
+import yara
 
 
 INDEX_PATH = '/var/faiss/faiss_index.index'
@@ -29,6 +30,7 @@ events_collection = db_client["proxyGPT"]["events"]
 regex_collection = db_client["proxyGPT"]["regex_rules"]
 topics_collection = db_client["proxyGPT"]["topic_rules"]
 counter_collection = db_client["proxyGPT"]["faiss_id_counters"]
+yara_rules_collection = db_client["proxyGPT"]["yara_rules"]
 
 #nlp = spacy.load("en_core_web_sm")
 
@@ -42,6 +44,18 @@ def get_next_faiss_id():
         return_document=ReturnDocument.AFTER
     )
     return counter["last_id"]
+
+def validate_yara_rule_string(rule_str):
+    try:
+        yara.compile(source=rule_str)
+        print("YARA rule is valid.")
+        return True
+    except yara.SyntaxError as e:
+        print(f"Syntax error: {e}")
+        return False
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
 
 
 def chunk_text(text, chunk_size=500, overlap=50):
@@ -279,6 +293,26 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
     def TopicRuleAdded(self, request, context):
         print(f"Received Topic Rule ID: {request.id}")
         background_executor.submit(on_topic_rule_added, request.id)
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
+    
+    #We have this callback to check if the Yara rule is valid before saving it to the database
+    def YaraRuleAdded(self, yara_rule, context):
+        print(f"Received Yara rule name: {yara_rule.name}")
+
+        if not validate_yara_rule_string(yara_rule.content):
+            print(f"Invalid Yara rule: {yara_rule.name}")
+            return monitor_pb2.MonitorReply(result=1)
+        
+        try:
+            # Save the Yara rule to the database
+            yara_rules_collection.insert_one({
+                "name": yara_rule.name,
+                "content": yara_rule.content
+            })
+        except Exception as e:
+            print(f"Error saving Yara rule: {e}")
+            return monitor_pb2.MonitorReply(result=2)
+        
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
     
 

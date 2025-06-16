@@ -276,17 +276,27 @@ app.post('/rules/yara/add', authMiddleware, requirePermission("rules"), async (r
     return res.status(400).send('Name and content are required.');
   }
 
-  let client;
-  try {
-    ({ client, db } = await connectToDB());
-    await db.collection('yara_rules').insertOne({ name, content });
-    res.redirect('/rules/yara');
-  } catch (err) {
-    console.error('Error adding YARA rule:', err);
-    res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
-  }
+  //Send gRPC notification to monitor as it can check if the rule is valid
+  const result = gRPC_client.YaraRuleAdded({ name: name, content: content }, (err, response) => {
+    if (err) {
+      console.error('gRPC YaraRuleAdded error:', err);
+      console.error('Error adding YARA rule:', err);
+      res.status(500).send('Internal Server Error');
+    } else {
+      console.log('gRPC YaraRuleAdded response:', response);
+
+      // If the rule was added successfully, return to the YARA rules page
+      if (response.result == 0) {
+        res.redirect('/rules/yara');
+      } else {
+        // If there was an error, send the error message
+        console.log('Invalid YARA rule');
+        res.status(400).send('Invalid YARA rule:');
+      }
+
+    }
+  });  
+  
 });
 
 

@@ -5,6 +5,7 @@ package monitor;
 service Monitor {
   rpc EventAdded (EventID) returns (MonitorReply);
   rpc TopicRuleAdded (TopicRuleID) returns (MonitorReply);
+  rpc YaraRuleAdded (YaraRule) returns (MonitorReply);
 
 }
 
@@ -18,4 +19,9 @@ message TopicRuleID {
 
 message MonitorReply {
   int32 result = 1;
+}
+
+message YaraRule {
+  string name = 1;
+  string content = 2;
 }

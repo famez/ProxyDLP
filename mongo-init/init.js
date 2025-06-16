@@ -15,12 +15,14 @@ db.createCollection('users');
 db.createCollection('events');
 db.createCollection('regex_rules');
 db.createCollection('topic_rules');
+db.createCollection('yara_rules');
 db.createCollection('domains');
 db.createCollection('faiss_id_counters');
 db.createCollection('sites');
 
 
 db.topic_rules.createIndex({ "name": 1 }, { unique: true })
+db.yara_rules.createIndex({ "name": 1 }, { unique: true })
 db.sites.createIndex({ "name": 1 }, { unique: true })
 
 //Insert default admin user

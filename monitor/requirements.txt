@@ -9,3 +9,4 @@ pytesseract==0.3.13
 grpcio==1.73.0
 grpcio-tools==1.73.0
 faiss-cpu==1.11.0
+yara-python==4.5.4
