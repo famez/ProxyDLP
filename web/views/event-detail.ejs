@@ -50,7 +50,7 @@
     <div class="mb-4 text-sm text-gray-600">
       <span class="font-medium">Rational:</span> <%= event.rational %>
     </div>
-    <% if (event.content && permissions.includes('conversation')) { %>
+    <% if (event.content && permissions.includes('conversations')) { %>
       <div class="mb-4">
         <h2 class="text-sm font-semibold text-gray-600 mb-1">Content</h2>
         <p class="text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded border"><%= event.content %></p>
