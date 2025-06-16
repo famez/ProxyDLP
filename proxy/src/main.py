@@ -87,10 +87,13 @@ proxy.register_site(Github_Copilot, ["githubcopilot.com", "api.github.com/user"]
 for site in proxy.get_sites():
     ctx.log.info(f"Registering site {site.get_name()} with urls {site.get_urls()}")
     
-    result = sites_collection.insert_one({
-        "name": site.get_name(),
-        "urls": site.get_urls()
-    })
+    try:
+        result = sites_collection.insert_one({
+            "name": site.get_name(),
+            "urls": site.get_urls()
+        })
+    except Exception as e:
+        ctx.log.error(f"Failed to register site {site.get_name()}: {e}")
 
 
 channel = grpc.insecure_channel('monitor:50051')
