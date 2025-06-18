@@ -114,6 +114,7 @@ def analyze_text(text):
     leak = {}
     leak['regex'] = analyze_text_regex(text)
     leak['topic'] = analyze_topic_leak(text)
+    leak['yara'] = analyze_text_yara(text)
 
     return leak
 
@@ -132,22 +133,55 @@ def analyze_text_regex(text):
     return regexes
 
 
-def analyze_text_yara(text):
+import yara
 
+def analyze_text_yara(text):
     yara_leaks = []
+    rule_sources = {}
+
+    # Step 1: Collect all rule sources
     for doc in yara_rules_collection.find():
         try:
-            rule = yara.compile(source=doc['content'])
-            matches = rule.match(data=text)
-            if matches:
-                print(f"Yara rule matched: {doc['name']}")
-                
-                yara_leaks.append()
-                return {"name": doc['name'], "matches": matches}
-        except yara.SyntaxError as e:
-            print(f"Syntax error in Yara rule {doc['name']}: {e}")
-        except Exception as e:
-            print(f"Error processing Yara rule {doc['name']}: {e}")
+            rule_sources[doc['name']] = doc['content']
+        except KeyError:
+            print(f"Missing 'name' or 'content' in YARA rule document: {doc}")
+    
+    try:
+        # Step 2: Compile all rules at once
+        compiled_rules = yara.compile(sources=rule_sources)
+
+        # Step 3: Match against text
+        matches = compiled_rules.match(data=text)
+
+        # Step 4: Extract match data from new YARA structure
+        for match in matches:
+            print(f"YARA rule matched: {match.rule}")
+            matched_strings = []
+
+            for string_match in match.strings:
+                identifier = string_match.identifier
+                for instance in string_match.instances:
+                    matched_strings.append({
+                        "offset": instance.offset,
+                        "identifier": identifier,
+                        "data": instance.matched_data.decode(errors="ignore")
+                    })
+
+            yara_leaks.append({
+                "name": match.rule,
+                "matched_strings": matched_strings,
+                "tags": match.tags,
+                "meta": match.meta
+            })
+
+        return yara_leaks
+
+    except yara.SyntaxError as e:
+        print(f"Syntax error in one of the YARA rules: {e}")
+    except Exception as e:
+        print(f"Error compiling or matching YARA rules: {e}")
+
+    return []
 
 
 def decode_file(filepath, content_type):
