@@ -131,6 +131,25 @@ def analyze_text_regex(text):
         
     return regexes
 
+
+def analyze_text_yara(text):
+
+    yara_leaks = []
+    for doc in yara_rules_collection.find():
+        try:
+            rule = yara.compile(source=doc['content'])
+            matches = rule.match(data=text)
+            if matches:
+                print(f"Yara rule matched: {doc['name']}")
+                
+                yara_leaks.append()
+                return {"name": doc['name'], "matches": matches}
+        except yara.SyntaxError as e:
+            print(f"Syntax error in Yara rule {doc['name']}: {e}")
+        except Exception as e:
+            print(f"Error processing Yara rule {doc['name']}: {e}")
+
+
 def decode_file(filepath, content_type):
 
     text = ""
