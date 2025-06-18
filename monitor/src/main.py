@@ -133,7 +133,6 @@ def analyze_text_regex(text):
     return regexes
 
 
-import yara
 
 def analyze_text_yara(text):
     yara_leaks = []
