@@ -1,36 +1,56 @@
-# Use official Python image as a base
 FROM python:3.11-slim
 
-# Set environment variables to avoid writing .pyc files and buffering
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    VENV_PATH=/home/appuser/venv \
+    PATH="/home/appuser/venv/bin:$PATH"
 
-# Set the working directory
+# Create app user and group
+RUN groupadd -r appgroup && useradd -r -g appgroup -m appuser
+
 WORKDIR /app
 
-# Copy requirements.txt before other files to leverage Docker cache
-COPY proxy/requirements.txt .
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    tmux \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+# Copy requirements.txt with proper ownership
+COPY --chown=appuser:appgroup proxy/requirements.txt .
 
+# Create virtualenv and set ownership on /home/appuser and pip cache
+RUN python -m venv $VENV_PATH && \
+    mkdir -p /home/appuser/.cache/pip && \
+    chown -R appuser:appgroup /home/appuser
 
-RUN apt-get update && apt-get install -y tmux
+# Install Python dependencies as appuser
+USER appuser
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
+# Switch back to root for cert setup and copying other files
+USER root
 
-COPY proxy/mitmCA.key /tmp/mitmCA.key
-COPY proxy/mitmCA.pem /tmp/mitmCA.pem
+# Copy mitm CA cert files with ownership
+COPY --chown=appuser:appgroup proxy/mitmCA.key /tmp/mitmCA.key
+COPY --chown=appuser:appgroup proxy/mitmCA.pem /tmp/mitmCA.pem
 
-RUN mkdir ~/.mitmproxy/
-RUN cat /tmp/mitmCA.key /tmp/mitmCA.pem > ~/.mitmproxy/mitmproxy-ca.pem
+RUN mkdir -p /home/appuser/.mitmproxy/ && \
+    cat /tmp/mitmCA.key /tmp/mitmCA.pem > /home/appuser/.mitmproxy/mitmproxy-ca.pem && \
+    chown -R appuser:appgroup /home/appuser/.mitmproxy
 
-COPY proto/ proto/
+# Copy proto and source code with correct ownership
+COPY --chown=appuser:appgroup proto/ proto/
+COPY --chown=appuser:appgroup proxy/src/ .
 
+# Ensure /app directory and all contents are owned by appuser
+RUN chown -R appuser:appgroup /app
 
+# Switch to appuser and set workdir
+USER appuser
+WORKDIR /app
+
+# Generate gRPC Python files using the installed venv python
 RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. monitor.proto
 
-COPY proxy/src/ .
-
 CMD ["tmux", "new", "-As", "mitmsession", "mitmproxy", "-s", "main.py"]
-#CMD ["python", "main.py"]

@@ -1,41 +1,62 @@
-# Use official Python image as a base
 FROM python:3.11-slim
 
-# Set environment variables to avoid writing .pyc files and buffering
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Set the working directory
+# Create non-root group and user
+RUN groupadd -r appgroup && useradd -r -g appgroup -m appuser
+
+# Set working directory
 WORKDIR /app
 
-# Copy requirements.txt before other files to leverage Docker cache
+# Copy requirements file first
 COPY monitor/requirements.txt .
 
-# Install Python dependencies
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+# Create virtualenv and fix ownership
+RUN python -m venv /home/appuser/venv \
+    && chown -R appuser:appgroup /home/appuser/venv
 
-#RUN python -m spacy download en_core_web_sm
-#RUN python -m spacy download es_core_news_sm
-#RUN python -m spacy download fr_core_news_sm
-
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
     libleptonica-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY proto/ proto/
+# Download grpc_health_probe as root, set permissions for appuser
+RUN curl -L https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.11/grpc_health_probe-linux-amd64 \
+    -o /usr/local/bin/grpc_health_probe \
+    && chmod +x /usr/local/bin/grpc_health_probe \
+    && chown appuser:appgroup /usr/local/bin/grpc_health_probe
 
-RUN pip install grpcio grpcio-tools grpcio-health-checking
+# Give appuser ownership of /app and pip cache dir
+RUN chown -R appuser:appgroup /app \
+    && mkdir -p /home/appuser/.cache/pip \
+    && chown -R appuser:appgroup /home/appuser/.cache
 
-RUN apt-get update && apt-get install -y curl \
-  && curl -L https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.11/grpc_health_probe-linux-amd64 -o /usr/local/bin/grpc_health_probe \
-  && chmod +x /usr/local/bin/grpc_health_probe
+# Switch to non-root user
+USER appuser
 
-RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. monitor.proto
+# Set PATH to use the virtualenv
+ENV PATH="/home/appuser/venv/bin:$PATH"
 
-COPY monitor/src/ .
+# Install Python dependencies inside virtualenv
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt \
+    && pip install grpcio grpcio-tools grpcio-health-checking
 
+# Copy proto files with correct ownership
+COPY --chown=appuser:appgroup proto/ proto/
+
+# Generate gRPC code
+RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. proto/monitor.proto
+
+# Copy application code with correct ownership
+COPY --chown=appuser:appgroup monitor/src/ .
+
+# Final working directory
+WORKDIR /app
+
+# Default command
 CMD ["python", "main.py"]
