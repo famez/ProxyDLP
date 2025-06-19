@@ -65,8 +65,10 @@ def load_yara_rules():
             rule_sources[doc['name']] = doc['content']
         except KeyError:
             print(f"Invalid YARA rule doc: {doc}")
+
+    yara_rules_compiled = yara.compile(sources=rule_sources)
     with yara_rw_lock.gen_wlock():
-        yara_rules_compiled = yara.compile(sources=rule_sources)
+        yara_rules_compiled.save("/tmp/yara_rules.yara")
 
 def load_faiss_index():
     global faiss_index
@@ -89,9 +91,12 @@ def match_regex(text):
 
 def match_yara(text):
     leaks = []
+
+    # Acquire read lock
     with yara_rw_lock.gen_rlock():
-        rules_copy = yara_rules_compiled.save()
-    compiled_copy = yara.load(io.BytesIO(rules_copy))
+        compiled_copy = yara.load("/tmp/yara_rules.yara")
+
+    # Now perform the match
     matches = compiled_copy.match(data=text)
     for match in matches:
         matched_strings = []
@@ -110,6 +115,7 @@ def match_yara(text):
             "meta": match.meta
         })
     return leaks
+
 
 def search_faiss(embedding_vector):
     with faiss_rw_lock.gen_rlock():
@@ -153,7 +159,6 @@ def chunk_text(text, chunk_size=500, overlap=50):
     return chunks
 
 
-
 def analyze_topic_leak(text):
 
     leaked_topics = []
@@ -163,7 +168,7 @@ def analyze_topic_leak(text):
     embedding_vectors = np.array([emb['embedding'] for emb in chunk_embeddings], dtype='float32')
     for embedding in embedding_vectors:
         #faiss_index.hnsw.efSearch = 16  # Query time accuracy/speed tradeoff, default is 16
-        scores, indices = faiss_index.search(embedding.reshape(1, -1), 10)  # Search for top 10 similar embeddings
+        scores, indices = search_faiss(embedding)  # This will use the global faiss_index
         for score, idx in zip(scores[0], indices[0]):
             if score >= 0.3:        #Cosine similarity threshold higher or equals to 0.3
                 print(f"Found similar embedding with score {score} at index {idx}")
@@ -173,14 +178,12 @@ def analyze_topic_leak(text):
                     {"faiss_indexes.$": 1, "name": 1}  # Only project the matched index with the chunk
                 )
 
-                
                 if doc:
                     print("Matched Document ID:", doc["_id"])
                     leaked_topics.append({"name": doc['name'], "faiss_id": int(idx), "score": float(score)})
 
                 else:
                     print("No matching document found.")
-
 
     return leaked_topics
 
@@ -205,67 +208,13 @@ def analyze_text(text):
 
 def analyze_text_regex(text):
 
-    regexes = {}
-    for doc in regex_collection.find():
-        for regex_name, regex_value in doc.items():
-            if regex_name != "_id":
-                compiled_regex = re.compile(regex_value)
-                for line in text.splitlines():
-                    match = re.search(compiled_regex, line)
-                    if match:
-                        regexes[match.group()] = regex_name
+    return match_regex(text)
         
-    return regexes
-
 
 
 def analyze_text_yara(text):
-    yara_leaks = []
-    rule_sources = {}
 
-    # Step 1: Collect all rule sources
-    for doc in yara_rules_collection.find():
-        try:
-            rule_sources[doc['name']] = doc['content']
-        except KeyError:
-            print(f"Missing 'name' or 'content' in YARA rule document: {doc}")
-    
-    try:
-        # Step 2: Compile all rules at once
-        compiled_rules = yara.compile(sources=rule_sources)
-
-        # Step 3: Match against text
-        matches = compiled_rules.match(data=text)
-
-        # Step 4: Extract match data from new YARA structure
-        for match in matches:
-            print(f"YARA rule matched: {match.rule}")
-            matched_strings = []
-
-            for string_match in match.strings:
-                identifier = string_match.identifier
-                for instance in string_match.instances:
-                    matched_strings.append({
-                        "offset": instance.offset,
-                        "identifier": identifier,
-                        "data": instance.matched_data.decode(errors="ignore")
-                    })
-
-            yara_leaks.append({
-                "name": match.rule,
-                "matched_strings": matched_strings,
-                "tags": match.tags,
-                "meta": match.meta
-            })
-
-        return yara_leaks
-
-    except yara.SyntaxError as e:
-        print(f"Syntax error in one of the YARA rules: {e}")
-    except Exception as e:
-        print(f"Error compiling or matching YARA rules: {e}")
-
-    return []
+    return match_yara(text)
 
 
 def decode_file(filepath, content_type):
@@ -400,11 +349,11 @@ def on_topic_rule_added(topic_rule_id):
         # Prepare data
         ids = np.array([index['faiss_id'] for index in faiss_indexes], dtype='int64')
 
-        #Add embeddings to FAISS index
-        faiss_index.add_with_ids(embeddings, ids)
-
-        #Save the FAISS index to disk
-        faiss.write_index(faiss_index, INDEX_PATH)
+        # Add embeddings to FAISS index with write lock
+        with faiss_rw_lock.gen_wlock():
+            faiss_index.add_with_ids(embeddings, ids)
+            # Save the FAISS index to disk
+            faiss.write_index(faiss_index, INDEX_PATH)
 
         topics_collection.update_one(
             {'_id': ObjectId(topic_rule_id)},  # Filter to find the document
@@ -416,8 +365,6 @@ def on_topic_rule_added(topic_rule_id):
     except Exception as e:
         # Handle the exception
         print(f"An error occurred: {e}")
-
-
 
 
 class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
@@ -446,6 +393,8 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
                 "name": yara_rule.name,
                 "content": yara_rule.content
             })
+
+            load_yara_rules()  # Reload Yara rules after adding a new one
         except Exception as e:
             print(f"Error saving Yara rule: {e}")
             return monitor_pb2.MonitorReply(result=2)
@@ -458,19 +407,7 @@ def main():
 
     reload_all_rules()  # Load all rules at startup
 
-    #Load FAISS index if it exists
-    if os.path.exists(INDEX_PATH):
-        print("📦 Loading existing FAISS index...")
-        global faiss_index
-        faiss_index = faiss.read_index(INDEX_PATH)
-    else:   #Inizialize it
-        print("🔍 No existing FAISS index found, starting fresh...")
-        dim = 384   # Dimension of the embeddings (for 'all-MiniLM-L6-v2')
-        flat = faiss.IndexFlatIP(dim)   # Use Inner Product (IP) for similarity search
-        #flat = faiss.IndexHNSWFlat(dim, 32, faiss.METRIC_INNER_PRODUCT)  # Using Inner Product (cosine similarity with normalized vectors)
-        #flat.hnsw.efConstruction = 40  # Construction time/search accuracy tradeoff, default is 40
-        faiss_index = faiss.IndexIDMap2(flat) # Create an index with ID mapping
-
+    # Initialize gRPC server
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     monitor_pb2_grpc.add_MonitorServicer_to_server(MonitorServicer(), server)
 
