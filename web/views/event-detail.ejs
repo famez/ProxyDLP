@@ -69,11 +69,11 @@
         <% Object.entries(event.leak.regex || {}).forEach(([k, v]) => { %>
           <span class="inline-block px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full"><%= k %>: <%= v %></span>
         <% }) %>
-        <% Object.entries(event.leak.ner || {}).forEach(([k, v]) => { %>
-          <span class="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full"><%= k %>: <%= v %></span>
-        <% }) %>
         <% (event.leak.topic || []).forEach(t => { %>
-          <span class="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full"><%= t %></span>
+          <span class="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full"><%= t.name %></span>
+        <% }) %>
+        <% (event.leak.yara || []).forEach(y => { %>
+          <span class="inline-block px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full"><%= y.name %></span>
         <% }) %>
       </div>
       

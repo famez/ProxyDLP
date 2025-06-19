@@ -249,6 +249,13 @@
                   </span>
               </span>
               <% }) %>
+              <% event.leak.yara.forEach(y => { %>
+              <span class="mt-2 tag-container">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      <%= y.name %>
+                  </span>
+              </span>
+              <% }) %>
             <% } %>
           </li>
         <% }) %>
