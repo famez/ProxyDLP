@@ -55,6 +55,15 @@ RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. proto
 # Copy application code with correct ownership
 COPY --chown=appuser:appgroup monitor/src/ .
 
+# Switch to root to fix volume mount dir permissions
+USER root
+
+# Create the FAISS directory and set proper ownership
+RUN mkdir -p /var/faiss && chown -R appuser:appgroup /var/faiss
+
+# Switch back to appuser
+USER appuser
+
 # Final working directory
 WORKDIR /app
 
