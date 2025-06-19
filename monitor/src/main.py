@@ -83,10 +83,8 @@ def match_regex(text):
     matches = {}
     with regex_rw_lock.gen_rlock():
         for name, pattern in regex_rules.items():
-            for line in text.splitlines():
-                match = pattern.search(line)
-                if match:
-                    matches[match.group()] = name
+            for match in pattern.finditer(text):
+                matches[match.group()] = name
     return matches
 
 def match_yara(text):
