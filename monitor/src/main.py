@@ -19,7 +19,7 @@ import monitor_pb2_grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 import faiss
 import yara
-
+from readerwriterlock import rwlock
 
 INDEX_PATH = '/var/faiss/faiss_index.index'
 
@@ -34,7 +34,94 @@ yara_rules_collection = db_client["proxyGPT"]["yara_rules"]
 
 #nlp = spacy.load("en_core_web_sm")
 
+# Global shared resources and RWLocks
+regex_rules = {}
+regex_rw_lock = rwlock.RWLockFair()
+
+faiss_index = None
+faiss_rw_lock = rwlock.RWLockFair()
+
+yara_rules_compiled = None
+yara_rw_lock = rwlock.RWLockFair()
+
 embeddings_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+
+def load_regex_rules():
+    global regex_rules
+    with regex_rw_lock.gen_wlock():
+        rules = {}
+        for doc in regex_collection.find():
+            for regex_name, regex_value in doc.items():
+                if regex_name != "_id":
+                    rules[regex_name] = re.compile(regex_value)
+        regex_rules = rules
+
+def load_yara_rules():
+    global yara_rules_compiled
+    rule_sources = {}
+    for doc in yara_rules_collection.find():
+        try:
+            rule_sources[doc['name']] = doc['content']
+        except KeyError:
+            print(f"Invalid YARA rule doc: {doc}")
+    with yara_rw_lock.gen_wlock():
+        yara_rules_compiled = yara.compile(sources=rule_sources)
+
+def load_faiss_index():
+    global faiss_index
+    with faiss_rw_lock.gen_wlock():
+        if os.path.exists(INDEX_PATH):
+            faiss_index = faiss.read_index(INDEX_PATH)
+        else:
+            dim = 384  # Embedding size
+            flat = faiss.IndexFlatIP(dim)
+            faiss_index = faiss.IndexIDMap2(flat)
+
+
+def match_regex(text):
+    matches = {}
+    with regex_rw_lock.gen_rlock():
+        for name, pattern in regex_rules.items():
+            for line in text.splitlines():
+                match = pattern.search(line)
+                if match:
+                    matches[match.group()] = name
+    return matches
+
+def match_yara(text):
+    leaks = []
+    with yara_rw_lock.gen_rlock():
+        rules_copy = yara_rules_compiled.save()
+    compiled_copy = yara.load(io.BytesIO(rules_copy))
+    matches = compiled_copy.match(data=text)
+    for match in matches:
+        matched_strings = []
+        for string_match in match.strings:
+            identifier = string_match.identifier
+            for instance in string_match.instances:
+                matched_strings.append({
+                    "offset": instance.offset,
+                    "identifier": identifier,
+                    "data": instance.matched_data.decode(errors="ignore")
+                })
+        leaks.append({
+            "name": match.rule,
+            "matched_strings": matched_strings,
+            "tags": match.tags,
+            "meta": match.meta
+        })
+    return leaks
+
+def search_faiss(embedding_vector):
+    with faiss_rw_lock.gen_rlock():
+        scores, indices = faiss_index.search(embedding_vector.reshape(1, -1), 10)
+    return scores, indices
+
+def reload_all_rules():
+    load_regex_rules()
+    load_yara_rules()
+    load_faiss_index()
 
 def get_next_faiss_id():
     counter = counter_collection.find_one_and_update(
@@ -370,6 +457,8 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
 
 def main():
+
+    reload_all_rules()  # Load all rules at startup
 
     #Load FAISS index if it exists
     if os.path.exists(INDEX_PATH):
