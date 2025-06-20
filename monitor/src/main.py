@@ -344,10 +344,10 @@ def on_topic_rule_added(topic_rule_id):
 
         chunks = chunk_text(topic_rule['pattern'])
         embeddings = embeddings_model.encode(chunks, normalize_embeddings=True)
-        faiss_indexes = [{"chunk": chunk, "faiss_id": get_next_faiss_id()} for chunk in chunks]
+        faiss_indexes = [get_next_faiss_id() for chunk in chunks]
 
         # Prepare data
-        ids = np.array([index['faiss_id'] for index in faiss_indexes], dtype='int64')
+        ids = np.array(faiss_indexes, dtype='int64')
 
         # Add embeddings to FAISS index with write lock
         with faiss_rw_lock.gen_wlock():
@@ -367,6 +367,29 @@ def on_topic_rule_added(topic_rule_id):
         print(f"An error occurred: {e}")
 
 
+def remove_topic_rule(topic_rule_id, delete_only_indexes=False):
+    print(f"Received Topic Rule ID: {topic_rule_id}")
+
+    topic_rule = topics_collection.find_one({'_id': ObjectId(topic_rule_id)})
+
+    ids = np.array(topic_rule['faiss_indexes'], dtype='int64')
+    selector = faiss.IDSelectorBatch(ids)
+    with faiss_rw_lock.gen_wlock():
+        faiss_index.remove_ids(selector)
+        # Save the FAISS index to disk
+        faiss.write_index(faiss_index, INDEX_PATH)
+
+    if delete_only_indexes:
+        topics_collection.update_one(
+            {'_id': ObjectId(topic_rule_id)},
+            {'$unset': {'faiss_indexes': ""}}
+        )
+    else:
+        topics_collection.delete_one({'_id': ObjectId(topic_rule_id)})
+
+    
+    
+
 class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
     def EventAdded(self, request, context):
@@ -376,6 +399,16 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
     
     def TopicRuleAdded(self, request, context):
         print(f"Received Topic Rule ID: {request.id}")
+        background_executor.submit(on_topic_rule_added, request.id)
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
+    
+    def TopicRuleRemoved(self, request, context):
+        remove_topic_rule(request.id, delete_only_indexes=False)
+        
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
+    
+    def TopicRuleEdited(self, request, context):
+        remove_topic_rule(request.id, delete_only_indexes=True)
         background_executor.submit(on_topic_rule_added, request.id)
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
     
@@ -401,6 +434,48 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
         
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
     
+    def YaraRuleEdited(self, yara_rule_edit_request, context):
+        print(f"Received Yara rule name: {yara_rule_edit_request.rule.name}")
+        print(f"Received Yara rule id: {yara_rule_edit_request.id.id}")
+
+        if not validate_yara_rule_string(yara_rule_edit_request.rule.content):
+            print(f"Invalid Yara rule: {yara_rule_edit_request.rule.name}")
+            return monitor_pb2.MonitorReply(result=1)
+        
+        try:
+            # Save the Yara rule to the database
+            yara_rules_collection.update_one( 
+                {'_id': ObjectId(yara_rule_edit_request.id.id)},  # Filter to find the document
+                {'$set': 
+                    {  
+                        "name": yara_rule_edit_request.rule.name,
+                        "content": yara_rule_edit_request.rule.content
+                    }
+                }  # Field to add or update
+            )
+
+            load_yara_rules()  # Reload Yara rules after adding a new one
+        except Exception as e:
+            print(f"Error saving Yara rule: {e}")
+            return monitor_pb2.MonitorReply(result=2)
+        
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
+
+    def YaraRuleDeleted(self, yara_rule, context):
+        load_yara_rules()  # Reload Yara rules after removing it
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
+
+    def RegexRuleAdded(self, regex_rule, context):
+        load_regex_rules()
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
+
+    def RegexRuleRemoved(self, regex_rule, context):
+        load_regex_rules()
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
+
+    def RegexRuleEdited(self, regex_rule, context):
+        load_regex_rules()
+        return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
 
 
 def main():

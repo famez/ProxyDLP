@@ -237,7 +237,8 @@ app.post('/rules/regex/add', authMiddleware, requirePermission("rules"), async (
   let client;
   try {
     ({ client, db } = await connectToDB());
-    await db.collection('regex_rules').insertOne({ [name]: pattern });
+    const result = await db.collection('regex_rules').insertOne({ [name]: pattern });
+    gRPC_client.RegexRuleAdded({ id: result.insertedId }, () => {});
     res.redirect('/rules/regex');
   } catch (err) {
     console.error('Error adding regex rule:', err);
@@ -310,7 +311,20 @@ app.post('/rules/:type/delete/:id', authMiddleware, requirePermission("rules"), 
   let client;
   try {
     ({ client, db } = await connectToDB());
-    await db.collection(`${type}_rules`).deleteOne({ _id: new ObjectId(id) });
+
+    if (type === 'topic') {
+      // Notify gRPC service about topic rule deletion
+      gRPC_client.TopicRuleDeleted({ id }, () => {});   //Monitor service will handle the deletion from the database
+    } else if (type === 'yara') { 
+      // Notify gRPC service about YARA rule deletion
+      await db.collection(`${type}_rules`).deleteOne({ _id: new ObjectId(id) });
+      gRPC_client.YaraRuleDeleted({ id }, () => {});
+    } else if (type === 'regex') {
+      // Notify gRPC service about regex rule deletion
+      await db.collection(`${type}_rules`).deleteOne({ _id: new ObjectId(id) });
+      gRPC_client.RegexRuleDeleted({ id }, () => {});
+    }
+
     res.redirect(`/rules/${type}`);
   } catch (err) {
     console.error(`Error deleting ${type} rule:`, err);
@@ -375,10 +389,18 @@ app.post('/rules/:type/edit/:id', authMiddleware, requirePermission("rules"), as
   let client;
   try {
     ({ client, db } = await connectToDB());
-    await db.collection(`${type}_rules`).replaceOne({ _id: new ObjectId(id) }, updateData);
 
     if (type === 'topic') {
-      gRPC_client.TopicRuleAdded({ id }, () => {});
+      // Notify gRPC service about topic rule update
+      gRPC_client.TopicRuleEdited({ id }, () => {});   //Monitor service will handle the update from the database
+    } else if (type === 'yara') { 
+      // Notify gRPC service about YARA rule update
+      await db.collection(`${type}_rules`).replaceOne({ _id: new ObjectId(id) }, updateData);
+      gRPC_client.YaraRuleEdited({ id, rule: updateData }, () => {});
+    } else if (type === 'regex') {
+      // Notify gRPC service about regex rule update
+      await db.collection(`${type}_rules`).replaceOne({ _id: new ObjectId(id) }, updateData);
+      gRPC_client.RegexRuleEdited({ id }, () => {});
     }
 
     res.redirect(`/rules/${type}`);

@@ -5,7 +5,14 @@ package monitor;
 service Monitor {
   rpc EventAdded (EventID) returns (MonitorReply);
   rpc TopicRuleAdded (TopicRuleID) returns (MonitorReply);
+  rpc TopicRuleRemoved (TopicRuleID) returns (MonitorReply);
+  rpc TopicRuleEdited (TopicRuleID) returns (MonitorReply);
   rpc YaraRuleAdded (YaraRule) returns (MonitorReply);
+  rpc YaraRuleRemoved (YaraRuleID) returns (MonitorReply);
+  rpc YaraRuleEdited (YaraRuleEditRequest) returns (MonitorReply);
+  rpc RegexRuleAdded (RegexRuleID) returns (MonitorReply);
+  rpc RegexRuleRemoved (RegexRuleID) returns (MonitorReply);
+  rpc RegexRuleEdited (RegexRuleID) returns (MonitorReply);
 
 }
 
@@ -17,11 +24,24 @@ message TopicRuleID {
   string id = 1;
 }
 
-message MonitorReply {
-  int32 result = 1;
+message RegexRuleID {
+  string id = 1;
 }
 
 message YaraRule {
   string name = 1;
   string content = 2;
+}
+
+message YaraRuleID {
+  string id = 1;
+}
+
+message YaraRuleEditRequest {
+  YaraRuleID id = 1;
+  YaraRule rule = 2;
+}
+
+message MonitorReply {
+  int32 result = 1;
 }
