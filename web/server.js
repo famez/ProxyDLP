@@ -314,15 +314,15 @@ app.post('/rules/:type/delete/:id', authMiddleware, requirePermission("rules"), 
 
     if (type === 'topic') {
       // Notify gRPC service about topic rule deletion
-      gRPC_client.TopicRuleDeleted({ id }, () => {});   //Monitor service will handle the deletion from the database
+      gRPC_client.TopicRuleRemoved({ id }, () => {});   //Monitor service will handle the deletion from the database
     } else if (type === 'yara') { 
       // Notify gRPC service about YARA rule deletion
       await db.collection(`${type}_rules`).deleteOne({ _id: new ObjectId(id) });
-      gRPC_client.YaraRuleDeleted({ id }, () => {});
+      gRPC_client.YaraRuleRemoved({ id }, () => {});
     } else if (type === 'regex') {
       // Notify gRPC service about regex rule deletion
       await db.collection(`${type}_rules`).deleteOne({ _id: new ObjectId(id) });
-      gRPC_client.RegexRuleDeleted({ id }, () => {});
+      gRPC_client.RegexRuleRemoved({ id }, () => {});
     }
 
     res.redirect(`/rules/${type}`);
