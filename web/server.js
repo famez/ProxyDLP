@@ -387,19 +387,21 @@ app.post('/rules/:type/edit/:id', authMiddleware, requirePermission("rules"), as
   }
 
   let client;
+
   try {
+
     ({ client, db } = await connectToDB());
+
+    await db.collection(`${type}_rules`).replaceOne({ _id: new ObjectId(id) }, updateData);
 
     if (type === 'topic') {
       // Notify gRPC service about topic rule update
       gRPC_client.TopicRuleEdited({ id }, () => {});   //Monitor service will handle the update from the database
     } else if (type === 'yara') { 
       // Notify gRPC service about YARA rule update
-      await db.collection(`${type}_rules`).replaceOne({ _id: new ObjectId(id) }, updateData);
       gRPC_client.YaraRuleEdited({ id, rule: updateData }, () => {});
     } else if (type === 'regex') {
       // Notify gRPC service about regex rule update
-      await db.collection(`${type}_rules`).replaceOne({ _id: new ObjectId(id) }, updateData);
       gRPC_client.RegexRuleEdited({ id }, () => {});
     }
 
