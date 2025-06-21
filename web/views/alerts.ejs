@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Alerts Configuration</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulseList {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+    li[data-pulse="true"] {
+      animation: pulseList 2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 min-h-screen flex items-center justify-center p-4">
+  <main class="w-full max-w-6xl p-8 bg-white rounded-2xl shadow-xl">
+    <h1 class="text-4xl font-bold text-indigo-700 mb-10 text-center">Alerts Dashboard</h1>
+
+    <!-- Cards Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+      
+      <!-- Alert Destinations -->
+      <a href="/alerts/destinations" class="group p-6 bg-gray-50 rounded-xl shadow border border-blue-100 hover:shadow-lg transition hover:bg-blue-50 flex items-center gap-4">
+        <div class="p-3 bg-blue-100 text-blue-700 rounded-full">
+          <!-- Email/Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-lg font-semibold text-blue-700 group-hover:underline">Alert Destinations</p>
+          <p class="text-sm text-gray-500">Configure email, syslog, and local log output</p>
+        </div>
+      </a>
+
+      <!-- Triggering Rules -->
+      <a href="/alerts/rules" class="group p-6 bg-gray-50 rounded-xl shadow border border-purple-100 hover:shadow-lg transition hover:bg-purple-50 flex items-center gap-4">
+        <div class="p-3 bg-purple-100 text-purple-700 rounded-full">
+          <!-- Rules Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6M9 16h6M5 8h14M5 20h14" />
+          </svg>
+        </div>
+        <div>
+          <p class="text-lg font-semibold text-purple-700 group-hover:underline">Triggering Rules</p>
+          <p class="text-sm text-gray-500">Set rules for alerts (regex, yara, etc.)</p>
+        </div>
+      </a>
+
+      <!-- Local Logs Viewer -->
+      <a href="/alerts/logs" class="group p-6 bg-gray-50 rounded-xl shadow border border-pink-100 hover:shadow-lg transition hover:bg-pink-50 flex items-center gap-4">
+        <div class="p-3 bg-pink-100 text-pink-700 rounded-full">
+          <!-- Logs Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 6h16M4 10h16M4 14h10M4 18h10" />
+          </svg>
+        </div>
+        <div>
+          <p class="text-lg font-semibold text-pink-700 group-hover:underline">Local Logs</p>
+          <p class="text-sm text-gray-500">View recently triggered local alerts</p>
+        </div>
+      </a>
+
+    </div>
+  </main>
+</body>
+</html>

@@ -1079,6 +1079,14 @@ app.post('/add-event-to-topic-rules', authMiddleware, requirePermission("events"
 
 });
 
+app.get('/alerts', authMiddleware, async (req, res) => {
+  try {
+    res.render('alerts', { title: 'Alerts' });
+  } catch (err) {
+    console.error('Error rendering alerts:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
