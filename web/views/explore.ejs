@@ -4,10 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Explore user activity</title>
-  <!-- Tailwind CSS CDN for rapid styling -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Subtle pulsing animation for new/first item */
     @keyframes pulseList {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.02); }
@@ -15,12 +13,10 @@
     li[data-pulse="true"] {
       animation: pulseList 2s ease-in-out infinite;
     }
-
     .tag-container span {
       display: inline-block;
       margin-right: 0.5rem;
     }
-
     .download-link {
       display: inline-block;
       padding: 8px 16px;
@@ -33,17 +29,14 @@
       transition: all 0.25s ease-in-out;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
-
     .download-link:hover {
       background: linear-gradient(135deg, #a777e3, #6e8efb);
       transform: translateY(-2px);
     }
-
     .download-link::after {
       content: ' ↓';
       font-size: 12px;
     }
-
     .small-link {
       margin-top: 10px;
       display: inline-block;
@@ -52,155 +45,85 @@
       text-decoration: underline;
     }
   </style>
-
-
 </head>
 
 <body class="bg-gray-50">
   <div class="max-w-4xl mx-auto py-10 px-4">
     <h1 class="text-3xl font-bold text-indigo-700 mb-6">Activity</h1>
 
-      <!-- Filter / Sort Bar -->
-      <form method="GET" class="mb-8 bg-white shadow-sm rounded-lg p-4 grid gap-4
-                                sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        <!-- Date range -->
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">From</label>
-          <input  type="date" name="start" value="<%= filters.start || '' %>"
-                  class="w-full border rounded p-1" />
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">To</label>
-          <input  type="date" name="end" value="<%= filters.end || '' %>"
-                  class="w-full border rounded p-1" />
-        </div>
+    <!-- Filter / Sort Bar -->
+    <form method="GET" class="mb-8 bg-white shadow-sm rounded-lg p-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+      <!-- Date range -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">From</label>
+        <input type="date" name="start" value="<%= filters.start || '' %>" class="w-full border rounded p-1" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">To</label>
+        <input type="date" name="end" value="<%= filters.end || '' %>" class="w-full border rounded p-1" />
+      </div>
 
-        <!-- User -->
+      <!-- Autocomplete fields -->
+      <div class="relative">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">User</label>
+        <input id="userInput" type="text" name="user" placeholder="username / email"
+               value="<%= filters.user || '' %>" class="border p-2 rounded w-full" autocomplete="off" />
+        <ul id="userSuggestions" class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden"></ul>
+      </div>
+      <div class="relative">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Site</label>
+        <input id="siteInput" type="text" name="site" placeholder="e.g. ChatGPT"
+               value="<%= filters.site || '' %>" class="border p-2 rounded w-full" autocomplete="off" />
+        <ul id="siteSuggestions" class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden"></ul>
+      </div>
+      <div class="relative">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Rational</label>
+        <input id="rationalInput" type="text" name="rational" placeholder="e.g. Conversation"
+               value="<%= filters.rational || '' %>" class="border p-2 rounded w-full" autocomplete="off" />
+        <ul id="rationalSuggestions" class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden"></ul>
+      </div>
+      <div class="relative">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">File name</label>
+        <input id="filenameInput" type="text" name="filename" placeholder="e.g. Confidential.docx"
+               value="<%= filters.filename || '' %>" class="border p-2 rounded w-full" autocomplete="off" />
+        <ul id="filenameSuggestions" class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden"></ul>
+      </div>
+      <div class="relative">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Filetype</label>
+        <input id="filetypeInput" type="text" name="filetype" placeholder="e.g. text/plain"
+               value="<%= filters.filetype || '' %>" class="border p-2 rounded w-full" autocomplete="off" />
+        <ul id="filetypeSuggestions" class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden"></ul>
+      </div>
 
-        <div class="relative">
-          <label class="block text-xs font-semibold text-gray-600 mb-1">User</label>
-          <input id="userInput" type="text" name="user"
-                placeholder="username / email"
-                value="<%= filters.user || '' %>"
-                class="border p-2 rounded w-full"
-                autocomplete="off" />
+      <!-- Content & tag filters -->
+      <div class="sm:col-span-2">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Content search</label>
+        <input type="text" name="content" value="<%= filters.content || '' %>" class="w-full border rounded p-1" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Leak tag</label>
+        <input type="text" name="leak" placeholder="PII / Address" value="<%= filters.leak || '' %>" class="w-full border rounded p-1" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Sort</label>
+        <select name="order" class="w-full border rounded p-1">
+          <option value="desc" <%= filters.order !== 'asc' ? 'selected' : '' %>>Newest first</option>
+          <option value="asc" <%= filters.order === 'asc' ? 'selected' : '' %>>Oldest first</option>
+        </select>
+      </div>
+      <div class="flex items-center mt-2">
+        <input type="checkbox" id="playground" name="playground" value="1" <%= filters.playground ? 'checked' : '' %> class="mr-2">
+        <label for="playground" class="text-sm text-gray-700 font-medium">Show Playground Events</label>
+      </div>
 
-          <ul id="userSuggestions"
-              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
-            <!-- Suggestions will appear here -->
-          </ul>
-        </div>
+      <!-- Submit buttons -->
+      <div class="sm:col-span-2 md:col-span-3 lg:col-span-4 flex gap-2 mt-2">
+        <button type="submit" class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">Apply</button>
+        <a href="/explore" class="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300">Reset</a>
+      </div>
+    </form>
 
-        <!-- Site -->
-        <div class="relative">
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Site</label>
-          <input id="siteInput" type="text" name="site"
-                placeholder="e.g. ChatGPT"
-                value="<%= filters.site || '' %>"
-                class="border p-2 rounded w-full"
-                autocomplete="off" />
-          <ul id="siteSuggestions"
-              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
-          </ul>
-        </div>
-
-        <!-- Rational -->
-        <div class="relative">
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Rational</label>
-          <input id="rationalInput" type="text" name="rational"
-                placeholder="e.g. Conversation"
-                value="<%= filters.rational || '' %>"
-                class="border p-2 rounded w-full"
-                autocomplete="off" />
-          <ul id="rationalSuggestions"
-              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
-          </ul>
-        </div>
-
-        <!-- Filename -->
-        <div class="relative">
-          <label class="block text-xs font-semibold text-gray-600 mb-1">File name</label>
-          <input id="filenameInput" type="text" name="filename"
-                placeholder="e.g. Confidential.docx"
-                value="<%= filters.filename || '' %>"
-                class="border p-2 rounded w-full"
-                autocomplete="off" />
-          <ul id="filenameSuggestions"
-              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
-          </ul>
-        </div>
-
-        <!-- File-type -->
-        <div class="relative">
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Filetype</label>
-          <input id="filetypeInput" type="text" name="filetype"
-                placeholder="e.g. text/plain"
-                value="<%= filters.filetype || '' %>"
-                class="border p-2 rounded w-full"
-                autocomplete="off" />
-          <ul id="filetypeSuggestions"
-              class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden">
-          </ul>
-        </div>
-
-        <!-- Content contains -->
-        <div class="sm:col-span-2">
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Content search</label>
-          <input  type="text" name="content" value="<%= filters.content || '' %>"
-                  class="w-full border rounded p-1" />
-        </div>
-
-        <!-- Leak tag -->
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Leak tag</label>
-          <input  type="text" name="leak" placeholder="PII / Address"
-                  value="<%= filters.leak || '' %>" class="w-full border rounded p-1" />
-        </div>
-
-        <!-- Sort order -->
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Sort</label>
-          <select name="order" class="w-full border rounded p-1">
-            <option value="desc" <%= filters.order !== 'asc' ? 'selected' : '' %>>Newest first</option>
-            <option value="asc"  <%= filters.order === 'asc'  ? 'selected' : '' %>>Oldest first</option>
-          </select>
-        </div>
-
-        <!-- Page number -->
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Page</label>
-          <input type="number" name="page" min="1"
-                value="<%= filters.page || 1 %>"
-                class="w-full border rounded p-1" />
-        </div>
-
-        <!-- Limit results -->
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 mb-1">Limit</label>
-          <select name="limit" class="w-full border rounded p-1">
-            <option value="10" <%= filters.limit == 10 ? 'selected' : '' %>>10</option>
-            <option value="50" <%= filters.limit == 50 ? 'selected' : '' %>>50</option>
-            <option value="100" <%= filters.limit == 100 ? 'selected' : '' %>>100</option>
-            <option value="250" <%= filters.limit == 250 ? 'selected' : '' %>>250</option>
-          </select>
-        </div>
-        <div class="flex items-center mt-2">
-          <input type="checkbox" id="playground" name="playground" value="1"
-                <%= filters.playground ? 'checked' : '' %>
-                class="mr-2">
-          <label for="playground" class="text-sm text-gray-700 font-medium">Show Playground Events</label>
-        </div>
-
-        <!-- Submit -->
-        <div class="sm:col-span-2 md:col-span-3 lg:col-span-4 flex gap-2 mt-2">
-          <button type="submit"
-                  class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">Apply</button>
-          <a href="/explore"
-            class="px-4 py-2 rounded bg-gray-200 text-gray-700 hover:bg-gray-300">Reset</a>
-        </div>
-      </form>
-
-    
+    <!-- Events -->
     <% if (events && events.length > 0) { %>
       <ol class="relative border-l-2 border-indigo-300 pl-6 space-y-8">
         <% events.forEach(event => { %>
@@ -209,25 +132,20 @@
             <time class="block text-sm text-gray-500"><%= event.timestamp %></time>
             <div class="mt-1 text-lg font-medium text-gray-800">
               <%= event.rational %>
-            <% if (event.rational == "Attached file") { %>
-              <a href="<%= event.filepath %>?name=<%= event.filename %>" class="download-link" download onclick="event.stopPropagation();">
-                <%= event.filename %>
-              </a>
-            <% } %>
-            <span class="text-sm text-blue-600 italic mt-1"><%= event.site %></span>
-            <% if (event.leak) { %>
-              <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                ✔ analyzed
-              </span>
-            <% } else { %>
-              <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                ✘ not analyzed
-              </span>
-            <% } %>
-            
-            <% if (event.user) { %>
-              <span class="text-sm text-gray-500 block">Username: <span class="font-semibold text-gray-700"><%= event.user %></span></span>
-            <% } %>
+              <% if (event.rational == "Attached file") { %>
+                <a href="<%= event.filepath %>?name=<%= event.filename %>" class="download-link" download onclick="event.stopPropagation();">
+                  <%= event.filename %>
+                </a>
+              <% } %>
+              <span class="text-sm text-blue-600 italic mt-1"><%= event.site %></span>
+              <% if (event.leak) { %>
+                <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">✔ analyzed</span>
+              <% } else { %>
+                <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">✘ not analyzed</span>
+              <% } %>
+              <% if (event.user) { %>
+                <span class="text-sm text-gray-500 block">Username: <span class="font-semibold text-gray-700"><%= event.user %></span></span>
+              <% } %>
             </div>
             <p class="text-gray-600">
               <% if (event.content && permissions.includes('conversations')) { %>
@@ -235,96 +153,116 @@
               <% } %>
             </p>
             <% if (event.leak) { %>
-              <% Object.entries(event.leak.regex).forEach(function ([key, value]) { %>
-              <span class="mt-2 tag-container">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                    <%= key %>: <%= value %>
-                  </span>
-              </span>
+              <% Object.entries(event.leak.regex).forEach(([key, value]) => { %>
+                <span class="mt-2 tag-container">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"><%= key %>: <%= value %></span>
+                </span>
               <% }) %>
               <% event.leak.topic.forEach(topic => { %>
-              <span class="mt-2 tag-container">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <%= topic.name %>
-                  </span>
-              </span>
+                <span class="mt-2 tag-container">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><%= topic.name %></span>
+                </span>
               <% }) %>
               <% event.leak.yara.forEach(y => { %>
-              <span class="mt-2 tag-container">
-                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      <%= y.name %>
-                  </span>
-              </span>
+                <span class="mt-2 tag-container">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"><%= y.name %></span>
+                </span>
               <% }) %>
             <% } %>
           </li>
         <% }) %>
       </ol>
-    <% } else { %>
-      <p class="text-gray-600">No events found</p>
-    <% } %>
+
+      <% } else { %>
+        <p class="text-gray-600">No events found</p>
+      <% } %>
+
+      <!-- Pagination Controls -->
+      <div class="mt-10 flex flex-col items-center gap-4">
+        <div class="flex items-center gap-4">
+          <% const currentPage = Number(filters.page || 1); %>
+          <% const limit = Number(filters.limit || 10); %>
+          <% const prevPage = currentPage > 1 ? currentPage - 1 : 1; %>
+          <% const nextPage = currentPage + 1; %>
+
+          <a href="?<%= new URLSearchParams({ ...filters, page: prevPage, limit }).toString() %>"
+             class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm <%= currentPage <= 1 ? 'opacity-50 pointer-events-none' : '' %>">
+            ← Previous
+          </a>
+          <span class="text-sm text-gray-600">Page <%= currentPage %></span>
+          <a href="?<%= new URLSearchParams({ ...filters, page: nextPage, limit }).toString() %>"
+             class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
+            Next →
+          </a>
+        </div>
+
+        <form method="GET" class="flex items-center gap-2 text-sm">
+          <% Object.entries(filters).forEach(([key, val]) => { if (key !== 'limit') { %>
+            <input type="hidden" name="<%= key %>" value="<%= val %>">
+          <% } }) %>
+          <label for="limitSelect" class="text-gray-600">Results per page:</label>
+          <select id="limitSelect" name="limit" onchange="this.form.submit()" class="border rounded px-2 py-1">
+            <option value="10" <%= limit == 10 ? 'selected' : '' %>>10</option>
+            <option value="50" <%= limit == 50 ? 'selected' : '' %>>50</option>
+            <option value="100" <%= limit == 100 ? 'selected' : '' %>>100</option>
+            <option value="250" <%= limit == 250 ? 'selected' : '' %>>250</option>
+          </select>
+        </form>
+      </div>
+    
   </div>
+
+  <script>
+    function setupAutocomplete({ inputId, listId, field }) {
+      const input = document.getElementById(inputId);
+      const suggestions = document.getElementById(listId);
+
+      async function fetchSuggestions() {
+        const val = input.value;
+        try {
+          const res = await fetch(`/api/options?field=${field}&startsWith=${encodeURIComponent(val)}`);
+          const options = await res.json();
+          suggestions.innerHTML = '';
+          if (options.length > 0) {
+            options.forEach(option => {
+              const li = document.createElement('li');
+              li.textContent = option;
+              li.className = 'px-4 py-2 hover:bg-indigo-100 cursor-pointer';
+              li.onclick = () => {
+                input.value = option;
+                suggestions.innerHTML = '';
+                suggestions.classList.add('hidden');
+              };
+              suggestions.appendChild(li);
+            });
+            suggestions.classList.remove('hidden');
+          } else {
+            suggestions.classList.add('hidden');
+          }
+        } catch (err) {
+          console.error(`Failed to load ${field} options:`, err);
+        }
+      }
+
+      input.addEventListener('input', fetchSuggestions);
+      input.addEventListener('focus', fetchSuggestions);
+      document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+          suggestions.classList.add('hidden');
+        }
+      });
+    }
+
+    setupAutocomplete({ inputId: 'userInput', listId: 'userSuggestions', field: 'user' });
+    setupAutocomplete({ inputId: 'siteInput', listId: 'siteSuggestions', field: 'site' });
+    setupAutocomplete({ inputId: 'rationalInput', listId: 'rationalSuggestions', field: 'rational' });
+    setupAutocomplete({ inputId: 'filenameInput', listId: 'filenameSuggestions', field: 'filename' });
+    setupAutocomplete({ inputId: 'filetypeInput', listId: 'filetypeSuggestions', field: 'content_type' });
+
+    document.querySelectorAll("ol li").forEach(li => {
+      li.addEventListener("mouseenter", () => li.setAttribute("data-pulse", "true"));
+      li.addEventListener("mouseleave", () => li.setAttribute("data-pulse", "false"));
+    });
+  </script>
 </body>
 </html>
-
-<script>
-function setupAutocomplete({ inputId, listId, field }) {
-  const input = document.getElementById(inputId);
-  const suggestions = document.getElementById(listId);
-
-  async function fetchSuggestions() {
-    const val = input.value;
-    try {
-      const res = await fetch(`/api/options?field=${field}&startsWith=${encodeURIComponent(val)}`);
-      const options = await res.json();
-
-      suggestions.innerHTML = '';
-      if (options.length > 0) {
-        options.forEach(option => {
-          const li = document.createElement('li');
-          li.textContent = option;
-          li.className = 'px-4 py-2 hover:bg-indigo-100 cursor-pointer';
-          li.onclick = () => {
-            input.value = option;
-            suggestions.innerHTML = '';
-            suggestions.classList.add('hidden');
-          };
-          suggestions.appendChild(li);
-        });
-        suggestions.classList.remove('hidden');
-      } else {
-        suggestions.classList.add('hidden');
-      }
-    } catch (err) {
-      console.error(`Failed to load ${field} options:`, err);
-    }
-  }
-
-  input.addEventListener('input', fetchSuggestions);
-  input.addEventListener('focus', fetchSuggestions);
-
-  document.addEventListener('click', (e) => {
-    if (!input.contains(e.target) && !suggestions.contains(e.target)) {
-      suggestions.classList.add('hidden');
-    }
-  });
-}
-
-// Initialize for each field
-setupAutocomplete({ inputId: 'userInput', listId: 'userSuggestions', field: 'user' });
-setupAutocomplete({ inputId: 'siteInput', listId: 'siteSuggestions', field: 'site' });
-setupAutocomplete({ inputId: 'rationalInput', listId: 'rationalSuggestions', field: 'rational' });
-setupAutocomplete({ inputId: 'filenameInput', listId: 'filenameSuggestions', field: 'filename' });
-setupAutocomplete({ inputId: 'filetypeInput', listId: 'filetypeSuggestions', field: 'content_type' });
-
-document.querySelectorAll("ol li").forEach(li => {
-  li.addEventListener("mouseenter", () => {
-    li.setAttribute("data-pulse", "true");
-  });
-  li.addEventListener("mouseleave", () => {
-    li.setAttribute("data-pulse", "false");
-  });
-});
-
-
-</script>
