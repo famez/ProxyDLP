@@ -1,0 +1,62 @@
+<%- include('partials/header', { title }) %>
+<main class="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow mt-10">
+  <h2 class="text-2xl font-bold text-purple-700 mb-6">Alert Triggering Rules</h2>
+
+  <table class="min-w-full border text-sm">
+    <thead class="bg-purple-100 text-purple-800">
+      <tr>
+        <th class="px-4 py-2 text-left">Rule Name</th>
+        <th class="px-4 py-2 text-left">Regex</th>
+        <th class="px-4 py-2 text-left">YARA</th>
+        <th class="px-4 py-2 text-left">Topic</th>
+        <th class="px-4 py-2 text-left">Destinations</th>
+      </tr>
+    </thead>
+    <tbody class="text-gray-700">
+      <% rules.forEach(rule => { %>
+        <tr class="border-b">
+          <td class="px-4 py-2 font-medium"><%= rule.name %></td>
+          <td class="px-4 py-2"><%= rule.regex.rules.join(', ') %> x<%= rule.regex.count %></td>
+          <td class="px-4 py-2"><%= rule.yara.rules.join(', ') %> x<%= rule.yara.count %></td>
+          <td class="px-4 py-2"><%= rule.topic.rules.join(', ') %> x<%= rule.topic.count %></td>
+          <td class="px-4 py-2"><%= rule.destinations.join(', ') %></td>
+        </tr>
+      <% }) %>
+
+      <!-- New Rule Entry Form -->
+      <tr class="border-t bg-purple-50">
+        <form action="/alerts/rules/add" method="POST" class="contents">
+          <td class="px-4 py-2">
+            <input name="name" type="text" placeholder="New Rule Name"
+                   class="w-full border p-1 rounded" required>
+          </td>
+
+          <% ['regex', 'yara', 'topic'].forEach(type => { %>
+            <td class="px-4 py-2">
+              <select name="<%= type %>Rules" multiple class="w-full border p-1 rounded text-xs">
+                <% options[`${type}Rules`].forEach(r => { %>
+                  <option value="<%= r %>"><%= r %></option>
+                <% }) %>
+              </select>
+              <input name="<%= type %>Count" type="number" min="1" value="1"
+                     class="mt-1 w-full border p-1 rounded text-xs" placeholder="Count">
+            </td>
+          <% }) %>
+
+          <td class="px-4 py-2">
+            <select name="destinations" multiple class="w-full border p-1 rounded text-xs">
+              <% options.destinations.forEach(dest => { %>
+                <option value="<%= dest %>"><%= dest %></option>
+              <% }) %>
+            </select>
+            <button type="submit"
+                    class="mt-2 bg-purple-600 text-white text-xs px-2 py-1 rounded hover:bg-purple-700">
+              Add Rule
+            </button>
+          </td>
+        </form>
+      </tr>
+    </tbody>
+  </table>
+</main>
+<%- include('partials/footer') %>

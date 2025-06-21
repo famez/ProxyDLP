@@ -1,0 +1,22 @@
+<%- include('partials/header', { title }) %>
+<main class="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow mt-10">
+  <h2 class="text-2xl font-bold text-pink-700 mb-6">Local Alert Logs</h2>
+
+  <table class="min-w-full table-auto border border-gray-200">
+    <thead class="bg-pink-100 text-pink-800">
+      <tr>
+        <th class="px-4 py-2 text-left">Time</th>
+        <th class="px-4 py-2 text-left">Matched rule</th>
+      </tr>
+    </thead>
+    <tbody class="text-sm text-gray-700">
+      <% logs.forEach(log => { %>
+        <tr class="border-b">
+          <td class="px-4 py-2"><%= log.time %></td>
+          <td class="px-4 py-2"><%= log.matched_rule %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</main>
+<%- include('partials/footer') %>

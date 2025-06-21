@@ -1088,6 +1088,68 @@ app.get('/alerts', authMiddleware, async (req, res) => {
   }
 });
 
+
+// Alert Destinations
+app.get('/alerts/destinations', authMiddleware, async (req, res) => {
+  try {
+    res.render('alert-destinations', { title: 'Alert Destinations' });
+  } catch (err) {
+    console.error('Error rendering alert destinations:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Alert Rules
+app.get('/alerts/rules', authMiddleware, async (req, res) => {
+  try {
+    const mockRules = [
+      {
+        name: 'Failed Login Alert',
+        regex: { rules: ['Regex1'], count: 3 },
+        yara: { rules: ['Yara1'], count: 1 },
+        topic: { rules: ['Topic1'], count: 2 },
+        destinations: ['email', 'syslog']
+      },
+      {
+        name: 'Suspicious Upload',
+        regex: { rules: ['Regex2'], count: 1 },
+        yara: { rules: ['Yara2'], count: 1 },
+        topic: { rules: ['Topic2'], count: 1 },
+        destinations: ['logs']
+      }
+    ];
+
+    // Mock available rule options and destinations
+    const options = {
+      regexRules: ['Regex1', 'Regex2'],
+      yaraRules: ['Yara1', 'Yara2'],
+      topicRules: ['Topic1', 'Topic2'],
+      destinations: ['email', 'syslog', 'logs']
+    };
+
+    res.render('alert-rules', { title: 'Alert Rules', rules: mockRules, options });
+  } catch (err) {
+    console.error('Error rendering alert rules:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+
+// Alert Logs
+app.get('/alerts/logs', authMiddleware, async (req, res) => {
+  try {
+    // Replace with real log fetching logic
+    const mockLogs = [
+      { time: '2025-06-21 14:32', matched_rule: 'regex' },
+      { time: '2025-06-21 15:01', matched_rule: 'yara' }
+    ];
+    res.render('alert-logs', { title: 'Alert Logs', logs: mockLogs });
+  } catch (err) {
+    console.error('Error rendering alert logs:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

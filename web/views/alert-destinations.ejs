@@ -1,0 +1,28 @@
+<%- include('partials/header', { title }) %>
+<main class="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow mt-10">
+  <h2 class="text-2xl font-bold text-blue-700 mb-6">Alert Destinations Configuration</h2>
+
+  <form class="space-y-6">
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Email Address</label>
+      <input type="email" placeholder="admin@example.com"
+             class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Syslog Server</label>
+      <input type="text" placeholder="192.168.1.100:514"
+             class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
+    </div>
+
+    <div class="flex items-center">
+      <input id="enableLocalLogs" type="checkbox"
+             class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"/>
+      <label for="enableLocalLogs" class="ml-2 block text-sm text-gray-700">Enable local logging</label>
+    </div>
+
+    <button type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Save Configuration</button>
+  </form>
+</main>
+<%- include('partials/footer') %>
