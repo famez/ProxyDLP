@@ -1045,6 +1045,41 @@ app.post('/manage-permissions', authMiddleware, requirePermission("user_manageme
 });
 
 
+app.post('/add-event-to-topic-rules', authMiddleware, requirePermission("events"), requirePermission("conversations"), async (req, res) => {
+  const { name, eventId } = req.body;
+  if (!eventId) {
+    return res.status(400).send('Event ID is required');
+  }
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+
+    const event = await db.collection('events').findOne({ _id: new ObjectId(eventId) });
+
+    if (!event) {
+      return res.status(404).send('Event not found');
+    }
+
+    const result = await db.collection('topic_rules').insertOne({ name, pattern: event.content });
+
+    gRPC_client.TopicRuleAdded({ id: result.insertedId }, () => {});
+
+    res.redirect('/event/' + eventId);
+
+  } catch (err) {
+
+    console.error('Error adding event to topic rules:', err);
+    res.status(500).send('Internal Server Error');
+
+  } finally {
+
+    if (client) await client.close();
+    
+  }
+
+});
+
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
