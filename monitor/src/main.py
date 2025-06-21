@@ -174,7 +174,7 @@ def analyze_topic_leak(text):
                 print(f"Found similar embedding with score {score} at index {idx}")
 
                 doc = topics_collection.find_one(
-                    {"faiss_indexes.faiss_id": int(idx)},
+                    {"faiss_indexes": int(idx)},
                     {"faiss_indexes.$": 1, "name": 1}  # Only project the matched index with the chunk
                 )
 
