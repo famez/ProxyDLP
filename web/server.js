@@ -1098,9 +1098,15 @@ app.get('/alerts/destinations', authMiddleware, requirePermission("alerts"), asy
     const alert_destinations = db.collection('alert-destinations');
     const destinations = await alert_destinations.find().toArray();
 
+    const localLogsEnabled = await alert_destinations.findOne({
+      type: 'local_logs',
+      enabled: true
+    });
+
     res.render('alert-destinations', {
       title: 'Alert Destinations',
       destinations,
+      localLogsEnabled
     });
 
   } catch (err) {
@@ -1123,6 +1129,11 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
     syslogHost,
     syslogPort,
   } = req.body;
+
+  const enableLocalLogs = req.body.enableLocalLogs === 'on';
+
+  console.log('Enable Local Logging:', enableLocalLogs);
+
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const ipOrHostnameRegex = /^(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$/;
@@ -1207,6 +1218,14 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
 
     }
 
+    if(enableLocalLogs) {
+      await alert_destinations.insertOne(
+        {
+          type: "local_logs",
+          enabled: true
+        }
+      );
+    }
 
   } catch (err) {
     console.error('Setting alerts destinations:', err);
