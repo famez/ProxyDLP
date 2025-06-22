@@ -1221,6 +1221,7 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
     if(enableLocalLogs) {
       await alert_destinations.insertOne(
         {
+          name: "Local logs",
           type: "local_logs",
           enabled: true
         }
@@ -1261,20 +1262,33 @@ app.get('/alerts/rules', authMiddleware, async (req, res) => {
       }
     ];
 
-    // Mock available rule options and destinations
-    const options = {
-      regexRules: ['Regex1', 'Regex2'],
-      yaraRules: ['Yara1', 'Yara2'],
-      topicRules: ['Topic1', 'Topic2'],
-      destinations: ['email', 'syslog', 'logs']
-    };
+    
+    //Get all the yara, regex and topic rules + available destinations.
 
-    res.render('alert-rules', { title: 'Alert Rules', rules: mockRules, options });
-  } catch (err) {
-    console.error('Error rendering alert rules:', err);
-    res.status(500).send('Internal Server Error');
-  }
-});
+    let client;
+      ({ client, db } = await connectToDB());
+      const yara_rules = await db.collection('yara_rules').find().toArray();
+      const regex_rules = await db.collection('regex_rules').find().toArray();
+      const topic_rules = await db.collection('topic_rules').find().toArray();
+      const alert_dests = await db.collection('alert-destinations').find().toArray();
+
+      const options = {
+        regexRules: regex_rules,
+        yaraRules: yara_rules,
+        topicRules: topic_rules,
+        destinations: alert_dests
+      };
+
+      res.render('alert-rules', { title: 'Alert Rules', rules: mockRules, options });
+      
+    } catch (err) {
+      console.error('Error rendering alert rules:', err);
+      res.status(500).send('Internal Server Error');
+    } finally {
+      if (client) await client.close();
+    }
+
+  });
 
 
 // Alert Logs

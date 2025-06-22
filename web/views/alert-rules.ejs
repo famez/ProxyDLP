@@ -34,9 +34,16 @@
           <% ['regex', 'yara', 'topic'].forEach(type => { %>
             <td class="px-4 py-2">
               <select name="<%= type %>Rules" multiple class="w-full border p-1 rounded text-xs">
-                <% options[`${type}Rules`].forEach(r => { %>
-                  <option value="<%= r %>"><%= r %></option>
-                <% }) %>
+                <% if (type !== "regex") { %>
+                  <% options[`${type}Rules`].forEach(r => { %>
+                    <option value="<%= r._id %>"><%= r.name %></option>
+                  <% }) %>
+                <% } else { %>
+                  <% options[`${type}Rules`].forEach(r => { 
+                    const key = Object.keys(r)[1]; %>
+                    <option value="<%= r._id %>"><%= key %></option>
+                  <% }) %>
+                <% }%>
               </select>
               <input name="<%= type %>Count" type="number" min="1" value="1"
                      class="mt-1 w-full border p-1 rounded text-xs" placeholder="Count">
@@ -46,7 +53,7 @@
           <td class="px-4 py-2">
             <select name="destinations" multiple class="w-full border p-1 rounded text-xs">
               <% options.destinations.forEach(dest => { %>
-                <option value="<%= dest %>"><%= dest %></option>
+                <option value="<%= dest._id %>"><%= dest.name %></option>
               <% }) %>
             </select>
             <button type="submit"
