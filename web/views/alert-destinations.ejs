@@ -154,6 +154,15 @@
       rows.forEach((row, index) => {
         const type = row.querySelector('select[name="destinationType[]"]').value;
 
+        const name = row.querySelectorAll('input[name="destinationName[]"]')[index];
+
+        if (name.value === "") {
+          alert(`Row ${index + 1}: Name cannot be empty.`);
+          valid = false;
+          return;
+        }
+        
+
         if (type === "email") {
           const email = row.querySelectorAll('input[name="email[]"]')[index];
           const password = row.querySelectorAll('input[name="emailPassword[]"]')[index];

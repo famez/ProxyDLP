@@ -1079,7 +1079,7 @@ app.post('/add-event-to-topic-rules', authMiddleware, requirePermission("events"
 
 });
 
-app.get('/alerts', authMiddleware, async (req, res) => {
+app.get('/alerts', authMiddleware, requirePermission("alerts"), async (req, res) => {
   try {
     res.render('alerts', { title: 'Alerts' });
   } catch (err) {
@@ -1090,7 +1090,7 @@ app.get('/alerts', authMiddleware, async (req, res) => {
 
 
 // Alert Destinations
-app.get('/alerts/destinations', authMiddleware, async (req, res) => {
+app.get('/alerts/destinations', authMiddleware, requirePermission("alerts"), async (req, res) => {
   try {
     res.render('alert-destinations', { title: 'Alert Destinations' });
   } catch (err) {
@@ -1099,7 +1099,7 @@ app.get('/alerts/destinations', authMiddleware, async (req, res) => {
   }
 });
 
-app.post('/alerts/destinations', (req, res) => {
+app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), async (req, res) => {
   const {
     destinationName,
     destinationType,
@@ -1118,6 +1118,11 @@ app.post('/alerts/destinations', (req, res) => {
   const errors = [];
 
   for (let i = 0; i < destinationType.length; i++) {
+
+    if (!destinationName[i]) {
+      errors.push(`Row ${i + 1}: Name is required.`);
+    }
+
     const type = destinationType[i];
 
     if (type === 'email') {
@@ -1160,8 +1165,46 @@ app.post('/alerts/destinations', (req, res) => {
   }
 
   // If all is good:
-  res.json({ success: true, message: 'Configuration saved.' });
-  
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+    const alert_destinations = db.collection('alert-destinations');
+
+    await alert_destinations.deleteMany({});
+
+    for (let i = 0; i < destinationType.length; i++) {
+      destination = {
+        name: destinationName[i],
+        type: destinationType[i],
+      }
+
+      if (destinationType[i] === "email") {
+
+        destination.email = email[i];
+        destination.emailPassword = emailPassword[i];
+        destination.smtpHost = smtpHost[i];
+        destination.smtpPort = smtpPort[i];
+
+      } else if (destinationType[i] === "syslog") {
+        destination.syslogHost = syslogHost[i];
+        destination.syslogPort = syslogPort[i];
+      }
+
+      await alert_destinations.insertOne(destination);
+
+    }
+
+
+  } catch (err) {
+    console.error('Setting alerts destinations:', err);
+    return res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+
+  res.redirect('/alerts/destinations');
+
 });
 
 

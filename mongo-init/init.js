@@ -19,6 +19,9 @@ db.createCollection('yara_rules');
 db.createCollection('domains');
 db.createCollection('faiss_id_counters');
 db.createCollection('sites');
+db.createCollection('alert-rules');
+db.createCollection('alert-destinations');
+db.createCollection('alert-logs');
 
 
 db.topic_rules.createIndex({ "name": 1 }, { unique: true })
