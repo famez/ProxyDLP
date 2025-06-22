@@ -1,28 +1,222 @@
 <%- include('partials/header', { title }) %>
-<main class="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow mt-10">
+<main class="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow mt-10">
   <h2 class="text-2xl font-bold text-blue-700 mb-6">Alert Destinations Configuration</h2>
 
-  <form class="space-y-6">
+  <form class="space-y-6" method="POST" action="/alerts/destinations">
+    <!-- Alert Destinations Table -->
     <div>
-      <label class="block text-sm font-medium text-gray-700">Email Address</label>
-      <input type="email" placeholder="admin@example.com"
-             class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
+      <table class="w-full table-auto border border-gray-200 rounded">
+        <thead class="bg-gray-100 text-left">
+          <tr>
+            <th class="p-2">Name</th>
+            <th class="p-2">Type</th>
+            <th class="p-2">Details</th>
+            <th class="p-2">Action</th>
+          </tr>
+        </thead>
+        <tbody id="destinationTable">
+          <!-- Initial Row -->
+          <tr>
+            <td class="p-2">
+              <input name="destinationName[]" type="text" placeholder="e.g., Primary Email"
+                     class="w-full border-gray-300 rounded-md p-2"/>
+            </td>
+            <td class="p-2">
+              <select name="destinationType[]" class="w-full border-gray-300 rounded-md"
+                      onchange="updateDetailsFields(this)">
+                <option value="email">Email</option>
+                <option value="syslog">Syslog</option>
+              </select>
+            </td>
+            <td class="p-2">
+              <div class="details-container">
+                <!-- Default: Email fields -->
+                <div class="email-fields space-y-2">
+                  <input type="email" name="email[]" placeholder="Email Address"
+                         class="w-full border-gray-300 rounded-md p-2"/>
+                  <input type="password" name="emailPassword[]" placeholder="Password"
+                         class="w-full border-gray-300 rounded-md p-2"/>
+                  <input type="password" name="emailPasswordConfirm[]" placeholder="Retype Password" 
+                         class="w-full border-gray-300 rounded-md p-2"/>
+                  <input type="text" name="smtpHost[]" placeholder="SMTP Host"
+                         class="w-full border-gray-300 rounded-md p-2"/>
+                  <input type="number" name="smtpPort[]" placeholder="SMTP Port"
+                         class="w-full border-gray-300 rounded-md p-2"/>
+                </div>
+                <div class="syslog-fields hidden space-y-2">
+                  <input type="text" name="syslogHost[]" placeholder="IP / Hostname"
+                         class="w-full border-gray-300 rounded-md p-2"/>
+                  <input type="number" name="syslogPort[]" placeholder="Port"
+                         class="w-full border-gray-300 rounded-md p-2"/>
+                </div>
+              </div>
+            </td>
+            <td class="p-2 text-center">
+              <button type="button" onclick="removeRow(this)" class="text-red-600 hover:underline">Remove</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <button type="button" onclick="addRow()"
+              class="mt-2 text-sm text-blue-600 hover:underline">+ Add Destination</button>
     </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Syslog Server</label>
-      <input type="text" placeholder="192.168.1.100:514"
-             class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
-    </div>
-
+    <!-- Local Logging -->
     <div class="flex items-center">
       <input id="enableLocalLogs" type="checkbox"
              class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"/>
       <label for="enableLocalLogs" class="ml-2 block text-sm text-gray-700">Enable local logging</label>
     </div>
 
+    <!-- Submit -->
     <button type="submit"
             class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Save Configuration</button>
   </form>
+
+  <!-- Scripts -->
+  <script>
+    function updateDetailsFields(select) {
+      const row = select.closest('tr');
+      const emailFields = row.querySelector('.email-fields');
+      const syslogFields = row.querySelector('.syslog-fields');
+
+      if (select.value === 'email') {
+        emailFields.classList.remove('hidden');
+        syslogFields.classList.add('hidden');
+      } else if (select.value === 'syslog') {
+        emailFields.classList.add('hidden');
+        syslogFields.classList.remove('hidden');
+      }
+    }
+
+    function addRow() {
+      const table = document.getElementById('destinationTable');
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="p-2">
+          <input name="destinationName[]" type="text" placeholder="e.g., Backup Syslog"
+                 class="w-full border-gray-300 rounded-md p-2"/>
+        </td>
+        <td class="p-2">
+          <select name="destinationType[]" class="w-full border-gray-300 rounded-md"
+                  onchange="updateDetailsFields(this)">
+            <option value="email">Email</option>
+            <option value="syslog">Syslog</option>
+          </select>
+        </td>
+        <td class="p-2">
+          <div class="details-container">
+            <div class="email-fields space-y-2">
+              <input type="email" name="email[]" placeholder="Email Address"
+                    class="w-full border-gray-300 rounded-md p-2"/>
+              <input type="password" name="emailPassword[]" placeholder="Password"
+                    class="w-full border-gray-300 rounded-md p-2"/>
+              <input type="password" name="emailPasswordConfirm[]" placeholder="Retype Password"
+                    class="w-full border-gray-300 rounded-md p-2"/>
+              <input type="text" name="smtpHost[]" placeholder="SMTP Host"
+                    class="w-full border-gray-300 rounded-md p-2"/>
+              <input type="number" name="smtpPort[]" placeholder="SMTP Port"
+                    class="w-full border-gray-300 rounded-md p-2"/>
+            </div>
+            <div class="syslog-fields hidden space-y-2">
+              <input type="text" name="syslogHost[]" placeholder="IP / Hostname"
+                     class="w-full border-gray-300 rounded-md p-2"/>
+              <input type="number" name="syslogPort[]" placeholder="Port"
+                     class="w-full border-gray-300 rounded-md p-2"/>
+            </div>
+          </div>
+        </td>
+        <td class="p-2 text-center">
+          <button type="button" onclick="removeRow(this)" class="text-red-600 hover:underline">Remove</button>
+        </td>
+      `;
+      table.appendChild(row);
+    }
+
+    function removeRow(button) {
+      const row = button.closest('tr');
+      row.remove();
+    }
+
+    // Initialize details for any pre-rendered rows
+    document.querySelectorAll('select[name="destinationType[]"]').forEach(select => {
+      updateDetailsFields(select);
+    });
+  </script>
+  <script>
+    document.querySelector("form").addEventListener("submit", function (e) {
+      const rows = document.querySelectorAll("#destinationTable tr");
+      let valid = true;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const ipOrHostnameRegex = /^(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$/;
+
+
+      rows.forEach((row, index) => {
+        const type = row.querySelector('select[name="destinationType[]"]').value;
+
+        if (type === "email") {
+          const email = row.querySelectorAll('input[name="email[]"]')[index];
+          const password = row.querySelectorAll('input[name="emailPassword[]"]')[index];
+          const confirmPassword = row.querySelectorAll('input[name="emailPasswordConfirm[]"]')[index];
+          const smtpHost = row.querySelectorAll('input[name="smtpHost[]"]')[index];
+          const smtpPort = row.querySelectorAll('input[name="smtpPort[]"]')[index];
+
+          if (!emailRegex.test(email.value)) {
+            alert(`Row ${index + 1}: Invalid email format.`);
+            valid = false;
+            return;
+          }
+
+          if (password.value === "") {
+            alert(`Row ${index + 1}: Password cannot be empty.`);
+            valid = false;
+            return;
+          }
+
+          if (password.value !== confirmPassword.value) {
+            alert(`Row ${index + 1}: Passwords do not match.`);
+            valid = false;
+            return;
+          }
+
+          if (!ipOrHostnameRegex.test(smtpHost.value)) {
+            alert(`Row ${index + 1}: Invalid IP address or hostname.`);
+            valid = false;
+            return;
+          }
+
+          const portNum = Number(smtpPort.value);
+          if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+            alert(`Row ${index + 1}: Port must be a number between 1 and 65535.`);
+            valid = false;
+            return;
+          }
+
+        } else if (type === "syslog") {
+          const host = row.querySelectorAll('input[name="syslogHost[]"]')[index];
+          const port = row.querySelectorAll('input[name="syslogPort[]"]')[index];
+
+          if (!ipOrHostnameRegex.test(host.value)) {
+            alert(`Row ${index + 1}: Invalid IP address or hostname.`);
+            valid = false;
+            return;
+          }
+
+          const portNum = Number(port.value);
+          if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+            alert(`Row ${index + 1}: Port must be a number between 1 and 65535.`);
+            valid = false;
+            return;
+          }
+        }
+      });
+
+      if (!valid) {
+        e.preventDefault();
+      }
+    });
+</script>
+
+
 </main>
 <%- include('partials/footer') %>
