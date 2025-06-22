@@ -1088,14 +1088,26 @@ app.get('/alerts', authMiddleware, requirePermission("alerts"), async (req, res)
   }
 });
 
-
 // Alert Destinations
 app.get('/alerts/destinations', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  
+  let client;
+
   try {
-    res.render('alert-destinations', { title: 'Alert Destinations' });
+    ({ client, db } = await connectToDB());
+    const alert_destinations = db.collection('alert-destinations');
+    const destinations = await alert_destinations.find().toArray();
+
+    res.render('alert-destinations', {
+      title: 'Alert Destinations',
+      destinations,
+    });
+
   } catch (err) {
     console.error('Error rendering alert destinations:', err);
     res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
   }
 });
 
