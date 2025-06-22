@@ -1099,6 +1099,74 @@ app.get('/alerts/destinations', authMiddleware, async (req, res) => {
   }
 });
 
+app.post('/alerts/destinations', (req, res) => {
+  const {
+    destinationName,
+    destinationType,
+    email,
+    emailPassword,
+    emailPasswordConfirm,
+    smtpHost,
+    smtpPort,
+    syslogHost,
+    syslogPort,
+  } = req.body;
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const ipOrHostnameRegex = /^(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$/;
+
+  const errors = [];
+
+  for (let i = 0; i < destinationType.length; i++) {
+    const type = destinationType[i];
+
+    if (type === 'email') {
+      if (!emailRegex.test(email[i])) {
+        errors.push(`Row ${i + 1}: Invalid email address.`);
+      }
+
+      if (!emailPassword[i]) {
+        errors.push(`Row ${i + 1}: Password is required.`);
+      }
+
+      if (emailPassword[i] !== emailPasswordConfirm[i]) {
+        errors.push(`Row ${i + 1}: Passwords do not match.`);
+      }
+
+      if (!ipOrHostnameRegex.test(smtpHost[i])) {
+        errors.push(`Row ${i + 1}: Invalid SMTP host.`);
+      }
+
+      const port = Number(smtpPort[i]);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        errors.push(`Row ${i + 1}: Invalid SMTP port.`);
+      }
+
+    } else if (type === 'syslog') {
+      if (!ipOrHostnameRegex.test(syslogHost[i])) {
+        errors.push(`Row ${i + 1}: Invalid Syslog host.`);
+      }
+
+      const port = Number(syslogPort[i]);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        errors.push(`Row ${i + 1}: Invalid Syslog port.`);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    // You can render the form again with the errors, or send JSON:
+    return res.status(400).json({ success: false, errors });
+  }
+
+  // If all is good:
+  res.json({ success: true, message: 'Configuration saved.' });
+  
+});
+
+
+
+
 // Alert Rules
 app.get('/alerts/rules', authMiddleware, async (req, res) => {
   try {
