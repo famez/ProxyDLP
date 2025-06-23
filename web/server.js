@@ -1148,6 +1148,10 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
 
     const type = destinationType[i];
 
+    if(type !== "local_logs" && destinationName[i] === "Local logs") {
+      errors.push(`Row ${i + 1}: Invalid name Local logs. This name is reserved`);
+    }
+
     if (type === 'email') {
       if (!emailRegex.test(email[i])) {
         errors.push(`Row ${i + 1}: Invalid email address.`);
@@ -1240,59 +1244,159 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
 });
 
 
-
-
 // Alert Rules
-app.get('/alerts/rules', authMiddleware, async (req, res) => {
+app.get('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  
+  let client;
   try {
-    const mockRules = [
-      {
-        name: 'Failed Login Alert',
-        regex: { rules: ['Regex1'], count: 3 },
-        yara: { rules: ['Yara1'], count: 1 },
-        topic: { rules: ['Topic1'], count: 2 },
-        destinations: ['email', 'syslog']
-      },
-      {
-        name: 'Suspicious Upload',
-        regex: { rules: ['Regex2'], count: 1 },
-        yara: { rules: ['Yara2'], count: 1 },
-        topic: { rules: ['Topic2'], count: 1 },
-        destinations: ['logs']
-      }
-    ];
-
     
     //Get all the yara, regex and topic rules + available destinations.
 
-    let client;
-      ({ client, db } = await connectToDB());
-      const yara_rules = await db.collection('yara_rules').find().toArray();
-      const regex_rules = await db.collection('regex_rules').find().toArray();
-      const topic_rules = await db.collection('topic_rules').find().toArray();
-      const alert_dests = await db.collection('alert-destinations').find().toArray();
+    
+    ({ client, db } = await connectToDB());
 
-      const options = {
-        regexRules: regex_rules,
-        yaraRules: yara_rules,
-        topicRules: topic_rules,
-        destinations: alert_dests
-      };
-
-      res.render('alert-rules', { title: 'Alert Rules', rules: mockRules, options });
+    const rules = await db.collection('alert-rules').aggregate([
+      // Lookup regex rule details
+      {
+        $lookup: {
+          from: 'regex_rules',
+          localField: 'regex.rules',
+          foreignField: '_id',
+          as: 'regexResolved'
+        }
+      },
+      // Lookup yara rule details
+      {
+        $lookup: {
+          from: 'yara_rules',
+          localField: 'yara.rules',
+          foreignField: '_id',
+          as: 'yaraResolved'
+        }
+      },
+      // Lookup topic rule details
+      {
+        $lookup: {
+          from: 'topic_rules',
+          localField: 'topic.rules',
+          foreignField: '_id',
+          as: 'topicResolved'
+        }
+      },
+      // Resolve destinations by matching name
+      {
+        $lookup: {
+          from: 'alert-destinations',
+          localField: 'destinations',
+          foreignField: 'name',
+          as: 'destinationResolved'
+        }
+      },
       
-    } catch (err) {
-      console.error('Error rendering alert rules:', err);
-      res.status(500).send('Internal Server Error');
-    } finally {
-      if (client) await client.close();
+      // Optional: remap result shape
+      {
+        $project: {
+          name: 1,
+          regex: {
+            count: '$regex.count',
+            rules: '$regexResolved'
+          },
+          yara: {
+            count: '$yara.count',
+            rules: '$yaraResolved'
+          },
+          topic: {
+            count: '$topic.count',
+            rules: '$topicResolved'
+          },
+          destinations: '$destinationResolved'
+        }
+      }
+    ]).toArray();
+
+    
+    const yara_rules = await db.collection('yara_rules').find().toArray();
+    const regex_rules = await db.collection('regex_rules').find().toArray();
+    const topic_rules = await db.collection('topic_rules').find().toArray();
+    const alert_dests = await db.collection('alert-destinations').find().toArray();
+
+    const options = {
+      regexRules: regex_rules,
+      yaraRules: yara_rules,
+      topicRules: topic_rules,
+      destinations: alert_dests
+    };
+
+    res.render('alert-rules', { title: 'Alert Rules', rules, options });
+    
+  } catch (err) {
+    console.error('Error rendering alert rules:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+
+});
+
+
+app.post('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req, res) => {
+
+  let client;
+  try {
+    const {
+      name,
+      regexRules,
+      regexCount,
+      yaraRules,
+      yaraCount,
+      topicRules,
+      topicCount,
+      destinations
+    } = req.body;
+
+    const parseField = val => Array.isArray(val) ? val : val ? [val] : [];
+
+    const parsedDestinations = parseField(destinations);
+
+    if (parsedDestinations.length === 0) {
+      return res.status(400).send('At least one destination must be selected.');
     }
 
-  });
+    const doc = {
+      name,
+      regex: {
+        rules: parseField(regexRules).map(id => new ObjectId(id)),
+        count: parseInt(regexCount) || 1
+      },
+      yara: {
+        rules: parseField(yaraRules).map(id => new ObjectId(id)),
+        count: parseInt(yaraCount) || 1
+      },
+      topic: {
+        rules: parseField(topicRules).map(id => new ObjectId(id)),
+        count: parseInt(topicCount) || 1
+      },
+      destinations: parsedDestinations
+    };
+
+    ({ client, db } = await connectToDB());
+
+    await db.collection('alert-rules').insertOne(doc);
+
+    res.redirect('/alerts/rules/');
+
+  } catch (err) {
+    console.error('Error inserting alert rule:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+
+});
 
 
 // Alert Logs
-app.get('/alerts/logs', authMiddleware, async (req, res) => {
+app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req, res) => {
   try {
     // Replace with real log fetching logic
     const mockLogs = [
