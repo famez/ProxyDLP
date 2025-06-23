@@ -63,7 +63,7 @@ function isStrongPassword(password) {
 async function connectToDB() {
   const client = new MongoClient(mongoUri);
   await client.connect();
-  const db = client.db('proxyGPT');
+  const db = client.db('ProxyDLP');
   
   return { client, db };
 }

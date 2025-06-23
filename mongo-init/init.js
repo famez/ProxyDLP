@@ -8,7 +8,7 @@ var regex_rules =
   {"Confidential label": "Contoso S.A - Confidential"}
 ]
 
-db = db.getSiblingDB('proxyGPT'); // Creates database 'proxyGPT'
+db = db.getSiblingDB('ProxyDLP'); // Creates database 'ProxyDLP'
 
 db.createCollection('users');
 

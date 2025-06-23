@@ -1,12 +1,12 @@
-# Security Policy for ProxyGPT
+# Security Policy for ProxyDLP
 
 ## Supported Versions
 
-ProxyGPT maintains security patches and updates for the latest stable release. Users are encouraged to stay updated to the latest version to benefit from fixes and improvements.
+ProxyDLP maintains security patches and updates for the latest stable release. Users are encouraged to stay updated to the latest version to benefit from fixes and improvements.
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in ProxyGPT, please report it **privately** to ensure responsible disclosure and timely mitigation.
+If you discover a security vulnerability in ProxyDLP, please report it **privately** to ensure responsible disclosure and timely mitigation.
 
 ### How to report
 
@@ -30,12 +30,12 @@ Please **do not** open a public issue for security vulnerabilities.
 
 ## Security Best Practices
 
-- Always run ProxyGPT behind secure network layers  
+- Always run ProxyDLP behind secure network layers  
 - Use strong secrets and rotate them periodically  
 - Protect access to the dashboard interface  
-- Regularly update ProxyGPT and dependencies to the latest versions  
+- Regularly update ProxyDLP and dependencies to the latest versions  
 - Limit access to the proxy and admin interfaces to trusted users
 
 ---
 
-Thank you for helping us keep ProxyGPT secure!
+Thank you for helping us keep ProxyDLP secure!

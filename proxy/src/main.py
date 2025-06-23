@@ -20,9 +20,9 @@ launch_ws_term()
 
 
 db_client = MongoClient(os.getenv("MONGO_URI"))
-events_collection = db_client["proxyGPT"]["events"]
-domains_collection = db_client["proxyGPT"]["domains"]
-sites_collection = db_client["proxyGPT"]["sites"]
+events_collection = db_client["ProxyDLP"]["events"]
+domains_collection = db_client["ProxyDLP"]["domains"]
+sites_collection = db_client["ProxyDLP"]["sites"]
 
 
 def account_login_callback(site, email):

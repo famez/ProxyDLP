@@ -1,16 +1,16 @@
-# ProxyGPT 🔒
+# ProxyDLP 🔒
 
-**ProxyGPT** is an open-source monitoring proxy designed for **security engineers** in enterprise environments. It enables secure, auditable use of AI tools like ChatGPT while detecting and preventing potential data leaks through user conversations and file uploads.
+**ProxyDLP** is an open-source monitoring proxy designed for **security engineers** in enterprise environments. It enables secure, auditable use of AI tools like ChatGPT while detecting and preventing potential data leaks through user conversations and file uploads.
 
 Its allows enterprise users to access AI tools like ChatGPT while ensuring **visibility**, **data security**, and **compliance**. It enables organizations to benefit from AI productivity tools without sacrificing confidentiality or control over sensitive information.
 
-> ⚠️ This is **not a privacy or anonymization tool** — ProxyGPT is built to **observe and control** AI tool usage across an organization.
+> ⚠️ This is **not a privacy or anonymization tool** — ProxyDLP is built to **observe and control** AI tool usage across an organization.
 
 ---
 
 ## 🎯 Purpose
 
-ProxyGPT helps organizations:
+ProxyDLP helps organizations:
 - Monitor and inspect conversations with AI assistants
 - Detect confidential or sensitive data in uploads and messages
 - Link AI usage to individual users or accounts
@@ -50,7 +50,7 @@ docker-compose up
 
 | Component             | Port  | Description                                  |
 |----------------------|-------|----------------------------------------------|
-| **ProxyGPT UI**      | 443   | Secure web interface for monitoring (HTTPS)  |
+| **ProxyDLP UI**      | 443   | Secure web interface for monitoring (HTTPS)  |
 |                      | 80    | Web interface (HTTP fallback)                |
 | **Monitoring Proxy** | 8080  | MiTM proxy for AI traffic                    |
 
@@ -70,7 +70,7 @@ docker-compose up
 
 ## 👥 Target Audience
 
-ProxyGPT is aimed at:
+ProxyDLP is aimed at:
 - **Security engineers**
 - **SOC analysts**
 - **IT compliance teams**

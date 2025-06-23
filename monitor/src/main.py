@@ -26,11 +26,11 @@ INDEX_PATH = '/var/faiss/faiss_index.index'
 background_executor = futures.ThreadPoolExecutor(max_workers=15)
 
 db_client = MongoClient(os.getenv("MONGO_URI"))
-events_collection = db_client["proxyGPT"]["events"]
-regex_collection = db_client["proxyGPT"]["regex_rules"]
-topics_collection = db_client["proxyGPT"]["topic_rules"]
-counter_collection = db_client["proxyGPT"]["faiss_id_counters"]
-yara_rules_collection = db_client["proxyGPT"]["yara_rules"]
+events_collection = db_client["ProxyDLP"]["events"]
+regex_collection = db_client["ProxyDLP"]["regex_rules"]
+topics_collection = db_client["ProxyDLP"]["topic_rules"]
+counter_collection = db_client["ProxyDLP"]["faiss_id_counters"]
+yara_rules_collection = db_client["ProxyDLP"]["yara_rules"]
 
 #nlp = spacy.load("en_core_web_sm")
 
