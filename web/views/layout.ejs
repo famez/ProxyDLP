@@ -8,26 +8,27 @@
 <body class="flex h-screen bg-gray-100">
 
   <!-- Sidebar -->
-  <aside class="w-64 bg-white shadow-md p-4">
-    <h1>Welcome, <%= username %>!</h1>
-    <h2 class="text-xl font-bold mb-6">Admin Panel</h2>
-    <nav class="space-y-4">
-      <a href="/" class="block px-4 py-2 rounded hover:bg-indigo-100">Welcome</a>
-      <a href="/dashboard" class="block px-4 py-2 rounded hover:bg-indigo-100">Dashboard</a>
-      <a href="/rules" class="block px-4 py-2 rounded hover:bg-indigo-100">Rules</a>
-      <a href="/sites" class="block px-4 py-2 rounded hover:bg-indigo-100">Sites</a>
-      <a href="/alerts" class="block px-4 py-2 rounded hover:bg-indigo-100">Alerts</a>
-      <a href="/domains" class="block px-4 py-2 rounded hover:bg-indigo-100">Allowed domains</a>
-      <a href="/playground" class="block px-4 py-2 rounded hover:bg-indigo-100">Playground</a>
-      <a href="/terminal" class="block px-4 py-2 rounded hover:bg-indigo-100">MITMPROXY Terminal</a>
-      <a href="/user-management" class="block px-4 py-2 rounded hover:bg-indigo-100">User management</a>
-      </nav>
+<aside class="w-64 bg-white shadow-md p-4">
+  <img src="/images/proxydlp-dark.png" alt="Login Icon" class="w-16 h-16 mx-auto opacity-80 mb-4" />
+  <h1 class="text-center mb-2">Welcome, <%= username %>!</h1>
+  <h2 class="text-xl font-bold mb-6 text-center">Admin Panel</h2>
+  <nav class="space-y-4">
+    <a href="/" class="block px-4 py-2 rounded hover:bg-indigo-100">Welcome</a>
+    <a href="/dashboard" class="block px-4 py-2 rounded hover:bg-indigo-100">Dashboard</a>
+    <a href="/rules" class="block px-4 py-2 rounded hover:bg-indigo-100">Rules</a>
+    <a href="/sites" class="block px-4 py-2 rounded hover:bg-indigo-100">Sites</a>
+    <a href="/alerts" class="block px-4 py-2 rounded hover:bg-indigo-100">Alerts</a>
+    <a href="/domains" class="block px-4 py-2 rounded hover:bg-indigo-100">Allowed domains</a>
+    <a href="/playground" class="block px-4 py-2 rounded hover:bg-indigo-100">Playground</a>
+    <a href="/terminal" class="block px-4 py-2 rounded hover:bg-indigo-100">MITMPROXY Terminal</a>
+    <a href="/user-management" class="block px-4 py-2 rounded hover:bg-indigo-100">User management</a>
+  </nav>
 
-      <a href="/logout" class="block mt-6 px-4 py-2 rounded bg-red-500 text-white text-center hover:bg-red-600 transition">
-  Logout
-</a>
+  <a href="/logout" class="block mt-6 px-4 py-2 rounded bg-red-500 text-white text-center hover:bg-red-600 transition">
+    Logout
+  </a>
+</aside>
 
-  </aside>
 
   <!-- Main Content -->
   <main class="flex-1 p-8 overflow-auto">
