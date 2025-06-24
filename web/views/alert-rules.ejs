@@ -18,20 +18,21 @@
           <td class="px-4 py-2 font-medium"><%= rule.name %></td>
 
           <td class="px-4 py-2">
-            <% /* For regex.rules: extract the key name (like 'Public IP addresses') */ %>
             <%= rule.regex.rules.map(r => {
-              // Get the first key that is NOT '_id'
               const key = Object.keys(r).find(k => k !== '_id');
               return key || 'N/A';
-            }).join(', ') %> x<%= rule.regex.count %>
+            }).join(', ') %>
+            <% if (rule.regex.rules.length > 0) { %> x<%= rule.regex.count %><% } %>
           </td>
 
           <td class="px-4 py-2">
-            <%= rule.yara.rules.map(r => r.name || 'N/A').join(', ') %> x<%= rule.yara.count %>
+            <%= rule.yara.rules.map(r => r.name || 'N/A').join(', ') %>
+            <% if (rule.yara.rules.length > 0) { %> x<%= rule.yara.count %><% } %>
           </td>
 
           <td class="px-4 py-2">
-            <%= rule.topic.rules.map(r => r.name || 'N/A').join(', ') %> x<%= rule.topic.count %>
+            <%= rule.topic.rules.map(r => r.name || 'N/A').join(', ') %>
+            <% if (rule.topic.rules.length > 0) { %> x<%= rule.topic.count %><% } %>
           </td>
 
           <td class="px-4 py-2">
@@ -39,6 +40,7 @@
           </td>
         </tr>
       <% }) %>
+
 
 
       <!-- New Rule Entry Form -->
