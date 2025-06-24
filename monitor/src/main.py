@@ -20,6 +20,7 @@ from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 import faiss
 import yara
 from readerwriterlock import rwlock
+from collections import Counter
 
 INDEX_PATH = '/var/faiss/faiss_index.index'
 
@@ -31,6 +32,10 @@ regex_collection = db_client["proxyGPT"]["regex_rules"]
 topics_collection = db_client["proxyGPT"]["topic_rules"]
 counter_collection = db_client["proxyGPT"]["faiss_id_counters"]
 yara_rules_collection = db_client["proxyGPT"]["yara_rules"]
+
+alert_destinations_collection = db_client["proxyGPT"]["alert-destinations"]
+alert_rules_collection = db_client["proxyGPT"]["alert-rules"]
+
 
 #nlp = spacy.load("en_core_web_sm")
 
@@ -136,17 +141,24 @@ def get_next_faiss_id():
     )
     return counter["last_id"]
 
+def extract_rule_identifiers(rule_str):
+    # Match rule names using regex: rule <identifier>
+    pattern = r'\brule\s+(\w+)\s*{'
+    return re.findall(pattern, rule_str)
+
 def validate_yara_rule_string(rule_str):
     try:
         yara.compile(source=rule_str)
+        rule_identifiers = extract_rule_identifiers(rule_str)
         print("YARA rule is valid.")
-        return True
+        return True, rule_identifiers
     except yara.SyntaxError as e:
         print(f"Syntax error: {e}")
-        return False
+        return False, []
     except Exception as e:
         print(f"Error: {e}")
-        return False
+        return False, []
+
 
 
 def chunk_text(text, chunk_size=500, overlap=50):
@@ -326,12 +338,136 @@ def on_event_added(event_id):
         else:
             print("No changes made or document not found.")
 
+        check_alerts(leak)
+        
 
         print(f"Finished long task for Event ID: {event_id}")
 
     except Exception as e:
         # Handle the exception
         print(f"An error occurred: {e}")
+
+
+def check_alerts(leak):
+
+    # Count regex values
+    regex_counts = Counter(leak["regex"].values())
+
+    # Count topic names
+    topic_counts = Counter(entry["name"] for entry in leak["topic"])
+
+    # Count yara names
+    yara_counts = Counter(entry["name"] for entry in leak["yara"])
+
+    leak_count = {
+        "regex": dict(regex_counts),
+        "topic": dict(topic_counts),
+        "yara": dict(yara_counts)
+    }
+
+    print(leak_count)
+
+    results = list(alert_rules_collection.aggregate([
+        {
+            "$lookup": {
+                "from": "topic_rules",
+                "localField": "topic.rules",
+                "foreignField": "_id",
+                "as": "resolved_topic"
+            }
+        },
+        {
+            "$lookup": {
+                "from": "yara_rules",
+                "localField": "yara.rules",
+                "foreignField": "_id",
+                "as": "resolved_yara"
+            }
+        },
+        {
+            "$lookup": {
+                "from": "regex_rules",
+                "localField": "regex.rules",
+                "foreignField": "_id",
+                "as": "resolved_regex"
+            }
+        },
+        {
+            "$lookup": {
+                "from": 'alert-destinations',
+                "localField": 'destinations',
+                "foreignField": 'name',
+                "as": 'destinationResolved'
+            }
+        },
+        {
+            "$project": {
+                "name": 1,
+                "topic_names": "$resolved_topic.name",
+                "topic_count": "$topic.count",
+                "yara_ids": {
+                    "$reduce": {
+                        "input": "$resolved_yara",
+                        "initialValue": [],
+                        "in": {
+                        "$concatArrays": ["$$value", "$$this.identifiers"]
+                        }
+                    }
+                },
+                "yara_count": "$yara.count",
+                "regex_names": {
+                    "$reduce": {
+                        "input": "$resolved_regex",
+                        "initialValue": [],
+                        "in": {
+                        "$concatArrays": [
+                            "$$value",
+                            {
+                            "$map": {
+                                "input": {
+                                "$filter": {
+                                    "input": { "$objectToArray": "$$this" },
+                                    "as": "item",
+                                    "cond": { "$ne": ["$$item.k", "_id"] }
+                                }
+                                },
+                                "as": "item",
+                                "in": "$$item.k"
+                            }
+                            }
+                        ]
+                        }
+                    }
+                },
+                "regex_count": "$regex.count",
+                "destinations": '$destinationResolved'
+            }
+        }
+    ]))
+
+    print (results)
+
+    # Comparison function
+    def rule_matches(alert_doc, leak_count):
+        for name in alert_doc.get("topic_names", []):
+            if leak_count["topic"].get(name, 0) < alert_doc.get("topic_count", 0):
+                return False
+        for name in alert_doc.get("yara_ids", []):
+            if leak_count["yara"].get(name, 0) < alert_doc.get("yara_count", 0):
+                return False
+        for name in alert_doc.get("regex_names", []):
+            if leak_count["regex"].get(name, 0) < alert_doc.get("regex_count", 0):
+                return False
+        return True
+    
+
+    # Filter matching alerts
+    matching_alerts = [doc for doc in results if rule_matches(doc, leak_count)]
+
+    # Print matching alert rule names
+    for alert in matching_alerts:
+        print(f"Matching alert rule: {alert['name']}")
+
 
 
 def on_topic_rule_added(topic_rule_id):
@@ -416,7 +552,8 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
     def YaraRuleAdded(self, yara_rule, context):
         print(f"Received Yara rule name: {yara_rule.name}")
 
-        if not validate_yara_rule_string(yara_rule.content):
+        is_valid, rule_identifiers = validate_yara_rule_string(yara_rule.content)
+        if not is_valid:
             print(f"Invalid Yara rule: {yara_rule.name}")
             return monitor_pb2.MonitorReply(result=1)
         
@@ -424,7 +561,8 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
             # Save the Yara rule to the database
             yara_rules_collection.insert_one({
                 "name": yara_rule.name,
-                "content": yara_rule.content
+                "content": yara_rule.content,
+                "identifiers": rule_identifiers
             })
 
             load_yara_rules()  # Reload Yara rules after adding a new one
@@ -438,7 +576,8 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
         print(f"Received Yara rule name: {yara_rule_edit_request.rule.name}")
         print(f"Received Yara rule id: {yara_rule_edit_request.id.id}")
 
-        if not validate_yara_rule_string(yara_rule_edit_request.rule.content):
+        is_valid, rule_identifiers = validate_yara_rule_string(yara_rule_edit_request.rule.content)
+        if not is_valid:
             print(f"Invalid Yara rule: {yara_rule_edit_request.rule.name}")
             return monitor_pb2.MonitorReply(result=1)
         
@@ -449,7 +588,8 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
                 {'$set': 
                     {  
                         "name": yara_rule_edit_request.rule.name,
-                        "content": yara_rule_edit_request.rule.content
+                        "content": yara_rule_edit_request.rule.content,
+                        "identifiers": rule_identifiers
                     }
                 }  # Field to add or update
             )
