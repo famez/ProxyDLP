@@ -1140,55 +1140,59 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
 
   const errors = [];
 
-  for (let i = 0; i < destinationType.length; i++) {
+  if (Array.isArray(destinationType)) {
 
-    if (!destinationName[i]) {
-      errors.push(`Row ${i + 1}: Name is required.`);
+    for (let i = 0; i < destinationType.length; i++) {
+
+      if (!destinationName[i]) {
+        errors.push(`Row ${i + 1}: Name is required.`);
+      }
+
+      const type = destinationType[i];
+
+      if(type !== "local_logs" && destinationName[i] === "Local logs") {
+        errors.push(`Row ${i + 1}: Invalid name Local logs. This name is reserved`);
+      }
+
+      if (type === 'email') {
+        if (!emailRegex.test(email[i])) {
+          errors.push(`Row ${i + 1}: Invalid email address.`);
+        }
+
+        if (!emailPassword[i]) {
+          errors.push(`Row ${i + 1}: Password is required.`);
+        }
+
+        if (emailPassword[i] !== emailPasswordConfirm[i]) {
+          errors.push(`Row ${i + 1}: Passwords do not match.`);
+        }
+
+        if (!ipOrHostnameRegex.test(smtpHost[i])) {
+          errors.push(`Row ${i + 1}: Invalid SMTP host.`);
+        }
+
+        const port = Number(smtpPort[i]);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          errors.push(`Row ${i + 1}: Invalid SMTP port.`);
+        }
+
+      } else if (type === 'syslog') {
+        if (!ipOrHostnameRegex.test(syslogHost[i])) {
+          errors.push(`Row ${i + 1}: Invalid Syslog host.`);
+        }
+
+        const port = Number(syslogPort[i]);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          errors.push(`Row ${i + 1}: Invalid Syslog port.`);
+        }
+      }
     }
 
-    const type = destinationType[i];
-
-    if(type !== "local_logs" && destinationName[i] === "Local logs") {
-      errors.push(`Row ${i + 1}: Invalid name Local logs. This name is reserved`);
+    if (errors.length > 0) {
+      // You can render the form again with the errors, or send JSON:
+      return res.status(400).json({ success: false, errors });
     }
 
-    if (type === 'email') {
-      if (!emailRegex.test(email[i])) {
-        errors.push(`Row ${i + 1}: Invalid email address.`);
-      }
-
-      if (!emailPassword[i]) {
-        errors.push(`Row ${i + 1}: Password is required.`);
-      }
-
-      if (emailPassword[i] !== emailPasswordConfirm[i]) {
-        errors.push(`Row ${i + 1}: Passwords do not match.`);
-      }
-
-      if (!ipOrHostnameRegex.test(smtpHost[i])) {
-        errors.push(`Row ${i + 1}: Invalid SMTP host.`);
-      }
-
-      const port = Number(smtpPort[i]);
-      if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        errors.push(`Row ${i + 1}: Invalid SMTP port.`);
-      }
-
-    } else if (type === 'syslog') {
-      if (!ipOrHostnameRegex.test(syslogHost[i])) {
-        errors.push(`Row ${i + 1}: Invalid Syslog host.`);
-      }
-
-      const port = Number(syslogPort[i]);
-      if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        errors.push(`Row ${i + 1}: Invalid Syslog port.`);
-      }
-    }
-  }
-
-  if (errors.length > 0) {
-    // You can render the form again with the errors, or send JSON:
-    return res.status(400).json({ success: false, errors });
   }
 
   // If all is good:
@@ -1200,27 +1204,31 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
 
     await alert_destinations.deleteMany({});
 
-    for (let i = 0; i < destinationType.length; i++) {
-      destination = {
-        name: destinationName[i],
-        type: destinationType[i],
+    if (Array.isArray(destinationType)) {
+
+      for (let i = 0; i < destinationType.length; i++) {
+        destination = {
+          name: destinationName[i],
+          type: destinationType[i],
+        }
+
+        if (destinationType[i] === "email") {
+
+          destination.email = email[i];
+          destination.emailPassword = emailPassword[i];
+          destination.smtpHost = smtpHost[i];
+          destination.smtpPort = smtpPort[i];
+
+        } else if (destinationType[i] === "syslog") {
+          destination.syslogHost = syslogHost[i];
+          destination.syslogPort = syslogPort[i];
+        }
+
+        await alert_destinations.insertOne(destination);
+
       }
 
-      if (destinationType[i] === "email") {
-
-        destination.email = email[i];
-        destination.emailPassword = emailPassword[i];
-        destination.smtpHost = smtpHost[i];
-        destination.smtpPort = smtpPort[i];
-
-      } else if (destinationType[i] === "syslog") {
-        destination.syslogHost = syslogHost[i];
-        destination.syslogPort = syslogPort[i];
-      }
-
-      await alert_destinations.insertOne(destination);
-
-    }
+   }
 
     if(enableLocalLogs) {
       await alert_destinations.insertOne(
