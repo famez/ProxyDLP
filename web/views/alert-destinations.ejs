@@ -15,97 +15,56 @@
           </tr>
         </thead>
         <tbody id="destinationTable">
-          <% if (destinations.length === 0) { %>
-            <!-- Render empty row if no destinations -->
-            <tr>
-              <td class="p-2">
-                <input name="destinationName[]" type="text" placeholder="e.g., Primary Email"
-                      class="w-full border-gray-300 rounded-md p-2"/>
-              </td>
-              <td class="p-2">
-                <select name="destinationType[]" class="w-full border-gray-300 rounded-md"
-                        onchange="updateDetailsFields(this)">
-                  <option value="email">Email</option>
-                  <option value="syslog">Syslog</option>
-                </select>
-              </td>
-              <td class="p-2">
-                <div class="details-container">
-                  <div class="email-fields space-y-2">
-                    <input type="email" name="email[]" placeholder="Email Address"
-                          class="w-full border-gray-300 rounded-md p-2"/>
-                    <input type="password" name="emailPassword[]" placeholder="Password"
-                          class="w-full border-gray-300 rounded-md p-2"/>
-                    <input type="password" name="emailPasswordConfirm[]" placeholder="Retype Password"
-                          class="w-full border-gray-300 rounded-md p-2"/>
-                    <input type="text" name="smtpHost[]" placeholder="SMTP Host"
-                          class="w-full border-gray-300 rounded-md p-2"/>
-                    <input type="number" name="smtpPort[]" placeholder="SMTP Port"
-                          class="w-full border-gray-300 rounded-md p-2"/>
-                  </div>
-                  <div class="syslog-fields hidden space-y-2">
-                    <input type="text" name="syslogHost[]" placeholder="IP / Hostname"
-                          class="w-full border-gray-300 rounded-md p-2"/>
-                    <input type="number" name="syslogPort[]" placeholder="Port"
-                          class="w-full border-gray-300 rounded-md p-2"/>
-                  </div>
-                </div>
-              </td>
-              <td class="p-2 text-center">
-                <button type="button" onclick="removeRow(this)" class="text-red-600 hover:underline">Remove</button>
-              </td>
-            </tr>
-          <% } else { %>
-            <% destinations.forEach(function(dest, i) { %>
-              <% if (dest.type !== "local_logs") { %>
-                <tr>
-                  <td class="p-2">
-                    <input name="destinationName[]" type="text" value="<%= dest.name %>"
-                          class="w-full border-gray-300 rounded-md p-2"/>
-                  </td>
-                  <td class="p-2">
-                    <select name="destinationType[]" class="w-full border-gray-300 rounded-md"
-                            onchange="updateDetailsFields(this)">
-                      <option value="email" <%= dest.type === 'email' ? 'selected' : '' %>>Email</option>
-                      <option value="syslog" <%= dest.type === 'syslog' ? 'selected' : '' %>>Syslog</option>
-                    </select>
-                  </td>
-                  <td class="p-2">
-                    <div class="details-container">
-                      <div class="email-fields space-y-2 <%= dest.type === 'email' ? '' : 'hidden' %>">
-                        <input type="email" name="email[]" placeholder="Email Address"
-                              value="<%= dest.email || '' %>"
-                              class="w-full border-gray-300 rounded-md p-2"/>
-                        <input type="password" name="emailPassword[]" placeholder="Password"
-                              value="<%= dest.emailPassword || '' %>"
-                              class="w-full border-gray-300 rounded-md p-2"/>
-                        <input type="password" name="emailPasswordConfirm[]" placeholder="Retype Password"
-                              value="<%= dest.emailPassword || '' %>"
-                              class="w-full border-gray-300 rounded-md p-2"/>
-                        <input type="text" name="smtpHost[]" placeholder="SMTP Host"
-                              value="<%= dest.smtpHost || '' %>"
-                              class="w-full border-gray-300 rounded-md p-2"/>
-                        <input type="number" name="smtpPort[]" placeholder="SMTP Port"
-                              value="<%= dest.smtpPort || '' %>"
-                              class="w-full border-gray-300 rounded-md p-2"/>
-                      </div>
-                      <div class="syslog-fields space-y-2 <%= dest.type === 'syslog' ? '' : 'hidden' %>">
-                        <input type="text" name="syslogHost[]" placeholder="IP / Hostname"
-                              value="<%= dest.syslogHost || '' %>"
-                              class="w-full border-gray-300 rounded-md p-2"/>
-                        <input type="number" name="syslogPort[]" placeholder="Port"
-                              value="<%= dest.syslogPort || '' %>"
-                              class="w-full border-gray-300 rounded-md p-2"/>
-                      </div>
+          
+          <% destinations.forEach(function(dest, i) { %>
+            <% if (dest.type !== "local_logs") { %>
+              <tr>
+                <td class="p-2">
+                  <input name="destinationName[]" type="text" value="<%= dest.name %>"
+                        class="w-full border-gray-300 rounded-md p-2"/>
+                </td>
+                <td class="p-2">
+                  <select name="destinationType[]" class="w-full border-gray-300 rounded-md"
+                          onchange="updateDetailsFields(this)">
+                    <option value="email" <%= dest.type === 'email' ? 'selected' : '' %>>Email</option>
+                    <option value="syslog" <%= dest.type === 'syslog' ? 'selected' : '' %>>Syslog</option>
+                  </select>
+                </td>
+                <td class="p-2">
+                  <div class="details-container">
+                    <div class="email-fields space-y-2 <%= dest.type === 'email' ? '' : 'hidden' %>">
+                      <input type="email" name="email[]" placeholder="Email Address"
+                            value="<%= dest.email || '' %>"
+                            class="w-full border-gray-300 rounded-md p-2"/>
+                      <input type="password" name="emailPassword[]" placeholder="Password"
+                            value="<%= dest.emailPassword || '' %>"
+                            class="w-full border-gray-300 rounded-md p-2"/>
+                      <input type="password" name="emailPasswordConfirm[]" placeholder="Retype Password"
+                            value="<%= dest.emailPassword || '' %>"
+                            class="w-full border-gray-300 rounded-md p-2"/>
+                      <input type="text" name="smtpHost[]" placeholder="SMTP Host"
+                            value="<%= dest.smtpHost || '' %>"
+                            class="w-full border-gray-300 rounded-md p-2"/>
+                      <input type="number" name="smtpPort[]" placeholder="SMTP Port"
+                            value="<%= dest.smtpPort || '' %>"
+                            class="w-full border-gray-300 rounded-md p-2"/>
                     </div>
-                  </td>
-                  <td class="p-2 text-center">
-                    <button type="button" onclick="removeRow(this)" class="text-red-600 hover:underline">Remove</button>
-                  </td>
-                </tr>
-              <% } %>
-            <% }); %>
-          <% } %>
+                    <div class="syslog-fields space-y-2 <%= dest.type === 'syslog' ? '' : 'hidden' %>">
+                      <input type="text" name="syslogHost[]" placeholder="IP / Hostname"
+                            value="<%= dest.syslogHost || '' %>"
+                            class="w-full border-gray-300 rounded-md p-2"/>
+                      <input type="number" name="syslogPort[]" placeholder="Port"
+                            value="<%= dest.syslogPort || '' %>"
+                            class="w-full border-gray-300 rounded-md p-2"/>
+                    </div>
+                  </div>
+                </td>
+                <td class="p-2 text-center">
+                  <button type="button" onclick="removeRow(this)" class="text-red-600 hover:underline">Remove</button>
+                </td>
+              </tr>
+            <% } %>
+          <% }); %>
         </tbody>
 
       </table>
