@@ -27,8 +27,8 @@ db.createCollection('alert-logs');
 db.topic_rules.createIndex({ "name": 1 }, { unique: true });
 db.yara_rules.createIndex({ "name": 1 }, { unique: true });
 db.sites.createIndex({ "name": 1 }, { unique: true });
-db.alert-destinations.createIndex({ "name": 1 }, { unique: true });
-db.alert-rules.createIndex({ "name": 1 }, { unique: true });
+db["alert-destinations"].createIndex({ "name": 1 }, { unique: true });
+db["alert-rules"].createIndex({ "name": 1 }, { unique: true });
 
 //Insert default admin user
 
