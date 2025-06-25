@@ -21,6 +21,7 @@ import faiss
 import yara
 from readerwriterlock import rwlock
 from collections import Counter
+from datetime import datetime, timezone
 
 INDEX_PATH = '/var/faiss/faiss_index.index'
 
@@ -35,6 +36,7 @@ yara_rules_collection = db_client["proxyGPT"]["yara_rules"]
 
 alert_destinations_collection = db_client["proxyGPT"]["alert-destinations"]
 alert_rules_collection = db_client["proxyGPT"]["alert-rules"]
+alert_locallogs_collection = db_client["proxyGPT"]["alert-logs"]
 
 
 #nlp = spacy.load("en_core_web_sm")
@@ -464,9 +466,37 @@ def check_alerts(leak):
     # Filter matching alerts
     matching_alerts = [doc for doc in results if rule_matches(doc, leak_count)]
 
-    # Print matching alert rule names
+    # Send matching alert rules to the configured destinations
     for alert in matching_alerts:
         print(f"Matching alert rule: {alert['name']}")
+        for destination in alert["destinations"]:
+            if(destination['type'] == "local_logs"):
+                send_alert_to_local_logs(alert, leak)
+            elif(destination['type'] == "syslog"):
+                send_alert_to_syslog(alert, leak)
+            elif(destination['type'] == "email"):
+                send_alert_to_email(alert, leak)
+
+
+def send_alert_to_local_logs(alert, leak):
+    
+    alert_locallogs_collection.insert_one(
+        {
+            "timestamp": datetime.now(timezone.utc),
+            "alert_rule": ObjectId(alert['_id']),
+            "leak": leak
+        }
+    )
+
+
+
+
+def send_alert_to_syslog(alert, leak):
+    pass
+
+
+def send_alert_to_email(alert, leak):
+    pass
 
 
 

@@ -6,14 +6,20 @@
     <thead class="bg-pink-100 text-pink-800">
       <tr>
         <th class="px-4 py-2 text-left">Time</th>
-        <th class="px-4 py-2 text-left">Matched rule</th>
+        <th class="px-4 py-2 text-left">Alert Rule</th>
+        <th class="px-4 py-2 text-left">Matched Yara</th>
+        <th class="px-4 py-2 text-left">Regex Matches</th>
+        <th class="px-4 py-2 text-left">Matched Topics</th>
       </tr>
     </thead>
     <tbody class="text-sm text-gray-700">
       <% logs.forEach(log => { %>
         <tr class="border-b">
           <td class="px-4 py-2"><%= log.time %></td>
-          <td class="px-4 py-2"><%= log.matched_rule %></td>
+          <td class="px-4 py-2"><%= log.alert_rule %></td>
+          <td class="px-4 py-2"><%= log.yara %></td>
+          <td class="px-4 py-2"><%= log.regex %></td>
+          <td class="px-4 py-2"><%= log.topic %></td>
         </tr>
       <% }) %>
     </tbody>
