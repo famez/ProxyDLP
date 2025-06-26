@@ -1136,7 +1136,8 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
 
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const ipOrHostnameRegex = /^(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$/;
+  const ipOrHostnameRegex = /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$/
+;
 
   const errors = [];
 
