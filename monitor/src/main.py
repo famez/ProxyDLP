@@ -22,6 +22,13 @@ import yara
 from readerwriterlock import rwlock
 from collections import Counter
 from datetime import datetime, timezone
+import logging
+import logging.handlers
+import json
+from syslog_rfc5424_formatter import RFC5424Formatter
+
+
+
 
 INDEX_PATH = '/var/faiss/faiss_index.index'
 
@@ -473,7 +480,7 @@ def check_alerts(leak):
             if(destination['type'] == "local_logs"):
                 send_alert_to_local_logs(alert, leak)
             elif(destination['type'] == "syslog"):
-                send_alert_to_syslog(alert, leak)
+                send_alert_to_syslog(alert, destination, leak)
             elif(destination['type'] == "email"):
                 send_alert_to_email(alert, leak)
 
@@ -489,10 +496,24 @@ def send_alert_to_local_logs(alert, leak):
     )
 
 
+def send_alert_to_syslog(alert, destination, leak):
+    # Create a syslog handler
+    print("Send to syslog...")
+    #print(f"Alert: {alert}")
+    logger = logging.getLogger('ProxyDLP')
+    logger.setLevel(logging.INFO)
+    syslog_handler = logging.handlers.SysLogHandler(address=(destination['syslogHost'], int(destination['syslogPort'])), facility=logging.handlers.SysLogHandler.LOG_USER)
+    
+    formatter = RFC5424Formatter()
+    syslog_handler.setFormatter(formatter)
+    logger.addHandler(syslog_handler)
 
+    log_data = {
+        "alert_rule": alert['name'],
+        "leak": leak
+    }
 
-def send_alert_to_syslog(alert, leak):
-    pass
+    logger.info(json.dumps(log_data))
 
 
 def send_alert_to_email(alert, leak):

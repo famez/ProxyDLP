@@ -65,6 +65,7 @@ RUN mkdir -p /var/faiss && chown -R appuser:appgroup /var/faiss
 USER appuser
 
 RUN pip install readerwriterlock
+RUN pip install syslog-rfc5424-formatter
 
 # Final working directory
 WORKDIR /app
