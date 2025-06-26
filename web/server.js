@@ -1311,6 +1311,7 @@ app.get('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req
       // Optional: remap result shape
       {
         $project: {
+          _id: 1,
           name: 1,
           regex: {
             count: '$regex.count',
@@ -1408,6 +1409,100 @@ app.post('/alerts/rules', authMiddleware, requirePermission("alerts"), async (re
   }
 
 });
+
+app.get('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  let client;
+  try {
+    const { id } = req.params;
+    ({ client, db } = await connectToDB());
+
+    const rule = await db.collection('alert-rules').findOne({ _id: new ObjectId(id) });
+    if (!rule) return res.status(404).send('Rule not found');
+
+    const [regexRules, yaraRules, topicRules, destinations] = await Promise.all([
+      db.collection('regex_rules').find().toArray(),
+      db.collection('yara_rules').find().toArray(),
+      db.collection('topic_rules').find().toArray(),
+      db.collection('alert-destinations').find().toArray()
+    ]);
+
+    res.render('alert-rules-edit', {
+      title: 'Edit Rule',
+      rule,
+      options: { regexRules, yaraRules, topicRules, destinations }
+    });
+
+  } catch (err) {
+    console.error('Error rendering edit page:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  let client;
+  try {
+    const { id } = req.params;
+    const {
+      name, regexRules, regexCount, yaraRules, yaraCount,
+      topicRules, topicCount, destinations
+    } = req.body;
+
+    const parseField = val => Array.isArray(val) ? val : val ? [val] : [];
+
+    const updateDoc = {
+      name,
+      regex: {
+        rules: parseField(regexRules).map(r => new ObjectId(r)),
+        count: parseInt(regexCount) || 1
+      },
+      yara: {
+        rules: parseField(yaraRules).map(r => new ObjectId(r)),
+        count: parseInt(yaraCount) || 1
+      },
+      topic: {
+        rules: parseField(topicRules).map(r => new ObjectId(r)),
+        count: parseInt(topicCount) || 1
+      },
+      destinations: parseField(destinations)
+    };
+
+    ({ client, db } = await connectToDB());
+    await db.collection('alert-rules').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateDoc }
+    );
+
+    res.redirect('/alerts/rules');
+
+  } catch (err) {
+    console.error('Error updating rule:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
+app.post('/alerts/rules/:id/delete', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  let client;
+  try {
+    const { id } = req.params;
+    ({ client, db } = await connectToDB());
+
+    await db.collection('alert-rules').deleteOne({ _id: new ObjectId(id) });
+
+    res.redirect('/alerts/rules');
+
+  } catch (err) {
+    console.error('Error deleting rule:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
 
 
 // Alert Logs

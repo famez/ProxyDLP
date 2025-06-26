@@ -1,0 +1,63 @@
+<%- include('partials/header', { title }) %>
+
+<main class="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow mt-10">
+  <h2 class="text-2xl font-bold text-purple-700 mb-6">Edit Alert Rule</h2>
+
+  <form action="/alerts/rules/<%= rule._id %>/edit" method="POST" class="space-y-6">
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Rule Name</label>
+      <input name="name" type="text" value="<%= rule.name %>"
+             class="w-full border p-2 rounded mt-1" required>
+    </div>
+
+    <% ['regex', 'yara', 'topic'].forEach(type => { 
+         const selectedRules = rule[type].rules.map(r => 
+            typeof r === 'object' && r !== null && r._id ? r._id.toString() : r.toString()
+            );
+
+         const count = rule[type].count;
+    %>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 capitalize"><%= type %> Rules</label>
+        <select name="<%= type %>Rules" multiple class="w-full border p-2 rounded text-sm mt-1">
+          <% options[`${type}Rules`].forEach(r => {
+               const rId = r._id.toString();
+               const selected = selectedRules.includes(rId) ? 'selected' : '';
+               const label = type === 'regex' ? Object.keys(r)[1] || 'Unnamed' : r.name || 'Unnamed';
+          %>
+            <option value="<%= rId %>" <%= selected %>><%= label %></option>
+          <% }) %>
+        </select>
+        <input name="<%= type %>Count" type="number" min="1" value="<%= count %>"
+               class="mt-2 w-full border p-2 rounded text-sm" placeholder="Count">
+      </div>
+    <% }) %>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Destinations</label>
+      <select name="destinations" multiple class="w-full border p-2 rounded text-sm mt-1">
+        <% const selectedDests = rule.destinations.map(d => d.name); %>
+        <% options.destinations.forEach(dest => { 
+             const selected = selectedDests.includes(dest.name) ? 'selected' : '';
+        %>
+          <option value="<%= dest.name %>" <%= selected %>><%= dest.name %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="flex space-x-2 mt-6">
+      <button type="submit"
+              class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+        Save Changes
+      </button>
+      <a href="/alerts/rules"
+         class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
+        Cancel
+      </a>
+    </div>
+
+  </form>
+</main>
+
+<%- include('partials/footer') %>

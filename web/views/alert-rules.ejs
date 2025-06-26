@@ -39,6 +39,18 @@
             <%= rule.destinations.map(d => d.name || 'N/A').join(', ') %>
           </td>
         </tr>
+        <td class="px-4 py-2 space-x-2 text-xs">
+        <form action="/alerts/rules/<%= rule._id %>/delete" method="POST" class="inline">
+          <button type="submit" onclick="return confirm('Are you sure?')"
+                  class="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
+            Delete
+          </button>
+        </form>
+        <a href="/alerts/rules/<%= rule._id %>/edit"
+          class="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">
+          Edit
+        </a>
+      </td>
       <% }) %>
 
 
