@@ -10,6 +10,7 @@
         <th class="px-4 py-2 text-left">YARA</th>
         <th class="px-4 py-2 text-left">Topic</th>
         <th class="px-4 py-2 text-left">Destinations</th>
+        <th class="px-4 py-2 text-left">Actions</th>
       </tr>
     </thead>
     <tbody class="text-gray-700">
@@ -38,22 +39,24 @@
           <td class="px-4 py-2">
             <%= rule.destinations.map(d => d.name || 'N/A').join(', ') %>
           </td>
+
+          <td class="px-4 py-2 text-xs">
+            <div class="flex space-x-2">
+              <form action="/alerts/rules/<%= rule._id %>/delete" method="POST" class="inline">
+                <button type="submit" onclick="return confirm('Are you sure?')"
+                        class="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
+                  Delete
+                </button>
+              </form>
+              <a href="/alerts/rules/<%= rule._id %>/edit"
+                class="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">
+                Edit
+              </a>
+            </div>
+          </td>
+
         </tr>
-        <td class="px-4 py-2 space-x-2 text-xs">
-        <form action="/alerts/rules/<%= rule._id %>/delete" method="POST" class="inline">
-          <button type="submit" onclick="return confirm('Are you sure?')"
-                  class="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
-            Delete
-          </button>
-        </form>
-        <a href="/alerts/rules/<%= rule._id %>/edit"
-          class="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">
-          Edit
-        </a>
-      </td>
       <% }) %>
-
-
 
       <!-- New Rule Entry Form -->
       <tr class="border-t bg-purple-50">
@@ -93,6 +96,9 @@
               Add Rule
             </button>
           </td>
+
+          <!-- Empty cell for the actions column -->
+          <td></td>
         </form>
       </tr>
     </tbody>
