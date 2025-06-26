@@ -1128,6 +1128,7 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
     smtpPort,
     syslogHost,
     syslogPort,
+    recipientEmail,
   } = req.body;
 
   const enableLocalLogs = req.body.enableLocalLogs === 'on';
@@ -1158,6 +1159,10 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
       if (type === 'email') {
         if (!emailRegex.test(email[i])) {
           errors.push(`Row ${i + 1}: Invalid email address.`);
+        }
+
+        if (!emailRegex.test(recipientEmail[i])) {
+          errors.push(`Row ${i + 1}: Invalid recipientEmail address.`);
         }
 
         if (!emailPassword[i]) {
@@ -1219,6 +1224,7 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
           destination.emailPassword = emailPassword[i];
           destination.smtpHost = smtpHost[i];
           destination.smtpPort = smtpPort[i];
+          destination.recipientEmail = recipientEmail[i];
 
         } else if (destinationType[i] === "syslog") {
           destination.syslogHost = syslogHost[i];

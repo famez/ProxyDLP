@@ -48,6 +48,10 @@
                       <input type="number" name="smtpPort[]" placeholder="SMTP Port"
                             value="<%= dest.smtpPort || '' %>"
                             class="w-full border-gray-300 rounded-md p-2"/>
+                       <!-- Recipient (actual destination address) -->
+                      <input type="email" name="recipientEmail[]" placeholder="Recipient Email Address"
+                            value="<%= dest.recipientEmail || '' %>"
+                            class="w-full border-gray-300 rounded-md p-2"/>
                     </div>
                     <div class="syslog-fields space-y-2 <%= dest.type === 'syslog' ? '' : 'hidden' %>">
                       <input type="text" name="syslogHost[]" placeholder="IP / Hostname"
@@ -128,6 +132,8 @@
                     class="w-full border-gray-300 rounded-md p-2"/>
               <input type="number" name="smtpPort[]" placeholder="SMTP Port"
                     class="w-full border-gray-300 rounded-md p-2"/>
+              <input type="email" name="recipientEmail[]" placeholder="Recipient Email Address"
+                    class="w-full border-gray-300 rounded-md p-2"/>
             </div>
             <div class="syslog-fields hidden space-y-2">
               <input type="text" name="syslogHost[]" placeholder="IP / Hostname"
@@ -181,6 +187,8 @@
           const confirmPassword = row.querySelectorAll('input[name="emailPasswordConfirm[]"]')[index];
           const smtpHost = row.querySelectorAll('input[name="smtpHost[]"]')[index];
           const smtpPort = row.querySelectorAll('input[name="smtpPort[]"]')[index];
+          const recipientEmail = row.querySelectorAll('input[name="recipientEmail[]"]')[index];
+          
 
           if (!emailRegex.test(email.value)) {
             alert(`Row ${index + 1}: Invalid email format.`);
@@ -209,6 +217,12 @@
           const portNum = Number(smtpPort.value);
           if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
             alert(`Row ${index + 1}: Port must be a number between 1 and 65535.`);
+            valid = false;
+            return;
+          }
+
+          if (!emailRegex.test(recipientEmail.value)) {
+            alert(`Row ${index + 1}: Invalid recipientEmail format.`);
             valid = false;
             return;
           }

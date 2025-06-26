@@ -26,7 +26,9 @@ import logging
 import logging.handlers
 import json
 from syslog_rfc5424_formatter import RFC5424Formatter
-
+import smtplib
+from email.mime.text import MIMEText
+import json
 
 
 
@@ -482,7 +484,7 @@ def check_alerts(leak):
             elif(destination['type'] == "syslog"):
                 send_alert_to_syslog(alert, destination, leak)
             elif(destination['type'] == "email"):
-                send_alert_to_email(alert, leak)
+                send_alert_to_email(alert, destination, leak)
 
 
 def send_alert_to_local_logs(alert, leak):
@@ -516,8 +518,37 @@ def send_alert_to_syslog(alert, destination, leak):
     logger.info(json.dumps(log_data))
 
 
-def send_alert_to_email(alert, leak):
-    pass
+def send_alert_to_email(alert, destination, leak):
+    smtp_host = destination.get("smtpHost")
+    smtp_port = int(destination.get("smtpPort", 25))
+    smtp_user = destination.get("email")
+    smtp_pass = destination.get("emailPassword")
+    recipient = destination.get("recipientEmail")
+
+    # Format message
+    subject = f"[Alert] {alert['name']}"
+    body = json.dumps({
+        "alert_rule": alert["name"],
+        "leak": leak
+    }, indent=2)
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = smtp_user
+    msg["To"] = recipient
+
+    # Send email
+    
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        server.set_debuglevel(1)  # Print interaction with server
+        try:
+            server.login(smtp_user, smtp_pass)
+        except smtplib.SMTPException:
+            pass  # Allow no-auth servers like MailHog
+
+        server.sendmail(smtp_user, [recipient], msg.as_string())
+
 
 
 
