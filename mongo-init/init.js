@@ -30,6 +30,13 @@ db.sites.createIndex({ "name": 1 }, { unique: true });
 db["alert-destinations"].createIndex({ "name": 1 }, { unique: true });
 db["alert-rules"].createIndex({ "name": 1 }, { unique: true });
 
+db["alert-destinations"].insertOne({
+      name: "Local logs",
+      type: "local_logs",
+      enabled: true,
+      rotationLimit: 100
+    });
+
 //Insert default admin user
 
 db.users.insertOne({username: "admin", password: "$2a$10$3lKl1v9l8Fe8PtAOCAEiaeXW.fTaCpKyCWJcuD1zELyFi2OZKIZBe",

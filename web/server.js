@@ -1504,16 +1504,19 @@ app.post('/alerts/rules/:id/delete', authMiddleware, requirePermission("alerts")
 
 // Alert Logs
 app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
 
   let client;
   try {
     ({ client, db } = await connectToDB());
-    const logs = await db.collection('alert-logs').aggregate([
-      // Sort latest first
-      { $sort: { timestamp: -1 } },
-      { $limit: 20 },
 
-      // Lookup alert rule info
+    const totalLogs = await db.collection('alert-logs').countDocuments();
+    const logs = await db.collection('alert-logs').aggregate([
+      { $sort: { timestamp: -1 } },
+      { $skip: skip },
+      { $limit: limit },
       {
         $lookup: {
           from: 'alert-rules',
@@ -1522,10 +1525,7 @@ app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req,
           as: 'alert_rule_doc'
         }
       },
-      // Unwind alert_rule_doc array to object (may be empty)
       { $unwind: { path: '$alert_rule_doc', preserveNullAndEmptyArrays: true } },
-
-      // Project needed fields only for clarity (optional)
       {
         $project: {
           timestamp: 1,
@@ -1535,50 +1535,60 @@ app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req,
       }
     ]).toArray();
 
-    // Format the result for the view
     const formattedLogs = logs.map(log => {
       const ts = new Date(log.timestamp.$date || log.timestamp).toISOString().replace('T', ' ').substring(0, 16);
-
       const alert_rule = log.alert_rule_name || 'Unknown Rule';
 
-      // Matched yara names
-      let yaraNames = '';
-      if (log.leak && Array.isArray(log.leak.yara)) {
-        yaraNames = log.leak.yara.map(y => y.name).join(', ');
-      }
+      const yaraNames = Array.isArray(log.leak?.yara) ? log.leak.yara.map(y => y.name).join(', ') : '';
+      const regexEntries = log.leak?.regex ? Object.entries(log.leak.regex).map(([k, v]) => `${k}: ${v}`).join('; ') : '';
+      const topicNames = Array.isArray(log.leak?.topic) ? log.leak.topic.map(t => t.name).join(', ') : '';
 
-      // Regex entries with matched values
-      let regexEntries = '';
-      if (log.leak && log.leak.regex) {
-        regexEntries = Object.entries(log.leak.regex)
-          .map(([key, val]) => `${key}: ${val}`)
-          .join('; ');
-      }
-
-      // Matched topic names
-      let topicNames = '';
-      if (log.leak && Array.isArray(log.leak.topic)) {
-        topicNames = log.leak.topic.map(t => t.name).join(', ');
-      }
-
-      return {
-        time: ts,
-        alert_rule,
-        yara: yaraNames,
-        regex: regexEntries,
-        topic: topicNames
-      };
+      return { time: ts, alert_rule, yara: yaraNames, regex: regexEntries, topic: topicNames };
     });
 
-    res.render('alert-logs', { title: 'Alert Logs', logs: formattedLogs });
+    const localDest = await db.collection('alert-destinations').findOne({ type: 'local_logs' });
+    const rotationLimit = localDest?.rotationLimit || 500;
+
+    res.render('alert-logs', {
+      title: 'Alert Logs',
+      logs: formattedLogs,
+      pagination: {
+        current: page,
+        totalPages: Math.ceil(totalLogs / limit),
+        limit
+      }, rotationLimit
+    });
+
   } catch (err) {
     console.error('Error rendering alert logs:', err);
     res.status(500).send('Internal Server Error');
   } finally {
     if (client) await client.close();
   }
-  
 });
+
+app.post('/alerts/logs/rotation', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  const maxLogs = parseInt(req.body.maxLogs) || 500;
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+
+    // Update the rotation limit
+    await db.collection('alert-destinations').updateOne(
+      { type: 'local_logs' },
+      { $set: { rotationLimit: maxLogs } }
+    );
+
+    res.redirect('/alerts/logs');
+  } catch (err) {
+    console.error('Error updating rotation limit:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
 
 
 app.listen(PORT, () => {

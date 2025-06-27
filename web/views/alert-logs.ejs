@@ -24,5 +24,37 @@
       <% }) %>
     </tbody>
   </table>
+  <div class="flex justify-between items-center mt-6">
+  <div>
+    Page <%= pagination.current %> of <%= pagination.totalPages %>
+  </div>
+  <div class="space-x-2">
+    <% if (pagination.current > 1) { %>
+      <a href="?page=<%= pagination.current - 1 %>&limit=<%= pagination.limit %>" class="px-3 py-1 bg-pink-200 text-pink-800 rounded hover:bg-pink-300">Previous</a>
+    <% } %>
+    <% if (pagination.current < pagination.totalPages) { %>
+      <a href="?page=<%= pagination.current + 1 %>&limit=<%= pagination.limit %>" class="px-3 py-1 bg-pink-200 text-pink-800 rounded hover:bg-pink-300">Next</a>
+    <% } %>
+  </div>
+</div>
+
+
+<form method="POST" action="/alerts/logs/rotation" class="mb-6 flex items-center gap-4">
+  <label class="text-gray-700 font-medium">Max Logs to Keep:</label>
+  <input
+    type="number"
+    name="maxLogs"
+    value="<%= rotationLimit %>"
+    min="10"
+    max="10000"
+    class="border px-3 py-1 rounded w-24 text-right"
+/>
+  <button type="submit" class="bg-pink-600 text-white px-4 py-1 rounded hover:bg-pink-700">
+    Update
+  </button>
+</form>
+
+
+
 </main>
 <%- include('partials/footer') %>

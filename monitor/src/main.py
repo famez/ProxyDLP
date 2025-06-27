@@ -9,7 +9,7 @@ import io
 import zipfile
 from sentence_transformers import SentenceTransformer, util
 #import spacy
-from pymongo import MongoClient, ReturnDocument
+from pymongo import MongoClient, ReturnDocument, ASCENDING
 from bson.objectid import ObjectId
 import numpy as np
 import grpc
@@ -480,14 +480,15 @@ def check_alerts(leak):
         print(f"Matching alert rule: {alert['name']}")
         for destination in alert["destinations"]:
             if(destination['type'] == "local_logs"):
-                send_alert_to_local_logs(alert, leak)
+                rotation_limit = destination.get("rotationLimit", 500)
+                send_alert_to_local_logs(alert, leak, rotation_limit)
             elif(destination['type'] == "syslog"):
                 send_alert_to_syslog(alert, destination, leak)
             elif(destination['type'] == "email"):
                 send_alert_to_email(alert, destination, leak)
 
 
-def send_alert_to_local_logs(alert, leak):
+def send_alert_to_local_logs(alert, leak, rotation_limit):
     
     alert_locallogs_collection.insert_one(
         {
@@ -496,6 +497,19 @@ def send_alert_to_local_logs(alert, leak):
             "leak": leak
         }
     )
+
+
+    # Count current number of logs
+    total_logs = alert_locallogs_collection.count_documents({})
+
+    # Remove oldest logs if over limit
+    if total_logs > rotation_limit:
+        to_delete = total_logs - rotation_limit
+
+        oldest_logs = alert_locallogs_collection.find({}, {"_id": 1}).sort("timestamp", ASCENDING).limit(to_delete)
+        ids_to_delete = [doc["_id"] for doc in oldest_logs]
+
+        alert_locallogs_collection.delete_many({"_id": {"$in": ids_to_delete}})
 
 
 def send_alert_to_syslog(alert, destination, leak):
