@@ -1131,9 +1131,7 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
     recipientEmail,
   } = req.body;
 
-  const enableLocalLogs = req.body.enableLocalLogs === 'on';
 
-  console.log('Enable Local Logging:', enableLocalLogs);
 
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1237,15 +1235,14 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
 
    }
 
-    if(enableLocalLogs) {
-      await alert_destinations.insertOne(
-        {
-          name: "Local logs",
-          type: "local_logs",
-          enabled: true
-        }
-      );
-    }
+    await alert_destinations.insertOne(
+      {
+        name: "Local logs",
+        type: "local_logs",
+        enabled: true
+      }
+    );
+    
 
   } catch (err) {
     console.error('Setting alerts destinations:', err);
