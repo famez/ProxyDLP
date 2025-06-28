@@ -17,12 +17,14 @@ RUN chown -R appuser:appgroup /usr/src/app
 USER appuser
 
 # Install npm packages as non-root
-RUN npm install
+RUN npm install --include=dev
 
 # Copy app source files as non-root
 COPY --chown=appuser:appgroup web/. .
 
 COPY --chown=appuser:appgroup proto/monitor.proto .
+
+RUN npm run build:css
 
 EXPOSE 3000
 

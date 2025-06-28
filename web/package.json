@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:css": "npx tailwindcss -i ./input.css -o ./public/css/tailwind.css --minify"    
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -17,5 +18,9 @@
     "@grpc/grpc-js": "^1.13.4",
     "@grpc/proto-loader": "^0.7.15",
     "multer": "^2.0.1"
-  }
+  },
+  "devDependencies": {
+  "tailwindcss": "^3.4.17"
+}
+
 }
