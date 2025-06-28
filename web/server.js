@@ -1485,6 +1485,12 @@ app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), 
 
     const parseField = val => Array.isArray(val) ? val : val ? [val] : [];
 
+    const parsedDestinations = parseField(destinations);
+
+    if (parsedDestinations.length === 0) {
+      return res.status(400).send('At least one destination must be selected.');
+    }
+
     const updateDoc = {
       name,
       regex: {

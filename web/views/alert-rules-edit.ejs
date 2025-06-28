@@ -37,10 +37,13 @@
     <div>
       <label class="block text-sm font-medium text-gray-700">Destinations</label>
       <select name="destinations" multiple class="w-full border p-2 rounded text-sm mt-1">
-        <% const selectedDests = rule.destinations.map(d => d.name); %>
+        <% const selectedDests = rule.destinations.map(r => 
+            typeof r === 'object' && r !== null && r._id ? r._id.toString() : r.toString()
+            ); %>
         <% options.destinations.forEach(dest => { 
-             const selected = selectedDests.includes(dest.name) ? 'selected' : '';
+            const selected = selectedDests.includes(dest._id.toString()) ? 'selected' : '';
         %>
+
           <option value="<%= dest._id %>" <%= selected %>><%= dest.name %></option>
         <% }) %>
       </select>
