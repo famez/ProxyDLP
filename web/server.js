@@ -1404,6 +1404,10 @@ app.post('/alerts/rules', authMiddleware, requirePermission("alerts"), async (re
       destinations
     } = req.body;
 
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required and cannot be empty.' });
+    }
+
     const parseField = val => Array.isArray(val) ? val : val ? [val] : [];
 
     const parsedDestinations = parseField(destinations);
@@ -1482,6 +1486,11 @@ app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), 
       name, regexRules, regexCount, yaraRules, yaraCount,
       topicRules, topicCount, destinations
     } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required and cannot be empty.' });
+    }
+
 
     const parseField = val => Array.isArray(val) ? val : val ? [val] : [];
 
