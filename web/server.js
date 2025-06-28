@@ -312,6 +312,21 @@ app.post('/rules/:type/delete/:id', authMiddleware, requirePermission("rules"), 
   try {
     ({ client, db } = await connectToDB());
 
+    const alert_rules = db.collection('alert-rules');
+    const ruleId = new ObjectId(id);
+
+    // Sanity check to avoid deletion of rules being used by alerts
+    const query = {};
+    query[`${type}.rules`] = ruleId;
+
+    const alertRulesUsingRules = await alert_rules.find(query).toArray();
+
+      if (alertRulesUsingRules.length > 0) {
+        const blockingRules = alertRulesUsingRules.map(rule => rule.name || rule._id.toString());
+        console.error(`Cannot delete ${type} rule in use by alert rules: ${blockingRules.join(', ')}`);
+        return res.status(409).send(`Cannot delete ${type} rule in use by alert rules: ${blockingRules.join(', ')}`);
+      }
+
     if (type === 'topic') {
       // Notify gRPC service about topic rule deletion
       gRPC_client.TopicRuleRemoved({ id }, () => {});   //Monitor service will handle the deletion from the database
