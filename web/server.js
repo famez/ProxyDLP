@@ -1305,7 +1305,7 @@ app.get('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req
         $lookup: {
           from: 'alert-destinations',
           localField: 'destinations',
-          foreignField: 'name',
+          foreignField: '_id',
           as: 'destinationResolved'
         }
       },
@@ -1394,7 +1394,7 @@ app.post('/alerts/rules', authMiddleware, requirePermission("alerts"), async (re
         rules: parseField(topicRules).map(id => new ObjectId(id)),
         count: parseInt(topicCount) || 1
       },
-      destinations: parsedDestinations
+      destinations: parsedDestinations.map(id => new ObjectId(id))
     };
 
     ({ client, db } = await connectToDB());
@@ -1467,7 +1467,7 @@ app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), 
         rules: parseField(topicRules).map(r => new ObjectId(r)),
         count: parseInt(topicCount) || 1
       },
-      destinations: parseField(destinations)
+      destinations: parseField(destinations).map(r => new ObjectId(r))
     };
 
     ({ client, db } = await connectToDB());

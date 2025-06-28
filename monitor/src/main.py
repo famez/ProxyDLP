@@ -407,7 +407,7 @@ def check_alerts(leak):
             "$lookup": {
                 "from": 'alert-destinations',
                 "localField": 'destinations',
-                "foreignField": 'name',
+                "foreignField": '_id',
                 "as": 'destinationResolved'
             }
         },

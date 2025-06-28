@@ -88,7 +88,7 @@
           <td class="px-4 py-2">
             <select name="destinations" multiple class="w-full border p-1 rounded text-xs">
               <% options.destinations.forEach(dest => { %>
-                <option value="<%= dest.name %>"><%= dest.name %></option>
+                <option value="<%= dest._id %>"><%= dest.name %></option>
               <% }) %>
             </select>
             <button type="submit"

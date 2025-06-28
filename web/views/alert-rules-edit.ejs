@@ -41,7 +41,7 @@
         <% options.destinations.forEach(dest => { 
              const selected = selectedDests.includes(dest.name) ? 'selected' : '';
         %>
-          <option value="<%= dest.name %>" <%= selected %>><%= dest.name %></option>
+          <option value="<%= dest._id %>" <%= selected %>><%= dest.name %></option>
         <% }) %>
       </select>
     </div>
