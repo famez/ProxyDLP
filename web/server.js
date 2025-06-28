@@ -1198,11 +1198,12 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
   try {
     ({ client, db } = await connectToDB());
     const alert_destinations = db.collection('alert-destinations');
+    const alert_rules = db.collection('alert-rules');
+
 
     const existing = await alert_destinations.find({ type: { $ne: 'local_logs' } }).toArray();
     const existingIds = existing.map(dest => String(dest._id));
 
-    const submittedIds = destinationId.map(id => id.trim()).filter(Boolean);
     const updatedIds = [];
 
     if (Array.isArray(destinationType)) {
@@ -1243,11 +1244,27 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
 
     // Remove any documents not in the submitted form (except local_logs)
     const toDelete = existingIds.filter(id => !updatedIds.includes(id));
+
     if (toDelete.length > 0) {
+      const toDeleteObjectIds = toDelete.map(id => new ObjectId(id));
+
+      // Check if any of the destinations are used in alert_rules
+      const rulesUsingDestinations = await alert_rules.find({
+        destinations: { $in: toDeleteObjectIds }
+      }).toArray();
+
+      if (rulesUsingDestinations.length > 0) {
+        const blockingRules = rulesUsingDestinations.map(rule => rule.name || rule._id.toString());
+        console.error(`Cannot delete destinations in use by alert rules: ${blockingRules.join(', ')}`);
+        return res.status(409).send(`Cannot delete destinations in use by alert rules: ${blockingRules.join(', ')}`);
+      }
+
+      // Safe to delete
       await alert_destinations.deleteMany({
-        _id: { $in: toDelete.map(id => new ObjectId(id)) }
+        _id: { $in: toDeleteObjectIds }
       });
     }
+
 
 
     res.redirect('/alerts/destinations');
