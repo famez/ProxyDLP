@@ -43,9 +43,9 @@ topics_collection = db_client["ProxyDLP"]["topic_rules"]
 counter_collection = db_client["ProxyDLP"]["faiss_id_counters"]
 yara_rules_collection = db_client["ProxyDLP"]["yara_rules"]
 
-alert_destinations_collection = db_client["proxyGPT"]["alert-destinations"]
-alert_rules_collection = db_client["proxyGPT"]["alert-rules"]
-alert_locallogs_collection = db_client["proxyGPT"]["alert-logs"]
+alert_destinations_collection = db_client["ProxyDLP"]["alert-destinations"]
+alert_rules_collection = db_client["ProxyDLP"]["alert-rules"]
+alert_locallogs_collection = db_client["ProxyDLP"]["alert-logs"]
 
 
 #nlp = spacy.load("en_core_web_sm")
