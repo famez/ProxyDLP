@@ -1,0 +1,107 @@
+<%- include('partials/header', { title }) %>
+<main class="max-w-6xl mx-auto bg-white p-8 rounded-xl shadow mt-10">
+  <h2 class="text-2xl font-bold text-purple-700 mb-6">Alert Triggering Rules</h2>
+
+  <table class="min-w-full border text-sm">
+    <thead class="bg-purple-100 text-purple-800">
+      <tr>
+        <th class="px-4 py-2 text-left">Rule Name</th>
+        <th class="px-4 py-2 text-left">Regex</th>
+        <th class="px-4 py-2 text-left">YARA</th>
+        <th class="px-4 py-2 text-left">Topic</th>
+        <th class="px-4 py-2 text-left">Destinations</th>
+        <th class="px-4 py-2 text-left">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="text-gray-700">
+      <% rules.forEach(rule => { %>
+        <tr class="border-b">
+          <td class="px-4 py-2 font-medium"><%= rule.name %></td>
+
+          <td class="px-4 py-2">
+            <%= rule.regex.rules.map(r => {
+              const key = Object.keys(r).find(k => k !== '_id');
+              return key || 'N/A';
+            }).join(', ') %>
+            <% if (rule.regex.rules.length > 0) { %> x<%= rule.regex.count %><% } %>
+          </td>
+
+          <td class="px-4 py-2">
+            <%= rule.yara.rules.map(r => r.name || 'N/A').join(', ') %>
+            <% if (rule.yara.rules.length > 0) { %> x<%= rule.yara.count %><% } %>
+          </td>
+
+          <td class="px-4 py-2">
+            <%= rule.topic.rules.map(r => r.name || 'N/A').join(', ') %>
+            <% if (rule.topic.rules.length > 0) { %> x<%= rule.topic.count %><% } %>
+          </td>
+
+          <td class="px-4 py-2">
+            <%= rule.destinations.map(d => d.name || 'N/A').join(', ') %>
+          </td>
+
+          <td class="px-4 py-2 text-xs">
+            <div class="flex space-x-2">
+              <form action="/alerts/rules/<%= rule._id %>/delete" method="POST" class="inline">
+                <button type="submit" onclick="return confirm('Are you sure?')"
+                        class="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
+                  Delete
+                </button>
+              </form>
+              <a href="/alerts/rules/<%= rule._id %>/edit"
+                class="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">
+                Edit
+              </a>
+            </div>
+          </td>
+
+        </tr>
+      <% }) %>
+
+      <!-- New Rule Entry Form -->
+      <tr class="border-t bg-purple-50">
+        <form action="/alerts/rules/" method="POST" class="contents">
+          <td class="px-4 py-2">
+            <input name="name" type="text" placeholder="New Rule Name"
+                   class="w-full border p-1 rounded" required>
+          </td>
+
+          <% ['regex', 'yara', 'topic'].forEach(type => { %>
+            <td class="px-4 py-2">
+              <select name="<%= type %>Rules" multiple class="w-full border p-1 rounded text-xs">
+                <% if (type !== "regex") { %>
+                  <% options[`${type}Rules`].forEach(r => { %>
+                    <option value="<%= r._id %>"><%= r.name %></option>
+                  <% }) %>
+                <% } else { %>
+                  <% options[`${type}Rules`].forEach(r => { 
+                    const key = Object.keys(r)[1]; %>
+                    <option value="<%= r._id %>"><%= key %></option>
+                  <% }) %>
+                <% }%>
+              </select>
+              <input name="<%= type %>Count" type="number" min="1" value="1"
+                     class="mt-1 w-full border p-1 rounded text-xs" placeholder="Count">
+            </td>
+          <% }) %>
+
+          <td class="px-4 py-2">
+            <select name="destinations" multiple class="w-full border p-1 rounded text-xs">
+              <% options.destinations.forEach(dest => { %>
+                <option value="<%= dest._id %>"><%= dest.name %></option>
+              <% }) %>
+            </select>
+            <button type="submit"
+                    class="mt-2 bg-purple-600 text-white text-xs px-2 py-1 rounded hover:bg-purple-700">
+              Add Rule
+            </button>
+          </td>
+
+          <!-- Empty cell for the actions column -->
+          <td></td>
+        </form>
+      </tr>
+    </tbody>
+  </table>
+</main>
+<%- include('partials/footer') %>

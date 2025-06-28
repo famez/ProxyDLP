@@ -19,11 +19,23 @@ db.createCollection('yara_rules');
 db.createCollection('domains');
 db.createCollection('faiss_id_counters');
 db.createCollection('sites');
+db.createCollection('alert-rules');
+db.createCollection('alert-destinations');
+db.createCollection('alert-logs');
 
 
-db.topic_rules.createIndex({ "name": 1 }, { unique: true })
-db.yara_rules.createIndex({ "name": 1 }, { unique: true })
-db.sites.createIndex({ "name": 1 }, { unique: true })
+db.topic_rules.createIndex({ "name": 1 }, { unique: true });
+db.yara_rules.createIndex({ "name": 1 }, { unique: true });
+db.sites.createIndex({ "name": 1 }, { unique: true });
+db["alert-destinations"].createIndex({ "name": 1 }, { unique: true });
+db["alert-rules"].createIndex({ "name": 1 }, { unique: true });
+
+db["alert-destinations"].insertOne({
+      name: "Local logs",
+      type: "local_logs",
+      enabled: true,
+      rotationLimit: 100
+    });
 
 //Insert default admin user
 

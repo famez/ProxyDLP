@@ -1,0 +1,60 @@
+<%- include('partials/header', { title }) %>
+<main class="max-w-5xl mx-auto bg-white p-8 rounded-xl shadow mt-10">
+  <h2 class="text-2xl font-bold text-pink-700 mb-6">Local Alert Logs</h2>
+
+  <table class="min-w-full table-auto border border-gray-200">
+    <thead class="bg-pink-100 text-pink-800">
+      <tr>
+        <th class="px-4 py-2 text-left">Time</th>
+        <th class="px-4 py-2 text-left">Alert Rule</th>
+        <th class="px-4 py-2 text-left">Matched Yara</th>
+        <th class="px-4 py-2 text-left">Regex Matches</th>
+        <th class="px-4 py-2 text-left">Matched Topics</th>
+      </tr>
+    </thead>
+    <tbody class="text-sm text-gray-700">
+      <% logs.forEach(log => { %>
+        <tr class="border-b">
+          <td class="px-4 py-2"><%= log.time %></td>
+          <td class="px-4 py-2"><%= log.alert_rule %></td>
+          <td class="px-4 py-2"><%= log.yara %></td>
+          <td class="px-4 py-2"><%= log.regex %></td>
+          <td class="px-4 py-2"><%= log.topic %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <div class="flex justify-between items-center mt-6">
+  <div>
+    Page <%= pagination.current %> of <%= pagination.totalPages %>
+  </div>
+  <div class="space-x-2">
+    <% if (pagination.current > 1) { %>
+      <a href="?page=<%= pagination.current - 1 %>&limit=<%= pagination.limit %>" class="px-3 py-1 bg-pink-200 text-pink-800 rounded hover:bg-pink-300">Previous</a>
+    <% } %>
+    <% if (pagination.current < pagination.totalPages) { %>
+      <a href="?page=<%= pagination.current + 1 %>&limit=<%= pagination.limit %>" class="px-3 py-1 bg-pink-200 text-pink-800 rounded hover:bg-pink-300">Next</a>
+    <% } %>
+  </div>
+</div>
+
+
+<form method="POST" action="/alerts/logs/rotation" class="mb-6 flex items-center gap-4">
+  <label class="text-gray-700 font-medium">Max Logs to Keep:</label>
+  <input
+    type="number"
+    name="maxLogs"
+    value="<%= rotationLimit %>"
+    min="10"
+    max="10000"
+    class="border px-3 py-1 rounded w-24 text-right"
+/>
+  <button type="submit" class="bg-pink-600 text-white px-4 py-1 rounded hover:bg-pink-700">
+    Update
+  </button>
+</form>
+
+
+
+</main>
+<%- include('partials/footer') %>

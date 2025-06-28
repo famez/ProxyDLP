@@ -64,7 +64,6 @@ RUN mkdir -p /var/faiss && chown -R appuser:appgroup /var/faiss
 # Switch back to appuser
 USER appuser
 
-RUN pip install readerwriterlock
 
 # Final working directory
 WORKDIR /app

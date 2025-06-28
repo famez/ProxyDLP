@@ -312,6 +312,21 @@ app.post('/rules/:type/delete/:id', authMiddleware, requirePermission("rules"), 
   try {
     ({ client, db } = await connectToDB());
 
+    const alert_rules = db.collection('alert-rules');
+    const ruleId = new ObjectId(id);
+
+    // Sanity check to avoid deletion of rules being used by alerts
+    const query = {};
+    query[`${type}.rules`] = ruleId;
+
+    const alertRulesUsingRules = await alert_rules.find(query).toArray();
+
+      if (alertRulesUsingRules.length > 0) {
+        const blockingRules = alertRulesUsingRules.map(rule => rule.name || rule._id.toString());
+        console.error(`Cannot delete ${type} rule in use by alert rules: ${blockingRules.join(', ')}`);
+        return res.status(409).send(`Cannot delete ${type} rule in use by alert rules: ${blockingRules.join(', ')}`);
+      }
+
     if (type === 'topic') {
       // Notify gRPC service about topic rule deletion
       gRPC_client.TopicRuleRemoved({ id }, () => {});   //Monitor service will handle the deletion from the database
@@ -399,7 +414,7 @@ app.post('/rules/:type/edit/:id', authMiddleware, requirePermission("rules"), as
       gRPC_client.TopicRuleEdited({ id }, () => {});   //Monitor service will handle the update from the database
     } else if (type === 'yara') { 
       // Notify gRPC service about YARA rule update
-      gRPC_client.YaraRuleEdited({ id, rule: updateData }, () => {});
+      gRPC_client.YaraRuleEdited({ id: {id}, rule: updateData }, () => {});
     } else if (type === 'regex') {
       // Notify gRPC service about regex rule update
       gRPC_client.RegexRuleEdited({ id }, () => {});
@@ -1078,6 +1093,545 @@ app.post('/add-event-to-topic-rules', authMiddleware, requirePermission("events"
   }
 
 });
+
+app.get('/alerts', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  try {
+    res.render('alerts', { title: 'Alerts' });
+  } catch (err) {
+    console.error('Error rendering alerts:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Alert Destinations
+app.get('/alerts/destinations', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  
+  let client;
+
+  try {
+    ({ client, db } = await connectToDB());
+    const alert_destinations = db.collection('alert-destinations');
+    const destinations = await alert_destinations.find().toArray();
+
+    const localLogsEnabled = await alert_destinations.findOne({
+      type: 'local_logs',
+      enabled: true
+    });
+
+    res.render('alert-destinations', {
+      title: 'Alert Destinations',
+      destinations,
+      localLogsEnabled
+    });
+
+  } catch (err) {
+    console.error('Error rendering alert destinations:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  const {
+    destinationId = [],
+    destinationName,
+    destinationType,
+    email,
+    emailPassword,
+    emailPasswordConfirm,
+    smtpHost,
+    smtpPort,
+    syslogHost,
+    syslogPort,
+    recipientEmail,
+  } = req.body;
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const ipOrHostnameRegex = /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$/;
+
+  const errors = [];
+
+  // Validation
+  if (Array.isArray(destinationType)) {
+    for (let i = 0; i < destinationType.length; i++) {
+      if (!destinationName[i]) {
+        errors.push(`Row ${i + 1}: Name is required.`);
+      }
+
+      const type = destinationType[i];
+
+      if (type !== "local_logs" && destinationName[i] === "Local logs") {
+        errors.push(`Row ${i + 1}: Invalid name 'Local logs'. This name is reserved.`);
+      }
+
+      if (type === 'email') {
+        if (!emailRegex.test(email[i])) {
+          errors.push(`Row ${i + 1}: Invalid email address.`);
+        }
+
+        if (!emailRegex.test(recipientEmail[i])) {
+          errors.push(`Row ${i + 1}: Invalid recipient email.`);
+        }
+
+        if (!emailPassword[i]) {
+          errors.push(`Row ${i + 1}: Password is required.`);
+        }
+
+        if (emailPassword[i] !== emailPasswordConfirm[i]) {
+          errors.push(`Row ${i + 1}: Passwords do not match.`);
+        }
+
+        if (!ipOrHostnameRegex.test(smtpHost[i])) {
+          errors.push(`Row ${i + 1}: Invalid SMTP host.`);
+        }
+
+        const port = Number(smtpPort[i]);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          errors.push(`Row ${i + 1}: Invalid SMTP port.`);
+        }
+
+      } else if (type === 'syslog') {
+        if (!ipOrHostnameRegex.test(syslogHost[i])) {
+          errors.push(`Row ${i + 1}: Invalid Syslog host.`);
+        }
+
+        const port = Number(syslogPort[i]);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          errors.push(`Row ${i + 1}: Invalid Syslog port.`);
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ success: false, errors });
+    }
+  }
+
+  let client;
+
+  try {
+    ({ client, db } = await connectToDB());
+    const alert_destinations = db.collection('alert-destinations');
+    const alert_rules = db.collection('alert-rules');
+
+
+    const existing = await alert_destinations.find({ type: { $ne: 'local_logs' } }).toArray();
+    const existingIds = existing.map(dest => String(dest._id));
+
+    const updatedIds = [];
+
+    if (Array.isArray(destinationType)) {
+      for (let i = 0; i < destinationType.length; i++) {
+        const type = destinationType[i];
+        const id = destinationId[i];
+        const base = {
+          name: destinationName[i],
+          type
+        };
+
+        if (type === 'email') {
+          Object.assign(base, {
+            email: email[i],
+            emailPassword: emailPassword[i],
+            smtpHost: smtpHost[i],
+            smtpPort: smtpPort[i],
+            recipientEmail: recipientEmail[i]
+          });
+        } else if (type === 'syslog') {
+          Object.assign(base, {
+            syslogHost: syslogHost[i],
+            syslogPort: syslogPort[i]
+          });
+        }
+
+        if (id && ObjectId.isValid(id)) {
+          await alert_destinations.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: base }
+          );
+          updatedIds.push(id);
+        } else {
+          await alert_destinations.insertOne(base);
+        }
+      }
+    }
+
+    // Remove any documents not in the submitted form (except local_logs)
+    const toDelete = existingIds.filter(id => !updatedIds.includes(id));
+
+    if (toDelete.length > 0) {
+      const toDeleteObjectIds = toDelete.map(id => new ObjectId(id));
+
+      // Check if any of the destinations are used in alert_rules
+      const rulesUsingDestinations = await alert_rules.find({
+        destinations: { $in: toDeleteObjectIds }
+      }).toArray();
+
+      if (rulesUsingDestinations.length > 0) {
+        const blockingRules = rulesUsingDestinations.map(rule => rule.name || rule._id.toString());
+        console.error(`Cannot delete destinations in use by alert rules: ${blockingRules.join(', ')}`);
+        return res.status(409).send(`Cannot delete destinations in use by alert rules: ${blockingRules.join(', ')}`);
+      }
+
+      // Safe to delete
+      await alert_destinations.deleteMany({
+        _id: { $in: toDeleteObjectIds }
+      });
+    }
+
+
+
+    res.redirect('/alerts/destinations');
+
+  } catch (err) {
+    console.error('Error saving alert destinations:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
+// Alert Rules
+app.get('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  
+  let client;
+  try {
+    
+    //Get all the yara, regex and topic rules + available destinations.
+
+    
+    ({ client, db } = await connectToDB());
+
+    const rules = await db.collection('alert-rules').aggregate([
+      // Lookup regex rule details
+      {
+        $lookup: {
+          from: 'regex_rules',
+          localField: 'regex.rules',
+          foreignField: '_id',
+          as: 'regexResolved'
+        }
+      },
+      // Lookup yara rule details
+      {
+        $lookup: {
+          from: 'yara_rules',
+          localField: 'yara.rules',
+          foreignField: '_id',
+          as: 'yaraResolved'
+        }
+      },
+      // Lookup topic rule details
+      {
+        $lookup: {
+          from: 'topic_rules',
+          localField: 'topic.rules',
+          foreignField: '_id',
+          as: 'topicResolved'
+        }
+      },
+      // Resolve destinations by matching name
+      {
+        $lookup: {
+          from: 'alert-destinations',
+          localField: 'destinations',
+          foreignField: '_id',
+          as: 'destinationResolved'
+        }
+      },
+      
+      // Optional: remap result shape
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          regex: {
+            count: '$regex.count',
+            rules: '$regexResolved'
+          },
+          yara: {
+            count: '$yara.count',
+            rules: '$yaraResolved'
+          },
+          topic: {
+            count: '$topic.count',
+            rules: '$topicResolved'
+          },
+          destinations: '$destinationResolved'
+        }
+      }
+    ]).toArray();
+
+    
+    const yara_rules = await db.collection('yara_rules').find().toArray();
+    const regex_rules = await db.collection('regex_rules').find().toArray();
+    const topic_rules = await db.collection('topic_rules').find().toArray();
+    const alert_dests = await db.collection('alert-destinations').find().toArray();
+
+    const options = {
+      regexRules: regex_rules,
+      yaraRules: yara_rules,
+      topicRules: topic_rules,
+      destinations: alert_dests
+    };
+
+    res.render('alert-rules', { title: 'Alert Rules', rules, options });
+    
+  } catch (err) {
+    console.error('Error rendering alert rules:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+
+});
+
+
+app.post('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req, res) => {
+
+  let client;
+  try {
+    const {
+      name,
+      regexRules,
+      regexCount,
+      yaraRules,
+      yaraCount,
+      topicRules,
+      topicCount,
+      destinations
+    } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required and cannot be empty.' });
+    }
+
+    const parseField = val => Array.isArray(val) ? val : val ? [val] : [];
+
+    const parsedDestinations = parseField(destinations);
+
+    if (parsedDestinations.length === 0) {
+      return res.status(400).send('At least one destination must be selected.');
+    }
+
+    const doc = {
+      name,
+      regex: {
+        rules: parseField(regexRules).map(id => new ObjectId(id)),
+        count: parseInt(regexCount) || 1
+      },
+      yara: {
+        rules: parseField(yaraRules).map(id => new ObjectId(id)),
+        count: parseInt(yaraCount) || 1
+      },
+      topic: {
+        rules: parseField(topicRules).map(id => new ObjectId(id)),
+        count: parseInt(topicCount) || 1
+      },
+      destinations: parsedDestinations.map(id => new ObjectId(id))
+    };
+
+    ({ client, db } = await connectToDB());
+
+    await db.collection('alert-rules').insertOne(doc);
+
+    res.redirect('/alerts/rules/');
+
+  } catch (err) {
+    console.error('Error inserting alert rule:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+
+});
+
+app.get('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  let client;
+  try {
+    const { id } = req.params;
+    ({ client, db } = await connectToDB());
+
+    const rule = await db.collection('alert-rules').findOne({ _id: new ObjectId(id) });
+    if (!rule) return res.status(404).send('Rule not found');
+
+    const [regexRules, yaraRules, topicRules, destinations] = await Promise.all([
+      db.collection('regex_rules').find().toArray(),
+      db.collection('yara_rules').find().toArray(),
+      db.collection('topic_rules').find().toArray(),
+      db.collection('alert-destinations').find().toArray()
+    ]);
+
+    res.render('alert-rules-edit', {
+      title: 'Edit Rule',
+      rule,
+      options: { regexRules, yaraRules, topicRules, destinations }
+    });
+
+  } catch (err) {
+    console.error('Error rendering edit page:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  let client;
+  try {
+    const { id } = req.params;
+    const {
+      name, regexRules, regexCount, yaraRules, yaraCount,
+      topicRules, topicCount, destinations
+    } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required and cannot be empty.' });
+    }
+
+
+    const parseField = val => Array.isArray(val) ? val : val ? [val] : [];
+
+    const parsedDestinations = parseField(destinations);
+
+    if (parsedDestinations.length === 0) {
+      return res.status(400).send('At least one destination must be selected.');
+    }
+
+    const updateDoc = {
+      name,
+      regex: {
+        rules: parseField(regexRules).map(r => new ObjectId(r)),
+        count: parseInt(regexCount) || 1
+      },
+      yara: {
+        rules: parseField(yaraRules).map(r => new ObjectId(r)),
+        count: parseInt(yaraCount) || 1
+      },
+      topic: {
+        rules: parseField(topicRules).map(r => new ObjectId(r)),
+        count: parseInt(topicCount) || 1
+      },
+      destinations: parseField(destinations).map(r => new ObjectId(r))
+    };
+
+    ({ client, db } = await connectToDB());
+    await db.collection('alert-rules').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateDoc }
+    );
+
+    res.redirect('/alerts/rules');
+
+  } catch (err) {
+    console.error('Error updating rule:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
+app.post('/alerts/rules/:id/delete', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  let client;
+  try {
+    const { id } = req.params;
+    ({ client, db } = await connectToDB());
+
+    await db.collection('alert-rules').deleteOne({ _id: new ObjectId(id) });
+
+    res.redirect('/alerts/rules');
+
+  } catch (err) {
+    console.error('Error deleting rule:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
+
+// Alert Logs
+app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+
+    const totalLogs = await db.collection('alert-logs').countDocuments();
+    const logs = await db.collection('alert-logs').aggregate([
+      { $sort: { timestamp: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $project: {
+          timestamp: 1,
+          leak: 1,
+          alert_rule: 1
+        }
+      }
+    ]).toArray();
+
+    const formattedLogs = logs.map(log => {
+      const ts = new Date(log.timestamp.$date || log.timestamp).toISOString().replace('T', ' ').substring(0, 16);
+      const alert_rule = log.alert_rule || 'Unknown Rule';
+
+      const yaraNames = Array.isArray(log.leak?.yara) ? log.leak.yara.map(y => y.name).join(', ') : '';
+      const regexEntries = log.leak?.regex ? Object.entries(log.leak.regex).map(([k, v]) => `${k}: ${v}`).join('; ') : '';
+      const topicNames = Array.isArray(log.leak?.topic) ? log.leak.topic.map(t => t.name).join(', ') : '';
+
+      return { time: ts, alert_rule, yara: yaraNames, regex: regexEntries, topic: topicNames };
+    });
+
+    const localDest = await db.collection('alert-destinations').findOne({ type: 'local_logs' });
+    const rotationLimit = localDest?.rotationLimit || 500;
+
+    res.render('alert-logs', {
+      title: 'Alert Logs',
+      logs: formattedLogs,
+      pagination: {
+        current: page,
+        totalPages: Math.ceil(totalLogs / limit),
+        limit
+      }, rotationLimit
+    });
+
+  } catch (err) {
+    console.error('Error rendering alert logs:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+app.post('/alerts/logs/rotation', authMiddleware, requirePermission("alerts"), async (req, res) => {
+  const maxLogs = parseInt(req.body.maxLogs) || 500;
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+
+    // Update the rotation limit
+    await db.collection('alert-destinations').updateOne(
+      { type: 'local_logs' },
+      { $set: { rotationLimit: maxLogs } }
+    );
+
+    res.redirect('/alerts/logs');
+  } catch (err) {
+    console.error('Error updating rotation limit:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
 
 
 app.listen(PORT, () => {
