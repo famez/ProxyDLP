@@ -541,28 +541,86 @@ def send_alert_to_email(alert, destination, leak):
 
     # Format message
     subject = f"[Alert] {alert['name']}"
-    body = json.dumps({
-        "alert_rule": alert["name"],
-        "leak": leak
-    }, indent=2)
 
-    msg = MIMEText(body)
+    # Generate HTML body similar to the EJS layout
+    body = f"""
+    <html>
+    <head>
+      <style>
+        body {{
+          font-family: sans-serif;
+          background-color: #fdfdfd;
+          padding: 20px;
+        }}
+        .container {{
+          max-width: 800px;
+          margin: 0 auto;
+          background: #fff;
+          padding: 20px;
+          border-radius: 8px;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }}
+        h2 {{
+          color: #b83280;
+        }}
+        table {{
+          width: 100%;
+          border-collapse: collapse;
+        }}
+        th, td {{
+          border: 1px solid #e2e8f0;
+          padding: 8px;
+          text-align: left;
+        }}
+        thead {{
+          background-color: #fed7e2;
+          color: #9d174d;
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <p>ProxyDLP alert</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Alert Rule</th>
+              <th>Matched Yara</th>
+              <th>Regex Matches</th>
+              <th>Matched Topics</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{leak.get('time', 'N/A')}</td>
+              <td>{alert.get('name')}</td>
+              <td>{leak.get('yara', 'N/A')}</td>
+              <td>{leak.get('regex', 'N/A')}</td>
+              <td>{leak.get('topic', 'N/A')}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </body>
+    </html>
+    """
+
+    # Prepare HTML email
+    msg = MIMEText(body, 'html')
     msg["Subject"] = subject
     msg["From"] = smtp_user
     msg["To"] = recipient
 
     # Send email
-    
     with smtplib.SMTP(smtp_host, smtp_port) as server:
         server.starttls()
-        server.set_debuglevel(1)  # Print interaction with server
+        server.set_debuglevel(1)
         try:
             server.login(smtp_user, smtp_pass)
         except smtplib.SMTPException:
             pass  # Allow no-auth servers like MailHog
-
         server.sendmail(smtp_user, [recipient], msg.as_string())
-
 
 
 
