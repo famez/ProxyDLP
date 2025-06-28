@@ -20,6 +20,7 @@
             <% if (dest.type !== "local_logs") { %>
               <tr>
                 <td class="p-2">
+                  <input type="hidden" name="destinationId[]" value="<%= dest._id || '' %>">
                   <input name="destinationName[]" type="text" value="<%= dest.name %>"
                         class="w-full border-gray-300 rounded-md p-2"/>
                 </td>

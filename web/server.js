@@ -1119,6 +1119,7 @@ app.get('/alerts/destinations', authMiddleware, requirePermission("alerts"), asy
 
 app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), async (req, res) => {
   const {
+    destinationId = [],
     destinationName,
     destinationType,
     email,
@@ -1130,28 +1131,23 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
     syslogPort,
     recipientEmail,
   } = req.body;
-
-
-
-
+  
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const ipOrHostnameRegex = /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$/
-;
+  const ipOrHostnameRegex = /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$/;
 
   const errors = [];
 
+  // Validation
   if (Array.isArray(destinationType)) {
-
     for (let i = 0; i < destinationType.length; i++) {
-
       if (!destinationName[i]) {
         errors.push(`Row ${i + 1}: Name is required.`);
       }
 
       const type = destinationType[i];
 
-      if(type !== "local_logs" && destinationName[i] === "Local logs") {
-        errors.push(`Row ${i + 1}: Invalid name Local logs. This name is reserved`);
+      if (type !== "local_logs" && destinationName[i] === "Local logs") {
+        errors.push(`Row ${i + 1}: Invalid name 'Local logs'. This name is reserved.`);
       }
 
       if (type === 'email') {
@@ -1160,7 +1156,7 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
         }
 
         if (!emailRegex.test(recipientEmail[i])) {
-          errors.push(`Row ${i + 1}: Invalid recipientEmail address.`);
+          errors.push(`Row ${i + 1}: Invalid recipient email.`);
         }
 
         if (!emailPassword[i]) {
@@ -1193,66 +1189,75 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
     }
 
     if (errors.length > 0) {
-      // You can render the form again with the errors, or send JSON:
       return res.status(400).json({ success: false, errors });
     }
-
   }
 
-  // If all is good:
-
   let client;
+
   try {
     ({ client, db } = await connectToDB());
     const alert_destinations = db.collection('alert-destinations');
 
-    await alert_destinations.deleteMany({});
+    const existing = await alert_destinations.find({ type: { $ne: 'local_logs' } }).toArray();
+    const existingIds = existing.map(dest => String(dest._id));
+
+    const submittedIds = destinationId.map(id => id.trim()).filter(Boolean);
+    const updatedIds = [];
 
     if (Array.isArray(destinationType)) {
-
       for (let i = 0; i < destinationType.length; i++) {
-        destination = {
+        const type = destinationType[i];
+        const id = destinationId[i];
+        const base = {
           name: destinationName[i],
-          type: destinationType[i],
+          type
+        };
+
+        if (type === 'email') {
+          Object.assign(base, {
+            email: email[i],
+            emailPassword: emailPassword[i],
+            smtpHost: smtpHost[i],
+            smtpPort: smtpPort[i],
+            recipientEmail: recipientEmail[i]
+          });
+        } else if (type === 'syslog') {
+          Object.assign(base, {
+            syslogHost: syslogHost[i],
+            syslogPort: syslogPort[i]
+          });
         }
 
-        if (destinationType[i] === "email") {
-
-          destination.email = email[i];
-          destination.emailPassword = emailPassword[i];
-          destination.smtpHost = smtpHost[i];
-          destination.smtpPort = smtpPort[i];
-          destination.recipientEmail = recipientEmail[i];
-
-        } else if (destinationType[i] === "syslog") {
-          destination.syslogHost = syslogHost[i];
-          destination.syslogPort = syslogPort[i];
+        if (id && ObjectId.isValid(id)) {
+          await alert_destinations.updateOne(
+            { _id: new ObjectId(id) },
+            { $set: base }
+          );
+          updatedIds.push(id);
+        } else {
+          await alert_destinations.insertOne(base);
         }
-
-        await alert_destinations.insertOne(destination);
-
       }
+    }
 
-   }
+    // Remove any documents not in the submitted form (except local_logs)
+    const toDelete = existingIds.filter(id => !updatedIds.includes(id));
+    if (toDelete.length > 0) {
+      await alert_destinations.deleteMany({
+        _id: { $in: toDelete.map(id => new ObjectId(id)) }
+      });
+    }
 
-    await alert_destinations.insertOne(
-      {
-        name: "Local logs",
-        type: "local_logs",
-        enabled: true
-      }
-    );
-    
+
+    res.redirect('/alerts/destinations');
 
   } catch (err) {
-    console.error('Setting alerts destinations:', err);
-    return res.status(500).send('Internal Server Error');
+    console.error('Error saving alert destinations:', err);
+    res.status(500).send('Internal Server Error');
   } finally {
     if (client) await client.close();
   }
-
-  res.redirect('/alerts/destinations');
-
 });
 
 
