@@ -1570,26 +1570,17 @@ app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req,
       { $skip: skip },
       { $limit: limit },
       {
-        $lookup: {
-          from: 'alert-rules',
-          localField: 'alert_rule',
-          foreignField: '_id',
-          as: 'alert_rule_doc'
-        }
-      },
-      { $unwind: { path: '$alert_rule_doc', preserveNullAndEmptyArrays: true } },
-      {
         $project: {
           timestamp: 1,
           leak: 1,
-          alert_rule_name: '$alert_rule_doc.name'
+          alert_rule: 1
         }
       }
     ]).toArray();
 
     const formattedLogs = logs.map(log => {
       const ts = new Date(log.timestamp.$date || log.timestamp).toISOString().replace('T', ' ').substring(0, 16);
-      const alert_rule = log.alert_rule_name || 'Unknown Rule';
+      const alert_rule = log.alert_rule || 'Unknown Rule';
 
       const yaraNames = Array.isArray(log.leak?.yara) ? log.leak.yara.map(y => y.name).join(', ') : '';
       const regexEntries = log.leak?.regex ? Object.entries(log.leak.regex).map(([k, v]) => `${k}: ${v}`).join('; ') : '';

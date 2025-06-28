@@ -493,7 +493,7 @@ def send_alert_to_local_logs(alert, leak, rotation_limit):
     alert_locallogs_collection.insert_one(
         {
             "timestamp": datetime.now(timezone.utc),
-            "alert_rule": ObjectId(alert['_id']),
+            "alert_rule": alert['name'],
             "leak": leak
         }
     )
