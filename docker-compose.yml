@@ -25,6 +25,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     volumes:
       - uploaded-files:/uploads/
+      - sites:/app/sites/
     networks:
       - internal-net
       - web-net
@@ -110,6 +111,7 @@ services:
       start_period: 5s
     volumes:
       - uploaded-files:/uploads/
+      - sites:/sites/
     networks:
       - internal-net
       - web-net
@@ -118,6 +120,7 @@ volumes:
   mongodb-data:
   uploaded-files:
   faiss-data:
+  sites:
 
 networks:
   internal-net:

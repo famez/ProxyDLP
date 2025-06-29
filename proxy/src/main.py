@@ -9,9 +9,6 @@ import monitor_pb2
 import monitor_pb2_grpc
 
 from proxy import Proxy
-from sites.chatgpt import ChatGPT
-from sites.github_copilot import Github_Copilot
-from sites.microsoft_copilot import Microsoft_Copilot
 
 
 from mitm_term import launch_ws_term
@@ -77,11 +74,6 @@ def attached_file_callback(site, email, filename, filepath, content_type):
 
 
 proxy = Proxy(account_login_callback, account_check_callback, conversation_callback, attached_file_callback)
-
-
-proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"])
-proxy.register_site(Microsoft_Copilot, ["substrate.office.com/m365Copilot/Chathub", "sharepoint.com/personal", "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:"])
-proxy.register_site(Github_Copilot, ["githubcopilot.com", "api.github.com/user"])
 
 #Add sites to the database for being checked later on the web interface.
 for site in proxy.get_sites():
