@@ -992,10 +992,11 @@ app.get('/sites', authMiddleware, requirePermission("sites"), async (req, res) =
   try {
     ({ client, db } = await connectToDB());
     const site_docs = await db.collection('sites').find().toArray();
+    const new_site_urls = await db.collection('site-urls').find().toArray();
 
     console.log('Loaded sites:', site_docs);
 
-    res.render('sites', { title: "Sites", site_docs});
+    res.render('sites', { title: "Sites", site_docs, new_site_urls });
 
   } catch (err) {
     console.error('Error showing sites:', err);
@@ -1631,6 +1632,62 @@ app.post('/alerts/logs/rotation', authMiddleware, requirePermission("alerts"), a
     if (client) await client.close();
   }
 });
+
+
+// Create new URL
+app.post('/site-urls', authMiddleware, requirePermission("sites"), async (req, res) => {
+  
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+    const { url } = req.body;
+    await db.collection('site-urls').insertOne({ url });
+    res.redirect('back');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error creating URL');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+// Update URL
+app.put('/site-urls/:id', authMiddleware, requirePermission("sites"), async (req, res) => {
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+    const id = req.params.id;
+    const { url } = req.body;
+    await db.collection('site-urls').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { url } }
+    );
+    res.sendStatus(200);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error updating URL');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+// Delete URL
+app.delete('/site-urls/:id', authMiddleware, requirePermission("sites"), async (req, res) => {
+  let client;
+  
+  try {
+    ({ client, db } = await connectToDB());
+    const id = req.params.id;
+    await db.collection('site-urls').deleteOne({ _id: new ObjectId(id) });
+    res.sendStatus(200);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error deleting URL');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
 
 
 

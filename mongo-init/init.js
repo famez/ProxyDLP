@@ -22,6 +22,8 @@ db.createCollection('sites');
 db.createCollection('alert-rules');
 db.createCollection('alert-destinations');
 db.createCollection('alert-logs');
+db.createCollection('site-urls');
+
 
 
 db.topic_rules.createIndex({ "name": 1 }, { unique: true });
@@ -29,6 +31,8 @@ db.yara_rules.createIndex({ "name": 1 }, { unique: true });
 db.sites.createIndex({ "name": 1 }, { unique: true });
 db["alert-destinations"].createIndex({ "name": 1 }, { unique: true });
 db["alert-rules"].createIndex({ "name": 1 }, { unique: true });
+db["site-urls"].createIndex({ "url": 1 }, { unique: true });
+
 
 db["alert-destinations"].insertOne({
       name: "Local logs",
