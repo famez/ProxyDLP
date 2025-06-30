@@ -11,6 +11,10 @@ const requirePermission = require('./middleware/requirePermission');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const multer = require('multer');
+const axios = require('axios');
+const fs = require('fs');
+
+
 
 
 const app = express();
@@ -1642,7 +1646,39 @@ app.post('/site-urls', authMiddleware, requirePermission("sites"), async (req, r
     ({ client, db } = await connectToDB());
     const { url } = req.body;
     await db.collection('site-urls').insertOne({ url });
-    res.redirect('back');
+
+    //Connect to the site and download manifest.json.
+    const manifest_url = url + "/manifest.json"
+
+    axios.get(manifest_url)
+    .then(response => {
+      console.log('Status:', response.status);
+      console.log('JSON Content:', response.data.dest_folder);
+
+      if ('dest_folder' in response.data) {
+        console.log('Creating folder ' + response.data.dest_folder + ' in /sites/');
+
+        fs.mkdir('/sites/' + response.data.dest_folder, (err) => {
+          if (err) {
+            if (err.code === 'EEXIST') {
+              console.log('Folder already exists');
+            } else {
+              console.error('Error creating folder:', err);
+            }
+          } else {
+            console.log('Folder created successfully!');
+          }
+        });
+
+      }
+      
+    })
+    .catch(error => {
+      console.error('Request error:', error.message);
+    });
+
+    res.redirect("/sites");
+
   } catch (err) {
     console.error(err);
     res.status(500).send('Error creating URL');

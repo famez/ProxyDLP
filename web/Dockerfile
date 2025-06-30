@@ -13,6 +13,8 @@ COPY --chown=appuser:appgroup web/package*.json ./
 
 # Change ownership of workdir to non-root user before npm install
 RUN chown -R appuser:appgroup /usr/src/app
+RUN mkdir /sites/
+RUN chown -R appuser:appgroup /sites/
 
 USER appuser
 
