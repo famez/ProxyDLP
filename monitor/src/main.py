@@ -664,10 +664,11 @@ def remove_topic_rule(topic_rule_id, delete_only_indexes=False):
 
     try:
 
-        ids = np.array(topic_rule['faiss_indexes'], dtype='int64')
+        ids = np.ascontiguousarray(np.array(topic_rule['faiss_indexes'], dtype=np.int64))
         selector = faiss.IDSelectorBatch(ids)
         with faiss_rw_lock.gen_wlock():
-            faiss_index.remove_ids(selector)
+            n_removed = faiss_index.remove_ids(selector)
+            print(f"Removed {n_removed} vectors from FAISS index")
             # Save the FAISS index to disk
             faiss.write_index(faiss_index, INDEX_PATH)
 
