@@ -662,20 +662,26 @@ def remove_topic_rule(topic_rule_id, delete_only_indexes=False):
 
     topic_rule = topics_collection.find_one({'_id': ObjectId(topic_rule_id)})
 
-    ids = np.array(topic_rule['faiss_indexes'], dtype='int64')
-    selector = faiss.IDSelectorBatch(ids)
-    with faiss_rw_lock.gen_wlock():
-        faiss_index.remove_ids(selector)
-        # Save the FAISS index to disk
-        faiss.write_index(faiss_index, INDEX_PATH)
+    try:
 
-    if delete_only_indexes:
-        topics_collection.update_one(
-            {'_id': ObjectId(topic_rule_id)},
-            {'$unset': {'faiss_indexes': ""}}
-        )
-    else:
-        topics_collection.delete_one({'_id': ObjectId(topic_rule_id)})
+        ids = np.array(topic_rule['faiss_indexes'], dtype='int64')
+        selector = faiss.IDSelectorBatch(ids)
+        with faiss_rw_lock.gen_wlock():
+            faiss_index.remove_ids(selector)
+            # Save the FAISS index to disk
+            faiss.write_index(faiss_index, INDEX_PATH)
+
+        if delete_only_indexes:
+            topics_collection.update_one(
+                {'_id': ObjectId(topic_rule_id)},
+                {'$unset': {'faiss_indexes': ""}}
+            )
+        else:
+            print(f"Deleting document")
+            topics_collection.delete_one({'_id': ObjectId(topic_rule_id)})
+
+    except Exception as e:
+        print(f"Exception: {e}")
 
     
     
@@ -689,7 +695,7 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
     
     def TopicRuleAdded(self, request, context):
         print(f"Received Topic Rule ID: {request.id}")
-        background_executor.submit(on_topic_rule_added, request.id)
+        on_topic_rule_added(request.id)
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
     
     def TopicRuleRemoved(self, request, context):
@@ -699,7 +705,7 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
     
     def TopicRuleEdited(self, request, context):
         remove_topic_rule(request.id, delete_only_indexes=True)
-        background_executor.submit(on_topic_rule_added, request.id)
+        on_topic_rule_added(request.id)
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
     
     #We have this callback to check if the Yara rule is valid before saving it to the database
