@@ -47,6 +47,11 @@
     <div class="mb-4 text-sm text-gray-600">
       <span class="font-medium">Site:</span> <%= event.site %>
     </div>
+    <% if (event.source_ip) { %>
+      <div class="mb-4 text-sm text-gray-600">
+        <span class="font-medium">Source IP:</span> <%= event.source_ip %>
+      </div>
+    <% } %>
 
     <div class="mb-4 text-sm text-gray-600">
       <span class="font-medium">Rational:</span> <%= event.rational %>

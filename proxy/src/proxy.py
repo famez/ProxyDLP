@@ -51,6 +51,7 @@ class Site:
     def __init__(self, name, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback):
         self.name = name
         self.urls = urls
+        self.source_ip = ""     #To keep track of the source IP address.
         self.on_account_login_callback = account_login_callback
         self.on_account_check_callback = account_check_callback
         self.on_conversation_callback = conversation_callback
@@ -63,13 +64,16 @@ class Site:
         return self.name
 
     def handle_request(self, flow):
+        self.source_ip = flow.client_conn.address[0]
         self.on_request_handle(flow)
 
     def handle_response(self, flow):
+        self.source_ip = flow.client_conn.address[0]
         self.on_response_handle(flow)
         
     def handle_ws_from_client_to_server(self, flow, message):
         # This method is called when a WebSocket message is sent from the client to the server
+        self.source_ip = flow.client_conn.address[0]
         self.on_ws_from_client_to_server(flow, message)
 
 
@@ -84,16 +88,16 @@ class Site:
         pass        #To be implement by child
 
     def account_login_callback(self, email):
-        return self.on_account_login_callback(self, email)
+        return self.on_account_login_callback(self, email, self.source_ip)
 
     def account_check_callback(self, email):
-        return self.on_account_check_callback(self, email)
+        return self.on_account_check_callback(self, email, self.source_ip)
 
     def conversation_callback(self, email, conversation_text):
-        return self.on_conversation_callback(self, email, conversation_text)
+        return self.on_conversation_callback(self, email, conversation_text, self.source_ip)
 
     def attached_file_callback(self, email, file_name, filepath, content_type):
-        return self.on_attached_file_callback(self, email, file_name, filepath, content_type)
+        return self.on_attached_file_callback(self, email, file_name, filepath, content_type, self.source_ip)
 
 
 #Helper functions

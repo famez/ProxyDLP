@@ -147,6 +147,9 @@
               <% if (event.user) { %>
                 <span class="text-sm text-gray-500 block">Username: <span class="font-semibold text-gray-700"><%= event.user %></span></span>
               <% } %>
+              <% if (event.source_ip) { %>
+                <span class="text-sm text-gray-500 block">IP Address: <span class="font-semibold text-gray-700"><%= event.source_ip %></span></span>
+              <% } %>
             </div>
             <p class="text-gray-600">
               <% if (event.content && permissions.includes('conversations')) { %>

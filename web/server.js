@@ -954,7 +954,8 @@ app.post('/playground', authMiddleware, requirePermission("playground"), upload.
       "user": username, 
       "rational": "Conversation", 
       "content": textContent, 
-      "site": "Playground"
+      "site": "Playground",
+      "source_ip": req.ip,
     });
 
     gRPC_client.EventAdded({ id: result.insertedId }, () => {});

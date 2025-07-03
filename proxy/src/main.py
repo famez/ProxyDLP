@@ -25,7 +25,7 @@ domains_collection = db_client["ProxyDLP"]["domains"]
 sites_collection = db_client["ProxyDLP"]["sites"]
 
 
-def account_login_callback(site, email):
+def account_login_callback(site, email, source_ip):
 
     for domain in domains_collection.find():
 
@@ -34,7 +34,7 @@ def account_login_callback(site, email):
         if re.match(email_regex, email):
             ctx.log.info(f"Corporative user {email} logged in")
             #Register event into the database.
-            event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Logged in", "site": site.get_name()}
+            event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Logged in", "site": site.get_name(), "source_ip": source_ip}
             events_collection.insert_one(event)
             return True
 
@@ -43,7 +43,7 @@ def account_login_callback(site, email):
 
 
 
-def account_check_callback(site, email):
+def account_check_callback(site, email, source_ip):
     for domain in domains_collection.find():
         email_regex = r'^[a-zA-Z0-9._%+-]+@' + domain['content'] + '$'
         if re.match(email_regex, email):
@@ -51,19 +51,19 @@ def account_check_callback(site, email):
     return False
 
 
-def conversation_callback(site, email, content):
+def conversation_callback(site, email, content, source_ip):
 
-    event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": content, "site": site.get_name()}
+    event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": content, "site": site.get_name(), "source_ip": source_ip}
     result = events_collection.insert_one(event)
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
     ctx.log.info("Sent event to monitor...")
     response = stub.EventAdded(mon_message)
     ctx.log.info(f"Response: {response}")
 
-def attached_file_callback(site, email, filename, filepath, content_type):
+def attached_file_callback(site, email, filename, filepath, content_type, source_ip):
 
     event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : filename, "filepath" : filepath, 
-                        "content_type": content_type, "site": site.get_name()}
+                        "content_type": content_type, "site": site.get_name(), "source_ip": source_ip}
                 
     result = events_collection.insert_one(event)
     
