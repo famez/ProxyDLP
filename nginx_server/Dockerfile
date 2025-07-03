@@ -12,6 +12,7 @@ RUN mkdir -p /var/www/images/
 COPY proxydlp-dark.png /var/www/images/
 COPY proxydlp-light.png /var/www/images/
 COPY proxydlp.png /var/www/images/
+COPY favicon.ico /var/www/images/
 
 
 # Copy your Nginx config
