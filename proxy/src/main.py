@@ -46,7 +46,7 @@ def account_login_callback(site, email, source_ip):
 
 def account_check_callback(site, email, source_ip):
     for domain in domains_collection.find():
-        email_regex = r'^[a-zA-Z0-9._%+-]+@' + domain['content'] + '$'
+        email_regex = r'^[a-zA-Z0-9._%+\-*]+@' + domain['content'] + r'$'
         if re.match(email_regex, email):
             return True
     return False
