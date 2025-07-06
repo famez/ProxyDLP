@@ -46,6 +46,9 @@ COPY --chown=appuser:appgroup proxy/src/ .
 # Ensure /app directory and all contents are owned by appuser
 RUN chown -R appuser:appgroup /app
 
+RUN mkdir /uploads/
+RUN chown -R appuser:appgroup /uploads/
+
 # Switch to appuser and set workdir
 USER appuser
 WORKDIR /app
