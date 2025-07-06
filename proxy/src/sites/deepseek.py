@@ -1,45 +1,10 @@
-from proxy import Site
+from proxy import Site, parse_multipart
 from mitmproxy import ctx
 
 import json
-import re
 
 import os
 import uuid
-
-def parse_multipart(content_type, body_bytes):
-    # Extract boundary from Content-Type
-    match = re.search(r'boundary=(.*)', content_type)
-    if not match:
-        return []
-
-    boundary = match.group(1)
-    if boundary.startswith('"') and boundary.endswith('"'):
-        boundary = boundary[1:-1]
-
-    boundary = boundary.encode()
-    delimiter = b'--' + boundary
-    parts = body_bytes.split(delimiter)[1:-1]  # Skip preamble and epilogue
-    files = []
-
-    for part in parts:
-        part = part.strip(b'\r\n')
-        headers_body = part.split(b'\r\n\r\n', 1)
-        if len(headers_body) != 2:
-            continue
-
-        headers_raw, body = headers_body
-        headers_text = headers_raw.decode(errors='ignore')
-
-        if 'filename="' in headers_text:
-            filename_match = re.search(r'filename="([^"]+)"', headers_text)
-            if not filename_match:
-                continue
-            filename = filename_match.group(1)
-            files.append((filename, body.strip()))
-
-    return files
-
 
 
 class DeepSeek(Site):
@@ -82,15 +47,18 @@ class DeepSeek(Site):
 
                 uploaded_files = parse_multipart(content_type, body)
 
-                for filename, content in uploaded_files:
+                for file in uploaded_files:
                     unique_id = uuid.uuid4().hex
                     safe_filename = f"{unique_id}"
                     filepath = os.path.join("/uploads", safe_filename)
 
                     ctx.log.info(f"Saving uploaded file to {filepath}")
                     with open(filepath, "wb") as f:
-                        f.write(content)
+                        f.write(file['content'])
                     ctx.log.info(f"Saved file: {filepath}")
+
+                    if auth_header in self.users:
+                        self.attached_file_callback(self.users[auth_header], file['filename'], filepath, file['content_type'])
 
 
     def on_response_handle(self, flow):

@@ -1,6 +1,7 @@
 import json
 import base64
 from mitmproxy import ctx
+import re
 
 class Proxy:
     def __init__(self, account_login_callback, account_check_callback, conversation_callback, attached_file_callback):
@@ -132,3 +133,45 @@ def extract_substring_between(s, start, end):
         return res  # Output: world
     
     return ""
+
+
+def parse_multipart(content_type_header, body_bytes):
+    # Extract boundary from Content-Type header
+    match = re.search(r'boundary=(.*)', content_type_header)
+    if not match:
+        return []
+
+    boundary = match.group(1)
+    if boundary.startswith('"') and boundary.endswith('"'):
+        boundary = boundary[1:-1]
+    boundary = boundary.encode()
+
+    delimiter = b'--' + boundary
+    parts = body_bytes.split(delimiter)[1:-1]  # Skip preamble and epilogue
+    files = []
+
+    for part in parts:
+        part = part.strip(b'\r\n')
+        headers_body = part.split(b'\r\n\r\n', 1)
+        if len(headers_body) != 2:
+            continue
+
+        headers_raw, body = headers_body
+        headers_text = headers_raw.decode(errors='ignore')
+        body = body.rstrip(b'\r\n')
+
+        # Extract filename and content-type
+        filename_match = re.search(r'filename="([^"]+)"', headers_text)
+        content_type_match = re.search(r'Content-Type:\s*([^\r\n;]+)', headers_text, re.IGNORECASE)
+
+        if filename_match:
+            filename = filename_match.group(1)
+            content_type = content_type_match.group(1) if content_type_match else "application/octet-stream"
+
+            files.append({
+                "filename": filename,
+                "content": body,
+                "content_type": content_type
+            })
+
+    return files
