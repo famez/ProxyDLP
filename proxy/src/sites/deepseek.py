@@ -1,5 +1,6 @@
 from proxy import Site, parse_multipart
 from mitmproxy import ctx
+from mitmproxy.http import Response
 
 import json
 
@@ -20,6 +21,9 @@ class DeepSeek(Site):
             
 
             auth_header = flow.request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+            
+                auth_header = auth_header[len("Bearer "):].strip()
 
             #Decode json from body
             json_body = flow.request.json()
@@ -28,9 +32,19 @@ class DeepSeek(Site):
             if "prompt" in json_body:
 
                 conversation = json_body['prompt']
-                #ctx.log.info(f"Conversation: {conversation}")
 
                 if auth_header in self.users:
+
+
+                    if not self.account_check_callback(self.users[auth_header]):
+                            
+                        # Return JSON response
+                        flow.response = Response.make(
+                            401
+                        )
+
+                        return
+                    
                     #ctx.log.info(f"Registering conversation: {conversation}")
                     self.conversation_callback(self.users[auth_header], conversation)
 
@@ -38,6 +52,9 @@ class DeepSeek(Site):
         elif flow.request.method == "POST" and "deepseek.com/api/v0/file/upload_file" in flow.request.pretty_url:
 
             auth_header = flow.request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+            
+                auth_header = auth_header[len("Bearer "):].strip()
 
             content_type = flow.request.headers.get("content-type", "")
 
@@ -60,12 +77,46 @@ class DeepSeek(Site):
                     if auth_header in self.users:
                         self.attached_file_callback(self.users[auth_header], file['filename'], filepath, file['content_type'])
 
+        elif flow.request.method == "POST" and "chat.deepseek.com/api/v0/users/login" in flow.request.pretty_url:
+
+            content_type = flow.request.headers.get("Content-Type", "")
+
+            if not "application/json" in content_type.lower():
+
+                return
+            
+            try:
+
+                #Decode json from body
+                json_body = flow.request.json()
+
+                if not 'email' in json_body:
+                    return
+                
+                email = json_body['email']
+
+                #Send login event
+                if not self.account_login_callback(email):
+                    # Return JSON response
+                    flow.response = Response.make(
+                        401
+                    )
+
+                    return
+                
+            except Exception as e:
+                ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
+                
+
 
     def on_response_handle(self, flow):
 
         if flow.request.method == "GET" and "deepseek.com/api/v0/users/current" in flow.request.pretty_url:
 
             auth_header = flow.request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+            
+                auth_header = auth_header[len("Bearer "):].strip()
 
             content_type = flow.response.headers.get("Content-Type", "")
 
@@ -78,10 +129,60 @@ class DeepSeek(Site):
 
                     if "data" in content and "biz_data" in content['data'] and "email" in content['data']['biz_data']:
                         email = content['data']['biz_data']['email']
-                        self.users[auth_header] = email
+
+                        #Only associate auth_header token with email if it was not before associated (during login)
+                        if not auth_header in self.users:
+                            self.users[auth_header] = email
                         #ctx.log.info(f"Email added to the users dict")
 
                 except Exception as e:
                     ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
+
+
+        elif flow.request.method == "POST" and "chat.deepseek.com/api/v0/users/login" in flow.request.pretty_url:
+
+            content_type = flow.request.headers.get("Content-Type", "")
+
+
+            if not "application/json" in content_type.lower():
+                return
+            
+            try:
+                #Decode json from body
+                json_body = flow.request.json()
+
+                if not 'email' in json_body:
+                    return
+                
+                email = json_body['email']
+            
+                content_type = flow.response.headers.get("Content-Type", "")
+
+                if not "application/json" in content_type.lower():
+                    return
+                
+                #Decode json from body
+                json_body = flow.response.json()
+
+                if 'data' in json_body and 'biz_data' in json_body['data'] and 'user' in json_body['data']['biz_data'] and 'token' in json_body['data']['biz_data']['user']:
+                    token = json_body['data']['biz_data']['user']['token']
+
+                    #Get full email account when using the local login.
+                    self.users[token] = email
+
+            except Exception as e:
+                    ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
+
+                
+
+
+
+
+
+
+
+
+
+
 
             
