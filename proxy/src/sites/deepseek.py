@@ -1,10 +1,45 @@
-from proxy import Site, EmailNotFoundException, decode_jwt, extract_substring_between
-from mitmproxy import http, ctx
-from mitmproxy.http import Response
+from proxy import Site
+from mitmproxy import ctx
 
 import json
+import re
+
 import os
 import uuid
+
+def parse_multipart(content_type, body_bytes):
+    # Extract boundary from Content-Type
+    match = re.search(r'boundary=(.*)', content_type)
+    if not match:
+        return []
+
+    boundary = match.group(1)
+    if boundary.startswith('"') and boundary.endswith('"'):
+        boundary = boundary[1:-1]
+
+    boundary = boundary.encode()
+    delimiter = b'--' + boundary
+    parts = body_bytes.split(delimiter)[1:-1]  # Skip preamble and epilogue
+    files = []
+
+    for part in parts:
+        part = part.strip(b'\r\n')
+        headers_body = part.split(b'\r\n\r\n', 1)
+        if len(headers_body) != 2:
+            continue
+
+        headers_raw, body = headers_body
+        headers_text = headers_raw.decode(errors='ignore')
+
+        if 'filename="' in headers_text:
+            filename_match = re.search(r'filename="([^"]+)"', headers_text)
+            if not filename_match:
+                continue
+            filename = filename_match.group(1)
+            files.append((filename, body.strip()))
+
+    return files
+
 
 
 class DeepSeek(Site):
@@ -35,6 +70,29 @@ class DeepSeek(Site):
                     self.conversation_callback(self.users[auth_header], conversation)
 
 
+        elif flow.request.method == "POST" and "deepseek.com/api/v0/file/upload_file" in flow.request.pretty_url:
+
+            auth_header = flow.request.headers.get("Authorization")
+
+            content_type = flow.request.headers.get("content-type", "")
+
+            if "multipart/form-data" in content_type:
+
+                body = flow.request.raw_content
+
+                uploaded_files = parse_multipart(content_type, body)
+
+                for filename, content in uploaded_files:
+                    unique_id = uuid.uuid4().hex
+                    safe_filename = f"{unique_id}"
+                    filepath = os.path.join("/uploads", safe_filename)
+
+                    ctx.log.info(f"Saving uploaded file to {filepath}")
+                    with open(filepath, "wb") as f:
+                        f.write(content)
+                    ctx.log.info(f"Saved file: {filepath}")
+
+
     def on_response_handle(self, flow):
 
         if flow.request.method == "GET" and "deepseek.com/api/v0/users/current" in flow.request.pretty_url:
@@ -57,3 +115,5 @@ class DeepSeek(Site):
 
                 except Exception as e:
                     ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
+
+            
