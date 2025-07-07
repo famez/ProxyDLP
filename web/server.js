@@ -465,7 +465,7 @@ app.get('/domains', authMiddleware, requirePermission("domains"), async (req, re
 
     const domains = await db.collection("domains").find().toArray();
 
-    const settings = await db.collection("settings").findOne();
+    const settings = await db.collection("domain-settings").findOne();
     const checkDomain = settings ? settings.check_domain : false;
 
     res.render('domains', { title: "Domains", domains, checkDomain });
