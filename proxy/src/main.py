@@ -13,6 +13,7 @@ from sites.chatgpt import ChatGPT
 from sites.github_copilot import Github_Copilot
 from sites.microsoft_copilot import Microsoft_Copilot
 from sites.deepseek import DeepSeek
+from sites.blackbox import BlackBox
 
 
 from mitm_term import launch_ws_term
@@ -95,6 +96,7 @@ proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"]
 proxy.register_site(Microsoft_Copilot, ["substrate.office.com/m365Copilot/Chathub", "sharepoint.com/personal", "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:"])
 proxy.register_site(Github_Copilot, ["githubcopilot.com", "api.github.com/user"])
 proxy.register_site(DeepSeek, ["deepseek.com"])
+proxy.register_site(BlackBox, ["blackbox.ai"])
 
 #Add sites to the database for being checked later on the web interface.
 for site in proxy.get_sites():
