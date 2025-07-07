@@ -7,9 +7,19 @@
 </head>
 <body class="bg-gray-100 p-8">
   <div class="max-w-7xl mx-auto">
-    <h1 class="text-3xl font-bold text-center mb-8">Allowed domains</h1>
+    <h1 class="text-3xl font-bold text-center mb-4">Allowed domains</h1>
+
+    <!-- Enable Access Restriction Checkbox -->
+    <div class="flex justify-center mb-6">
+      <label class="inline-flex items-center">
+        <input type="checkbox" name="enableRestriction" class="form-checkbox h-5 w-5 text-blue-600">
+        <span class="ml-2 text-sm text-gray-700">Enable access restriction by domain name</span>
+      </label>
+    </div>
+
     <p class="text-center text-gray-600 mb-2">Manage the domains that are allowed to access the AI solutions.</p>
     <p class="text-center text-gray-500 mb-6 text-sm">For example, whitelist email domains like <code>contoso.com, user@contoso.com</code> to control which accounts can log in to the AI solution.</p>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
       
       <!-- Regex Rules Column -->
@@ -18,12 +28,12 @@
         <ul class="space-y-4 mb-6">
           <% domains.forEach(domain => { %>
             <li class="border rounded-lg p-4 bg-gray-50">
-            <div class="text-sm text-gray-700"><code><%= domain.content %></code></div>
-            <div class="flex gap-2 mt-2">
-              <form action="/domains/delete/<%= domain._id %>" method="POST">
-                <button class="text-red-600 hover:underline" onclick="return confirm('Delete this domain?')">Delete</button>
-              </form>
-            </div>
+              <div class="text-sm text-gray-700"><code><%= domain.content %></code></div>
+              <div class="flex gap-2 mt-2">
+                <form action="/domains/delete/<%= domain._id %>" method="POST">
+                  <button class="text-red-600 hover:underline" onclick="return confirm('Delete this domain?')">Delete</button>
+                </form>
+              </div>
             </li>
           <% }) %>
         </ul>
