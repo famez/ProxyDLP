@@ -12,7 +12,9 @@
     <!-- Enable Access Restriction Checkbox -->
     <div class="flex justify-center mb-6">
       <label class="inline-flex items-center">
-        <input type="checkbox" name="enableRestriction" class="form-checkbox h-5 w-5 text-blue-600">
+        <input type="checkbox" name="enableRestriction" class="form-checkbox h-5 w-5 text-blue-600"
+        <%= checkDomain ? 'checked' : '' %>>
+
         <span class="ml-2 text-sm text-gray-700">Enable access restriction by domain name</span>
       </label>
     </div>
@@ -53,4 +55,39 @@
     </div>
   </div>
 </body>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const checkbox = document.querySelector('input[name="enableRestriction"]');
+    checkbox.addEventListener('change', async (event) => {
+      const enabled = event.target.checked;
+
+      try {
+        const response = await fetch('/domains/check-domain', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest' // so server knows it's AJAX
+          },
+          body: JSON.stringify({ check_domain: enabled })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update setting');
+        }
+
+        const result = await response.json();
+        console.log('Updated:', result);
+      } catch (error) {
+        console.error('Error updating check_domain:', error);
+        alert('Failed to update setting. Please try again.');
+        // Roll back checkbox state on error
+        event.target.checked = !enabled;
+      }
+    });
+  });
+</script>
+
 </html>
+
+

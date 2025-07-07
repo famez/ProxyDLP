@@ -24,9 +24,15 @@ db_client = MongoClient(os.getenv("MONGO_URI"))
 events_collection = db_client["ProxyDLP"]["events"]
 domains_collection = db_client["ProxyDLP"]["domains"]
 sites_collection = db_client["ProxyDLP"]["sites"]
+domain_settings_collection = db_client["ProxyDLP"]["domain-settings"]
 
 
 def account_login_callback(site, email, source_ip):
+
+    #Check domain check skip
+    domain_settings = domain_settings_collection.find_one()
+    if not domain_settings or not "check_domain" in domain_settings or not domain_settings['check_domain']:
+        return True        
 
     for domain in domains_collection.find():
 
@@ -43,8 +49,13 @@ def account_login_callback(site, email, source_ip):
     return False
 
 
-
 def account_check_callback(site, email, source_ip):
+
+    #Check domain check skip
+    domain_settings = domain_settings_collection.find_one()
+    if not domain_settings or not "check_domain" in domain_settings or not domain_settings['check_domain']:
+        return True 
+    
     for domain in domains_collection.find():
         email_regex = r'^[a-zA-Z0-9._%+\-*]+@' + domain['content'] + r'$'
         if re.match(email_regex, email):

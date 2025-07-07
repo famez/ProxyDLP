@@ -462,8 +462,13 @@ app.get('/domains', authMiddleware, requirePermission("domains"), async (req, re
   let client;
   try {
     ({ client, db } = await connectToDB());
+
     const domains = await db.collection("domains").find().toArray();
-    res.render('domains', { title: "Domains", domains });
+
+    const settings = await db.collection("settings").findOne();
+    const checkDomain = settings ? settings.check_domain : false;
+
+    res.render('domains', { title: "Domains", domains, checkDomain });
   } catch (err) {
     console.error('Error loading domains:', err);
     res.status(500).send('Internal Server Error');
@@ -471,6 +476,8 @@ app.get('/domains', authMiddleware, requirePermission("domains"), async (req, re
     if (client) await client.close();
   }
 });
+
+
 
 app.post('/domains/delete/:id', authMiddleware, requirePermission("domains"), async (req, res) => {
   const id = req.params.id;
@@ -1632,6 +1639,28 @@ app.post('/alerts/logs/rotation', authMiddleware, requirePermission("alerts"), a
     if (client) await client.close();
   }
 });
+
+app.post('/domains/check-domain', authMiddleware, requirePermission("domains"), async (req, res) => {
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+
+    const { check_domain } = req.body;
+    if (typeof check_domain !== 'boolean') {
+      return res.status(400).json({ error: 'Invalid check_domain value' });
+    }
+
+    await db.collection("domain-settings").updateOne({}, { $set: { check_domain } });
+
+    res.json({ success: true, check_domain });
+  } catch (err) {
+    console.error('Error updating check_domain:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    if (client) await client.close();
+  }
+});
+
 
 
 

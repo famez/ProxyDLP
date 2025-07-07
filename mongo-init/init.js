@@ -22,6 +22,7 @@ db.createCollection('sites');
 db.createCollection('alert-rules');
 db.createCollection('alert-destinations');
 db.createCollection('alert-logs');
+db.createCollection('domain-settings');
 
 
 db.topic_rules.createIndex({ "name": 1 }, { unique: true });
@@ -36,6 +37,12 @@ db["alert-destinations"].insertOne({
       enabled: true,
       rotationLimit: 100
     });
+
+db["domain-settings"].insertOne(
+  {
+    check_domain: false
+  }      
+)
 
 //Insert default admin user
 
