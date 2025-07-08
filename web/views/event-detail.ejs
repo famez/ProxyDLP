@@ -39,11 +39,11 @@
     <div class="mb-4 text-sm text-gray-600">
       <span class="font-medium">Timestamp:</span> <%= event.timestamp.toISOString() %>
     </div>
-
-    <div class="mb-4 text-sm text-gray-600">
-      <span class="font-medium">User:</span> <%= event.user %>
-    </div>
-
+    <% if (event.user) { %>
+      <div class="mb-4 text-sm text-gray-600">
+        <span class="font-medium">User:</span> <%= event.user %>
+      </div>
+    <% } %>
     <div class="mb-4 text-sm text-gray-600">
       <span class="font-medium">Site:</span> <%= event.site %>
     </div>
