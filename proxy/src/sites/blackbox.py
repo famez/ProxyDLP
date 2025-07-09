@@ -22,6 +22,8 @@ class BlackBox(Site):
             
             content_type = flow.request.headers.get("Content-Type", "")
 
+            email = None
+
             if not "application/json" in content_type.lower():
 
                 return
@@ -31,22 +33,41 @@ class BlackBox(Site):
                 #Decode json from body
                 json_body = flow.request.json()
 
-                if not 'session' in json_body or not 'user' in json_body['session'] or not 'email' in json_body['session']['user']:
-                    return
-                
-                if not self.account_check_callback(json_body['session']['user']['email']):
-                    flow.response = Response.make(
-                        401
-                    )
-                    return
+                session = json_body.get('session')
+                if isinstance(session, dict):
+                    user = session.get('user')
+                    if isinstance(user, dict):
+                        email = user.get('email')
+
+
+                #Check if anonymous chats are allowed or chats with proper account domains are allowed.
+                if not email:
+                    if not self.allow_anonymous_access():
+                        flow.response = Response.make(
+                            401
+                        )
+                        return
+                else:
+                    if not self.account_check_callback(email):
+                        flow.response = Response.make(
+                            401
+                        )
+                        return
+                    
 
                 if not "messages" in json_body:
                     return
                 
+                
                 for message in reversed(json_body['messages']): 
                     if 'role' in message and message['role'] == "user" and 'content' in message:
-                        self.conversation_callback(json_body['session']['user']['email'], message['content'])
+                        if email:
+                            self.conversation_callback(json_body['session']['user']['email'], message['content'])
+                        else:
+                            self.anonymous_conversation_callback(message['content'])
                         break
+
+
 
             except Exception as e:
                 ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
