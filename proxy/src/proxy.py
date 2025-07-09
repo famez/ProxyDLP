@@ -4,12 +4,16 @@ from mitmproxy import ctx
 import re
 
 class Proxy:
-    def __init__(self, account_login_callback, account_check_callback, conversation_callback, attached_file_callback):
+    def __init__(self, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
+                 allow_anonymous_access, anonymous_conversation_callback):
         self.sites = []
         self.account_login_callback = account_login_callback
         self.account_check_callback = account_check_callback
         self.conversation_callback = conversation_callback
         self.attached_file_callback = attached_file_callback
+        self.allow_anonymous_access = allow_anonymous_access
+        self.anonymous_conversation_callback = anonymous_conversation_callback
+
 
     def register_site(self, cls, urls):
         site = cls(urls, self.account_login_callback, self.account_check_callback, self.conversation_callback, self.attached_file_callback)
@@ -49,7 +53,8 @@ class EmailNotFoundException(Exception):
         super().__init__(f"Validation error on '{field}': {message}")
 
 class Site:
-    def __init__(self, name, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback):
+    def __init__(self, name, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
+                 allow_anonymous_access, anonymous_conversation_callback):
         self.name = name
         self.urls = urls
         self.source_ip = ""     #To keep track of the source IP address.
@@ -57,6 +62,8 @@ class Site:
         self.on_account_check_callback = account_check_callback
         self.on_conversation_callback = conversation_callback
         self.on_attached_file_callback = attached_file_callback
+        self.allow_anonymous_access = allow_anonymous_access
+        self.anonymous_conversation_callback = anonymous_conversation_callback
 
     def get_urls(self):
         return self.urls
@@ -99,6 +106,12 @@ class Site:
 
     def attached_file_callback(self, email, file_name, filepath, content_type):
         return self.on_attached_file_callback(self, email, file_name, filepath, content_type, self.source_ip)
+    
+    def allow_anonymous_access(self):
+        return self.allow_anonymous_access(self)
+    
+    def anonymous_conversation_callback(self, file_name, filepath, content_type):
+        return self.anonymous_conversation_callback(self, file_name, filepath, content_type, self.source_ip)
 
 
 #Helper functions

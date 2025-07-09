@@ -28,6 +28,24 @@ sites_collection = db_client["ProxyDLP"]["sites"]
 domain_settings_collection = db_client["ProxyDLP"]["domain-settings"]
 
 
+#Anonymous access is allowed if no account check is enabled to authorize several account domains
+def allow_anonymous_access(site):
+    #Check domain check skip
+    domain_settings = domain_settings_collection.find_one()
+    if not domain_settings or not "check_domain" in domain_settings or not domain_settings['check_domain']:
+        return True
+    
+    return False
+
+#Anonymous conversations
+def anonymous_conversation_callback(site, content, source_ip):
+    event = {"timestamp": datetime.now(timezone.utc), "rational": "Conversation", "content": content, "site": site.get_name(), "source_ip": source_ip}
+    result = events_collection.insert_one(event)
+    mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
+    ctx.log.info("Sent event to monitor...")
+    response = stub.EventAdded(mon_message)
+    ctx.log.info(f"Response: {response}")
+
 def account_login_callback(site, email, source_ip):
 
     #Check domain check skip
@@ -89,7 +107,8 @@ def attached_file_callback(site, email, filename, filepath, content_type, source
     ctx.log.info(f"Response: {response}")
 
 
-proxy = Proxy(account_login_callback, account_check_callback, conversation_callback, attached_file_callback)
+proxy = Proxy(account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
+              allow_anonymous_access, anonymous_conversation_callback)
 
 
 proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"])
