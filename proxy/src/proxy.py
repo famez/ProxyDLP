@@ -16,7 +16,8 @@ class Proxy:
 
 
     def register_site(self, cls, urls):
-        site = cls(urls, self.account_login_callback, self.account_check_callback, self.conversation_callback, self.attached_file_callback)
+        site = cls(urls, self.account_login_callback, self.account_check_callback, self.conversation_callback, self.attached_file_callback,
+                   self.attached_file_callback, self.anonymous_conversation_callback)
         self.sites.append(site)
 
     def route_request(self, flow):
