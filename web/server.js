@@ -105,8 +105,9 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
   const {
     start, end, user, site, rational,
     filename, filetype, content, leak, order = 'desc',
-    playground
+    playground, source_ip
   } = req.query;
+
 
 
   const query = {};
@@ -130,6 +131,8 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
   if (content) query.content = { $regex: new RegExp(content, 'i') };
   if (filename) query.filename = { $regex: new RegExp(filename, 'i') };
   if (filetype) query.content_type = { $regex: new RegExp(filetype, 'i') };
+  if (source_ip) query.source_ip = { $regex: new RegExp(source_ip, 'i') };
+
   
 
   const sort = { timestamp: order === 'asc' ? 1 : -1 };
@@ -637,18 +640,23 @@ app.post('/delete-user', authMiddleware, requirePermission("user_management"), a
 app.get('/api/options', authMiddleware, requirePermission("events"), async (req, res) => {
   const { field, startsWith = '' } = req.query;
   if (!field) return res.status(400).json({ error: 'Missing field' });
-  const allowedFields = ['user', 'site', 'rational', 'filename', 'content_type'];
+
+  const allowedFields = ['user', 'site', 'rational', 'filename', 'content_type', 'source_ip'];
   if (!allowedFields.includes(field)) return res.status(400).json({ error: 'Invalid field' });
+
   let client;
   try {
     ({ client, db } = await connectToDB());
     const events_collection = db.collection('events');
+
     const pipeline = [
       { $match: { [field]: { $regex: `^${startsWith}`, $options: '' } } },
       { $group: { _id: `$${field}` } }
     ];
+
     const results = await events_collection.aggregate(pipeline).toArray();
     const values = results.map(r => r._id).filter(Boolean);
+
     await client.close();
     res.json(values);
   } catch (err) {
@@ -658,6 +666,7 @@ app.get('/api/options', authMiddleware, requirePermission("events"), async (req,
     if (client) await client.close();
   }
 });
+
 
 app.get('/event/:id', authMiddleware, requirePermission("events"), async (req, res) => {
   const { id } = req.params;

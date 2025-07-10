@@ -72,6 +72,13 @@
         <ul id="userSuggestions" class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden"></ul>
       </div>
       <div class="relative">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Source IP</label>
+        <input id="ipInput" type="text" name="source_ip" placeholder="e.g. 192.168.0.1"
+              value="<%= filters.source_ip || '' %>" class="border p-2 rounded w-full" autocomplete="off" />
+        <ul id="ipSuggestions" class="absolute z-10 bg-white border w-full mt-1 rounded shadow hidden"></ul>
+      </div>
+
+      <div class="relative">
         <label class="block text-xs font-semibold text-gray-600 mb-1">Site</label>
         <input id="siteInput" type="text" name="site" placeholder="e.g. ChatGPT"
                value="<%= filters.site || '' %>" class="border p-2 rounded w-full" autocomplete="off" />
@@ -262,6 +269,8 @@
     setupAutocomplete({ inputId: 'rationalInput', listId: 'rationalSuggestions', field: 'rational' });
     setupAutocomplete({ inputId: 'filenameInput', listId: 'filenameSuggestions', field: 'filename' });
     setupAutocomplete({ inputId: 'filetypeInput', listId: 'filetypeSuggestions', field: 'content_type' });
+    setupAutocomplete({ inputId: 'ipInput', listId: 'ipSuggestions', field: 'source_ip' });
+
 
     document.querySelectorAll("ol li").forEach(li => {
       li.addEventListener("mouseenter", () => li.setAttribute("data-pulse", "true"));
