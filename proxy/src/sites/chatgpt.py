@@ -104,14 +104,21 @@ class ChatGPT(Site):
 
         if flow.request.method == "POST" and "chatgpt.com/backend-anon/conversation" in flow.request.pretty_url:
             # Return JSON response
+            if not self.allow_anonymous_access():
 
-            ctx.log.info(f"Anonymous conversations are not allowed")
-            flow.response = Response.make(
-                403,
-                b"Blocked by proxy",  # Body
-                {"Content-Type": "text/plain"}  # Headers
-            )
-            return        
+                ctx.log.info(f"Anonymous conversations are not allowed")
+                flow.response = Response.make(
+                    403,
+                    b"Blocked by proxy",  # Body
+                    {"Content-Type": "text/plain"}  # Headers
+                )
+                return 
+
+            #Get the text sent to the conversation
+            json_body = flow.request.json()
+            conversation_text = json_body["messages"][0]["content"]["parts"][0]
+
+            self.anonymous_conversation_callback(conversation_text)
         
         if flow.request.method == "POST" and (flow.request.pretty_url == "https://chatgpt.com/backend-api/conversation"
                                             or flow.request.pretty_url == "https://chatgpt.com/backend-api/f/conversation"):
