@@ -1,4 +1,4 @@
-from proxy import Site
+from proxy import Site, parse_multipart
 from mitmproxy import ctx
 from mitmproxy.http import Response
 
@@ -73,14 +73,24 @@ class BlackBox(Site):
                 ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
 
         
-    
-
-
-
-
-
-
-
-
-
+        elif flow.request.method == "POST" and "blackbox.ai/api/workspace" in flow.request.pretty_url:
             
+            content_type = flow.request.headers.get("content-type", "")
+
+            if "multipart/form-data" in content_type:
+
+                body = flow.request.raw_content
+
+                uploaded_files = parse_multipart(content_type, body)
+
+                for file in uploaded_files:
+                    unique_id = uuid.uuid4().hex
+                    safe_filename = f"{unique_id}"
+                    filepath = os.path.join("/uploads", safe_filename)
+
+                    ctx.log.info(f"Saving uploaded file to {filepath}")
+                    with open(filepath, "wb") as f:
+                        f.write(file['content'])
+                    ctx.log.info(f"Saved file: {filepath}")
+
+                    self.attached_file_callback(None, file['filename'], filepath, file['content_type'])

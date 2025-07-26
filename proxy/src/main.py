@@ -94,8 +94,14 @@ def conversation_callback(site, email, content, source_ip):
 
 def attached_file_callback(site, email, filename, filepath, content_type, source_ip):
 
-    event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : filename, "filepath" : filepath, 
-                        "content_type": content_type, "site": site.get_name(), "source_ip": source_ip}
+    if email:
+
+        event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : filename, "filepath" : filepath, 
+                            "content_type": content_type, "site": site.get_name(), "source_ip": source_ip}
+        
+    else:
+        event = {"timestamp": datetime.now(timezone.utc), "rational": "Attached file", "filename" : filename, "filepath" : filepath, 
+                            "content_type": content_type, "site": site.get_name(), "source_ip": source_ip}
                 
     result = events_collection.insert_one(event)
     
