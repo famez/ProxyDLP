@@ -33,7 +33,7 @@ domain_settings_collection = db_client["ProxyDLP"]["domain-settings"]
 def allow_anonymous_access(site):
     #Check domain check skip
     domain_settings = domain_settings_collection.find_one()
-    if not domain_settings or not "check_domain" in domain_settings or not domain_settings['check_domain']:
+    if not domain_settings or not "allow_anonymous" in domain_settings or not domain_settings['allow_anonymous']:
         return True
     
     return False

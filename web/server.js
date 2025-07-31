@@ -470,8 +470,9 @@ app.get('/domains', authMiddleware, requirePermission("domains"), async (req, re
 
     const settings = await db.collection("domain-settings").findOne();
     const checkDomain = settings ? settings.check_domain : false;
+    const allowAnonymous = settings ? settings.allow_anonymous : false;
 
-    res.render('domains', { title: "Domains", domains, checkDomain });
+    res.render('domains', { title: "Domains", domains, checkDomain, allowAnonymous });
   } catch (err) {
     console.error('Error loading domains:', err);
     res.status(500).send('Internal Server Error');
@@ -1670,7 +1671,30 @@ app.post('/domains/check-domain', authMiddleware, requirePermission("domains"), 
   }
 });
 
+app.post('/domains/allow-anonymous', authMiddleware, requirePermission("domains"), async (req, res) => {
+  let client;
+  try {
+    const { client: dbClient, db } = await connectToDB();
+    client = dbClient;
 
+    const { allow_anonymous } = req.body;
+    if (typeof allow_anonymous !== 'boolean') {
+      return res.status(400).json({ error: 'Invalid allow_anonymous value' });
+    }
+
+    await db.collection("domain-settings").updateOne(
+      {},
+      { $set: { allow_anonymous } },
+    );
+
+    res.json({ success: true, allow_anonymous });
+  } catch (err) {
+    console.error('Error updating allow_anonymous:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  } finally {
+    if (client) await client.close();
+  }
+});
 
 
 app.listen(PORT, () => {

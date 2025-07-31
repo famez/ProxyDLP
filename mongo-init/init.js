@@ -40,7 +40,8 @@ db["alert-destinations"].insertOne({
 
 db["domain-settings"].insertOne(
   {
-    check_domain: false
+    check_domain: false,
+    allow_anonymous: true
   }      
 )
 

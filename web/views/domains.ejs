@@ -9,85 +9,126 @@
   <div class="max-w-7xl mx-auto">
     <h1 class="text-3xl font-bold text-center mb-4">Allowed domains</h1>
 
-    <!-- Enable Access Restriction Checkbox -->
+    <!-- Allow Anonymous Conversations Checkbox -->
     <div class="flex justify-center mb-6">
       <label class="inline-flex items-center">
-        <input type="checkbox" name="enableRestriction" class="form-checkbox h-5 w-5 text-blue-600"
-        <%= checkDomain ? 'checked' : '' %>>
-
-        <span class="ml-2 text-sm text-gray-700">Enable access restriction by domain name</span>
+        <input type="checkbox" id="allowAnonymous" class="form-checkbox h-5 w-5 text-green-600"
+        <%= allowAnonymous ? 'checked' : '' %>>
+        <span class="ml-2 text-sm text-gray-700">Allow anonymous conversations</span>
       </label>
     </div>
 
-    <p class="text-center text-gray-600 mb-2">Manage the domains that are allowed to access the AI solutions.</p>
-    <p class="text-center text-gray-500 mb-6 text-sm">For example, whitelist email domains like <code>contoso.com, user@contoso.com</code> to control which accounts can log in to the AI solution.</p>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-      
-      <!-- Regex Rules Column -->
-      <div class="bg-white shadow-lg rounded-xl p-6">
-        <h2 class="text-xl font-semibold mb-4">Domains</h2>
-        <ul class="space-y-4 mb-6">
-          <% domains.forEach(domain => { %>
-            <li class="border rounded-lg p-4 bg-gray-50">
-              <div class="text-sm text-gray-700"><code><%= domain.content %></code></div>
-              <div class="flex gap-2 mt-2">
-                <form action="/domains/delete/<%= domain._id %>" method="POST">
-                  <button class="text-red-600 hover:underline" onclick="return confirm('Delete this domain?')">Delete</button>
-                </form>
-              </div>
-            </li>
-          <% }) %>
-        </ul>
-
-        <!-- Add Domain Form -->
-        <form action="/domains/add" method="POST" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700">Domain</label>
-            <input name="domain" required class="w-full border rounded p-2" />
-          </div>
-          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-            Add domain
-          </button>
-        </form>
+    <!-- Begin fieldset to disable when anonymous is allowed -->
+    <fieldset id="restrictedSection">
+      <!-- Enable Access Restriction Checkbox -->
+      <div class="flex justify-center mb-6">
+        <label class="inline-flex items-center">
+          <input type="checkbox" name="enableRestriction" class="form-checkbox h-5 w-5 text-blue-600"
+          <%= checkDomain ? 'checked' : '' %>>
+          <span class="ml-2 text-sm text-gray-700">Enable access restriction by domain name</span>
+        </label>
       </div>
 
-    </div>
-  </div>
-</body>
+      <p class="text-center text-gray-600 mb-2">Manage the domains that are allowed to access the AI solutions.</p>
+      <p class="text-center text-gray-500 mb-6 text-sm">For example, whitelist email domains like <code>contoso.com, user@contoso.com</code> to control which accounts can log in to the AI solution.</p>
 
-<script>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Regex Rules Column -->
+        <div class="bg-white shadow-lg rounded-xl p-6">
+          <h2 class="text-xl font-semibold mb-4">Domains</h2>
+          <ul class="space-y-4 mb-6">
+            <% domains.forEach(domain => { %>
+              <li class="border rounded-lg p-4 bg-gray-50">
+                <div class="text-sm text-gray-700"><code><%= domain.content %></code></div>
+                <div class="flex gap-2 mt-2">
+                  <form action="/domains/delete/<%= domain._id %>" method="POST">
+                    <button class="text-red-600 hover:underline" onclick="return confirm('Delete this domain?')">Delete</button>
+                  </form>
+                </div>
+              </li>
+            <% }) %>
+          </ul>
+
+          <!-- Add Domain Form -->
+          <form action="/domains/add" method="POST" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Domain</label>
+              <input name="domain" required class="w-full border rounded p-2" />
+            </div>
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+              Add domain
+            </button>
+          </form>
+        </div>
+      </div>
+    </fieldset>
+  </div>
+
+  <script>
   document.addEventListener('DOMContentLoaded', () => {
-    const checkbox = document.querySelector('input[name="enableRestriction"]');
-    checkbox.addEventListener('change', async (event) => {
-      const enabled = event.target.checked;
+    const anonymousCheckbox = document.getElementById('allowAnonymous');
+    const restrictedSection = document.getElementById('restrictedSection');
+    const restrictionCheckbox = document.querySelector('input[name="enableRestriction"]');
+
+    // Handle Anonymous Checkbox Change
+    anonymousCheckbox.addEventListener('change', async (event) => {
+      const allowAnonymous = event.target.checked;
+      restrictedSection.disabled = allowAnonymous;
 
       try {
-        const response = await fetch('/domains/check-domain', {
+        const response = await fetch('/domains/allow-anonymous', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest' // so server knows it's AJAX
+            'X-Requested-With': 'XMLHttpRequest'
           },
-          body: JSON.stringify({ check_domain: enabled })
+          body: JSON.stringify({ allow_anonymous: allowAnonymous })
         });
 
         if (!response.ok) {
-          throw new Error('Failed to update setting');
+          throw new Error('Failed to update anonymous setting');
         }
 
         const result = await response.json();
-        console.log('Updated:', result);
+        console.log('Anonymous setting updated:', result);
       } catch (error) {
-        console.error('Error updating check_domain:', error);
-        alert('Failed to update setting. Please try again.');
-        // Roll back checkbox state on error
-        event.target.checked = !enabled;
+        console.error('Error updating anonymous setting:', error);
+        alert('Failed to update anonymous setting. Please try again.');
+        event.target.checked = !allowAnonymous; // Rollback checkbox state
+        restrictedSection.disabled = !allowAnonymous;
       }
     });
+
+    // Handle Restriction Checkbox Change
+    if (restrictionCheckbox) {
+      restrictionCheckbox.addEventListener('change', async (event) => {
+        const enabled = event.target.checked;
+
+        try {
+          const response = await fetch('/domains/check-domain', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ check_domain: enabled })
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to update domain restriction');
+          }
+
+          const result = await response.json();
+          console.log('Domain restriction updated:', result);
+        } catch (error) {
+          console.error('Error updating check_domain:', error);
+          alert('Failed to update domain restriction. Please try again.');
+          event.target.checked = !enabled;
+        }
+      });
+    }
   });
 </script>
 
+</body>
 </html>
-
-
