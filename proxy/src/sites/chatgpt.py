@@ -22,7 +22,7 @@ class ChatGPT(Site):
             ctx.log.info("Performing authentication!")
             json_body = flow.request.json()
 
-            if 'connection' in json_body:
+            if 'connection' in json_body and not self.allow_anonymous_access():
                 #Don't allow delegated authentication
                 ctx.log.info("Blocking delegated authentication!")
                 # Define the JSON structure you want to return
@@ -102,7 +102,8 @@ class ChatGPT(Site):
                 ctx.log.error(f"Email not found on URL: {e}")
 
 
-        if flow.request.method == "POST" and "chatgpt.com/backend-anon/conversation" in flow.request.pretty_url:
+        if flow.request.method == "POST" and ("chatgpt.com/backend-anon/conversation" in flow.request.pretty_url
+                                              or "chatgpt.com/backend-anon/f/conversation" in flow.request.pretty_url):
             # Return JSON response
             if not self.allow_anonymous_access():
 
