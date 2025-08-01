@@ -28,7 +28,6 @@ class Microsoft_Copilot(Site):
             if tempauth.startswith("v1."):
                 #tempauth = tempauth[3:]
                 tempauth = tempauth.removeprefix("v1.")
-                #ctx.log.info(f"Tempauth extracted: {tempauth}")
                 
 
                 decoded = decode_special_microsoft_token(tempauth)
@@ -75,43 +74,17 @@ class Microsoft_Copilot(Site):
                     del self.uploaded_files[email]
 
 
-                #ctx.log.info(f"Decoded tempauth: {json.dumps(tempauth, indent=2)}")
 
-        """
-        if flow.request.method == "GET" and "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:" in flow.request.pretty_url:
-            
-            auth_header = flow.request.headers.get("authorization")
-
-            if auth_header.startswith("Bearer "):
-            
-                jwt_token = auth_header[len("Bearer "):].strip()
-
-                email = get_email_from_auth_header(jwt_token)
-                #ctx.log.info(f"JWT Token extracted: {jwt_token}")
-
-                ctx.log.info(f"GET EMAIL: {email}")
-
-                match = re.search(r'[^/]+$', flow.request.pretty_url)
-
-                if match:
-                    filename = match.group()
-
-                    ctx.log.info(f"Filename: {filename}")
-
-                    #self.uploaded_files[email] = {"filename": filename}
-        """
+    
 
     def on_response_handle(self, flow):
 
-        #ctx.log.info(f"On response handle for {flow.request.pretty_url}")
 
         if flow.request.method == "GET" and "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:" in flow.request.pretty_url:
             
             content_type = flow.response.headers.get("Content-Type", "")
 
-            #ctx.log.info(f"Content-Type: {content_type}")
 
-            #ctx.log.info(f"Response : {flow.response.content}")
 
             if "application/json" in content_type.lower():
 
@@ -119,14 +92,11 @@ class Microsoft_Copilot(Site):
 
                     # Try to parse as JSON
                     content = json.loads(flow.response.content.decode('utf-8'))
-                    #ctx.log.info("Parsed JSON Response:")
-                    #ctx.log.info(json.dumps(content, indent=2))  # pretty-print
 
                     email = content['lastModifiedBy']['user']['email']
                     filename = content['name']
                     file_type = content['file']['mimeType']
 
-                    #ctx.log.info(f"Email: {email}, Filename: {filename}, File Type: {file_type}")
 
                     self.uploaded_files[email] = {"filename": filename, "filetype": file_type}
 
@@ -158,12 +128,8 @@ class Microsoft_Copilot(Site):
             
 
         if flow.request.method == "GET" and "substrate.office.com/m365Copilot/Chathub" in flow.request.pretty_url:
-            #ctx.log.info(f"\n[WS Message from Client to Server]")
-            #ctx.log.info(f"URL: {flow.request.pretty_url}")
-            #ctx.log.info(f"Message: {message.content}")
 
             auth_query_param = flow.request.query.get("access_token", "")
-            #ctx.log.info(f"auth_header: {auth_header}")
 
             try :
                 email = get_email_from_auth_header(auth_query_param)
@@ -195,8 +161,6 @@ class Microsoft_Copilot(Site):
             ctx.log.info("JWT token checks failed!")
             # Prevent the message from being sent to the server
             message.kill()
-            # Optionally, you can send a close frame to the client
-            #flow.websocket.close(403, reason="Blocked by proxy")
 
 def get_email_from_auth_header(auth_query_param):
     
@@ -208,8 +172,6 @@ def get_email_from_auth_header(auth_query_param):
         jwt_data = decode_jwt(jwt_token)
 
         if jwt_data:
-            #ctx.log.info(f"JWT Header: {json.dumps(jwt_data['header'], indent=2)}")
-            #ctx.log.info(f"JWT Payload: {json.dumps(jwt_data['payload'], indent=2)}")
 
             jwt_payload = jwt_data['payload']
 
