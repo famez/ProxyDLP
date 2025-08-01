@@ -108,10 +108,40 @@ class Microsoft_Copilot(Site):
 
         if flow.request.method == "GET" and "copilot.microsoft.com/c/api/chat" in flow.request.pretty_url:
 
-            if not self.allow_anonymous_access():
-                # Prevent the message from being sent to the server
-                message.kill()
-                return
+            email = None
+
+            auth_query_param = flow.request.query.get("accessToken", "")
+
+            if auth_query_param == "":
+
+                #Anonymous conversation
+                if not self.allow_anonymous_access():
+                    # Prevent the message from being sent to the server
+                    message.kill()
+                    return
+                
+            else:
+
+                try :
+
+                    jwt_token = auth_query_param.strip()
+
+                    jwt_data = decode_jwt(jwt_token)
+
+                    if jwt_data:
+
+                        jwt_payload = jwt_data['payload']
+
+                        if "email" in jwt_payload:
+                            email = jwt_payload['email']
+
+                            if not self.account_check_callback(email):
+                                # Prevent the message from being sent to the server
+                                message.kill()
+                                return
+
+                except EmailNotFoundException as e:
+                    ctx.log.error(f"Email not properly decoded: {e}")
 
             try:
                 json_content = json.loads(message.content.decode('utf-8'))
@@ -120,7 +150,10 @@ class Microsoft_Copilot(Site):
                     messages = json_content['content']
                     for message in messages:
                         if message['type'] == 'text':
-                            self.anonymous_conversation_callback(message['text'])
+                            if email:
+                                self.conversation_callback(email, message['text'])
+                            else:
+                                self.anonymous_conversation_callback(message['text'])
 
             except Exception as e:
                 ctx.log.error(f"Failed to decode JSON from message.content: {e}")
