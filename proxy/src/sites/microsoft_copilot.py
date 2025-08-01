@@ -135,6 +135,28 @@ class Microsoft_Copilot(Site):
           
 
     def on_ws_from_client_to_server(self, flow, message):
+
+        if flow.request.method == "GET" and "copilot.microsoft.com/c/api/chat" in flow.request.pretty_url:
+
+            if not self.allow_anonymous_access():
+                # Prevent the message from being sent to the server
+                message.kill()
+                return
+
+            try:
+                json_content = json.loads(message.content.decode('utf-8'))
+                
+                if "event" in json_content and json_content['event'] == "send" and "content" in json_content:
+                    messages = json_content['content']
+                    for message in messages:
+                        if message['type'] == 'text':
+                            self.anonymous_conversation_callback(message['text'])
+
+            except Exception as e:
+                ctx.log.error(f"Failed to decode JSON from message.content: {e}")
+
+            
+
         if flow.request.method == "GET" and "substrate.office.com/m365Copilot/Chathub" in flow.request.pretty_url:
             #ctx.log.info(f"\n[WS Message from Client to Server]")
             #ctx.log.info(f"URL: {flow.request.pretty_url}")
