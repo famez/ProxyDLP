@@ -48,9 +48,20 @@ class Gemini(Site):
 
 
                     if email and email != "":
+
+                        if not self.account_check_callback(email):
+                            #Don't allow not permitted domains
+                            flow.response = Response.make(403)
+                            return
+
                         self.conversation_callback(email, conversation)
 
                     else:
+                        if not self.allow_anonymous_access():
+                            #Don't allow anonymous conversations
+                            flow.response = Response.make(403)
+                            return
+                        
                         self.anonymous_conversation_callback(conversation)
 
                 except Exception as e:
