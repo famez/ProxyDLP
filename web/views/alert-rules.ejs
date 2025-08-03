@@ -80,8 +80,10 @@
                   <% }) %>
                 <% }%>
               </select>
-              <input name="<%= type %>Count" type="number" min="1" value="1"
-                     class="mt-1 w-full border p-1 rounded text-xs" placeholder="Count">
+              <% if (type !== 'yara') { %>
+                <input name="<%= type %>Count" type="number" min="1" value="1"
+                       class="mt-1 w-full border p-1 rounded text-xs" placeholder="Count">
+              <% } %>
             </td>
           <% }) %>
 

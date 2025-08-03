@@ -1501,7 +1501,7 @@ app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), 
   try {
     const { id } = req.params;
     const {
-      name, regexRules, regexCount, yaraRules, yaraCount,
+      name, regexRules, regexCount, yaraRules, /*yaraCount,*/
       topicRules, topicCount, destinations
     } = req.body;
 
@@ -1526,7 +1526,7 @@ app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), 
       },
       yara: {
         rules: parseField(yaraRules).map(r => new ObjectId(r)),
-        count: parseInt(yaraCount) || 1
+        count: parseInt(/*yaraCount*/1) || 1
       },
       topic: {
         rules: parseField(topicRules).map(r => new ObjectId(r)),
