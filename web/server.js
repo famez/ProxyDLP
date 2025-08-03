@@ -1502,7 +1502,7 @@ app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), 
     const { id } = req.params;
     const {
       name, regexRules, regexCount, yaraRules, /*yaraCount,*/
-      topicRules, topicCount, destinations
+      topicRules, /*topicCount,*/ destinations
     } = req.body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
@@ -1530,7 +1530,7 @@ app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), 
       },
       topic: {
         rules: parseField(topicRules).map(r => new ObjectId(r)),
-        count: parseInt(topicCount) || 1
+        count: parseInt(/*topicCount*/1) || 1
       },
       destinations: parseField(destinations).map(r => new ObjectId(r))
     };
