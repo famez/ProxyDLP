@@ -1697,6 +1697,51 @@ app.post('/domains/allow-anonymous', authMiddleware, requirePermission("domains"
 });
 
 
+app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req, res) => {
+
+  let client;
+
+  try {
+    ({ client, db } = await connectToDB());
+    const site_docs = await db.collection('sites').find().toArray();
+
+    // Flatten all URL entries
+    const rawUrls = site_docs.flatMap(site => site.urls || []);
+    const cleanedUrls = rawUrls.map(url => url.trim()).filter(Boolean);
+
+    // Use proxy from form input
+    const proxy = req.body.proxy?.trim();
+    if (!proxy) {
+      return res.status(400).send("Proxy address is required.");
+    }
+
+    // Generate PAC file content
+    const pacContent = `
+      function FindProxyForURL(url, host) {
+        var rules = ${JSON.stringify(cleanedUrls, null, 2)};
+        for (var i = 0; i < rules.length; i++) {
+          if (shExpMatch(url, "*"+rules[i]+"*")) {
+            return "PROXY ${proxy}";
+          }
+        }
+        return "DIRECT";
+      }
+      `.trim();
+
+    res.setHeader('Content-Type', 'application/x-ns-proxy-autoconfig');
+    res.setHeader('Content-Disposition', 'attachment; filename="proxy.pac"');
+    res.send(pacContent);
+
+  } catch (err) {
+    console.error('Error generating PAC file:', err);
+    res.status(500).send('Failed to generate PAC file.');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
