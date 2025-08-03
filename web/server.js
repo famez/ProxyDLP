@@ -1709,11 +1709,54 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
     const rawUrls = site_docs.flatMap(site => site.urls || []);
     const cleanedUrls = rawUrls.map(url => url.trim()).filter(Boolean);
 
-    // Use proxy from form input
-    const proxy = req.body.proxy?.trim();
-    if (!proxy) {
+    const proxyInput = req.body.proxy?.trim();
+
+    if (!proxyInput) {
       return res.status(400).send("Proxy address is required.");
     }
+
+    // Match host:port (IPv4 or DNS)
+    const proxyPattern = /^([a-zA-Z0-9.-]+):(\d{1,5})$/;
+    const match = proxyInput.match(proxyPattern);
+
+    if (!match) {
+      return res.status(400).render('error', { 
+        title: 'Invalid Proxy', 
+        message: 'Invalid proxy format. Use host:port (e.g., 192.168.0.1:8080 or proxy.example.com:3128).' 
+      });
+    }
+
+    const host = match[1];
+    const port = parseInt(match[2], 10);
+
+    if (port < 1 || port > 65535) {
+      return res.status(400).render('error', { 
+        title: 'Invalid Proxy', 
+        message: 'Invalid port number. Must be between 1 and 65535.' 
+      });
+    }
+
+    // Validate host (either valid IP or DNS name)
+    const isIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(host);
+    let validHost = false;
+
+    if (isIPv4) {
+      const octets = host.split('.').map(Number);
+      validHost = octets.every(o => o >= 0 && o <= 255);
+    } else {
+      // DNS: labels (a-z0-9), may have hyphens, dots between labels
+      validHost = /^[a-zA-Z0-9-]{1,63}(\.[a-zA-Z0-9-]{1,63})+$/.test(host);
+    }
+
+    if (!validHost) {
+      return res.status(400).render('error', { 
+        title: 'Invalid Proxy', 
+        message: 'Invalid host. Must be a valid IPv4 address or DNS name.' 
+      });
+    }
+
+    // Safe to use
+    const proxy = `${host}:${port}`;
 
     // Generate PAC file content
     const pacContent = `
