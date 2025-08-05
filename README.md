@@ -34,25 +34,6 @@ Its allows enterprise users to access AI tools like ChatGPT while ensuring **vis
 <img width="1316" height="657" alt="Screenshot_2025-08-03_18-22-43" src="https://github.com/user-attachments/assets/c5364777-d5b9-45ec-ae2e-cf8e6a2a723d" />
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## 🎯 Purpose
 
 ProxyDLP helps organizations:
@@ -106,10 +87,11 @@ docker-compose up
 ## 🔒 Deployment Notes
 
 - The proxy intercepts TLS traffic using a custom Root CA (`mitmCA.pem`)
-- You must configure your client machines to trust this CA certificate
+- You must configure your client machines to trust this CA certificate (for example via GPO deployment).
 - The proxy inspects and decodes traffic from supported AI platforms
 - All activity is logged and linked to the user or session that initiated it
 - Default user is admin and password is admin (can be changed after installation)
+- It is recommended to configure a PAC file on the client machines (i.e. via GPO) so that only the traffic intended to the AI tools goes through the proxy, excluding the rest of the traffic. The PAC file can be automatically generated from the "SITES" page.
 
 ---
 
