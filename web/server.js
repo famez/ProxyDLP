@@ -577,7 +577,10 @@ app.post('/add-user', authMiddleware, requirePermission("user_management"), asyn
       return res.status(400).send("User already exists.");
     }
     if (!isStrongPassword(password)) {
-      return res.status(400).send("Password must be at least 12 characters long and include uppercase, lowercase, number, and special character.");
+      return res.status(400).render('error', { 
+        title: 'Invalid Password', 
+        message: 'Password must be at least 12 characters long and include uppercase, lowercase, number, and special character.' 
+      });
     }
     await db.collection('users').insertOne({ username: username, password: await bcrypt.hash(password, 10) });
     res.redirect('/user-management');
