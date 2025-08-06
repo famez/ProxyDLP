@@ -1067,7 +1067,12 @@ app.post('/manage-permissions', authMiddleware, requirePermission("user_manageme
       return res.status(404).send('User not found');
     }
 
-    res.redirect('/manage-permissions?username=' + encodeURIComponent(username));
+
+    return res.render('success', { 
+        title: 'Permissions changed', 
+        message: 'Permissions have been properly changed' 
+      });
+
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
