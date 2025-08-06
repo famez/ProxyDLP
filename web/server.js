@@ -1764,17 +1764,30 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
     const proxy = `${host}:${port}`;
 
     // Generate PAC file content
+    // Build PAC rules using host-based matching
+    
+    // Extract unique domains only (drop any path after slash)
+    const domains = [...new Set(
+      cleanedUrls.map(url => url.split('/')[0].toLowerCase())
+    )];
+
+    const pacConditions = domains.map(domain => {
+      return `        dnsDomainIs(host, "${domain}")`;
+    }).join(' ||\n');
+
     const pacContent = `
-      function FindProxyForURL(url, host) {
-        var rules = ${JSON.stringify(cleanedUrls, null, 2)};
-        for (var i = 0; i < rules.length; i++) {
-          if (shExpMatch(url, "*"+rules[i]+"*")) {
+    function FindProxyForURL(url, host) {
+        // Define domains to proxy
+        if (
+    ${pacConditions}
+        ) {
             return "PROXY ${proxy}";
-          }
         }
+
+        // All other traffic bypasses proxy
         return "DIRECT";
-      }
-      `.trim();
+    }
+    `.trim();
 
     res.setHeader('Content-Type', 'application/x-ns-proxy-autoconfig');
     res.setHeader('Content-Disposition', 'attachment; filename="proxy.pac"');
