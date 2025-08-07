@@ -40,8 +40,12 @@ def allow_anonymous_access(site):
     return False
 
 #Anonymous conversations
-def anonymous_conversation_callback(site, content, source_ip):
+def anonymous_conversation_callback(site, content, source_ip, conversation_id):
     event = {"timestamp": datetime.now(timezone.utc), "rational": "Conversation", "content": content, "site": site.get_name(), "source_ip": source_ip}
+    
+    if conversation_id:
+        event['conversation_id'] = conversation_id
+
     result = events_collection.insert_one(event)
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
     ctx.log.info("Sent event to monitor...")
@@ -84,9 +88,13 @@ def account_check_callback(site, email, source_ip):
     return False
 
 
-def conversation_callback(site, email, content, source_ip):
+def conversation_callback(site, email, content, source_ip, conversation_id):
 
     event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Conversation", "content": content, "site": site.get_name(), "source_ip": source_ip}
+
+    if conversation_id:
+        event['conversation_id'] = conversation_id
+
     result = events_collection.insert_one(event)
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
     ctx.log.info("Sent event to monitor...")

@@ -135,7 +135,19 @@
     <% if (events && events.length > 0) { %>
       <ol class="relative border-l-2 border-indigo-300 pl-6 space-y-8">
         <% events.forEach(event => { %>
-          <li data-pulse="false" onclick="window.location.href='/event/<%= event._id %>'" class="cursor-pointer hover:bg-indigo-50 transition p-2 rounded" title="View full event">
+          <li data-pulse="false"
+              onclick="window.location.href='/event/<%= event._id %>'"
+              class="relative group cursor-pointer hover:bg-indigo-50 transition p-2 rounded"
+              title="View full event">
+
+            <% if (event.conversation_id) { %>
+              <a href="?<%= new URLSearchParams({ ...filters, conversation_id: event.conversation_id }).toString() %>"
+                onclick="event.stopPropagation();"
+                class="hidden group-hover:inline-block absolute right-2 top-2 bg-indigo-500 text-white text-xs px-3 py-1 rounded-full shadow hover:bg-indigo-600 transition">
+                Follow Conversation
+              </a>
+            <% } %>
+
             <div class="absolute w-4 h-4 bg-indigo-500 rounded-full -left-2 border-2 border-white"></div>
             <time class="block text-sm text-gray-500"><%= event.timestamp %></time>
             <div class="mt-1 text-lg font-medium text-gray-800">
@@ -183,10 +195,10 @@
           </li>
         <% }) %>
       </ol>
+    <% } else { %>
+      <p class="text-gray-600">No events found</p>
+    <% } %>
 
-      <% } else { %>
-        <p class="text-gray-600">No events found</p>
-      <% } %>
 
       <!-- Pagination Controls -->
       <div class="mt-10 flex flex-col items-center gap-4">

@@ -16,7 +16,7 @@ class ChatGPT(Site):
         self.files = {}
         self.file_ids = {}
     
-    def on_request_handle(self, flow):
+    def on_response_handle(self, flow):
             
         if flow.request.method == "POST" and "auth.openai.com/api/accounts/authorize/continue" in flow.request.pretty_url:
             ctx.log.info("Performing authentication!")
@@ -119,7 +119,29 @@ class ChatGPT(Site):
             json_body = flow.request.json()
             conversation_text = json_body["messages"][0]["content"]["parts"][0]
 
-            self.anonymous_conversation_callback(conversation_text)
+            # If the response is a text/event-stream, parse and log the events
+            if flow.response and flow.response.headers.get("Content-Type", "").startswith("text/event-stream"):
+                try:
+                    event_data = flow.response.text
+                    for line in event_data.splitlines():
+                        if line.startswith("data:"):
+                            data = line[len("data:"):].strip()
+                            if data and data != "[DONE]":
+                                try:
+                                    event = json.loads(data)
+
+                                    if "conversation_id" in event:
+                                        
+                                        conversation_id = event['conversation_id']
+                                        #ctx.log.info(f"conversation_id: {conversation_id}")
+                                        self.anonymous_conversation_callback(conversation_text, conversation_id)
+                                        break
+
+                                except Exception as e:
+                                    ctx.log.error(f"Failed to parse event data: {e}")
+                except Exception as e:
+                    ctx.log.error(f"Error parsing text/event-stream: {e}")
+
         
         if flow.request.method == "POST" and (flow.request.pretty_url == "https://chatgpt.com/backend-api/conversation"
                                             or flow.request.pretty_url == "https://chatgpt.com/backend-api/f/conversation"):
@@ -139,7 +161,27 @@ class ChatGPT(Site):
                     conversation_text = json_body["messages"][0]["content"]["parts"][0]
 
                     if  isinstance(conversation_text, str):
-                        self.conversation_callback(email, conversation_text)
+
+                        # If the response is a text/event-stream, parse and log the events
+                        if flow.response and flow.response.headers.get("Content-Type", "").startswith("text/event-stream"):
+                            try:
+                                event_data = flow.response.text
+                                for line in event_data.splitlines():
+                                    if line.startswith("data:"):
+                                        data = line[len("data:"):].strip()
+                                        if data and data != "[DONE]":
+                                            try:
+                                                event = json.loads(data)
+                                                if "conversation_id" in event:
+                                                    conversation_id = event['conversation_id']
+                                                    #ctx.log.info(f"conversation_id: {conversation_id}")
+                                                    self.conversation_callback(email, conversation_text, conversation_id)
+                                                    break
+
+                                            except Exception as e:
+                                                ctx.log.error(f"Failed to parse event data: {e}")
+                            except Exception as e:
+                                ctx.log.error(f"Error parsing text/event-stream: {e}")                       
 
                     return
                 
@@ -152,6 +194,7 @@ class ChatGPT(Site):
                 b"Blocked by proxy",  # Body
                 {"Content-Type": "text/plain"}  # Headers
             )
+
 
 
         #File being uploaded to ChatGPT.

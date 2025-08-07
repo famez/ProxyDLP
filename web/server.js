@@ -99,16 +99,13 @@ app.get('/dashboard', authMiddleware, async (req, res) => {
 app.get('/terminal', authMiddleware, requirePermission("mitmterminal"), (req, res) => {
   res.render('terminal', { title: 'Terminal' }); // renders views/terminal.ejs
 });
-
 app.get('/explore', authMiddleware, requirePermission("events"), async (req, res) => {
 
   const {
     start, end, user, site, rational,
     filename, filetype, content, leak, order = 'desc',
-    playground, source_ip
+    playground, source_ip, conversation_id
   } = req.query;
-
-
 
   const query = {};
 
@@ -133,15 +130,13 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
   if (filetype) query.content_type = { $regex: new RegExp(filetype, 'i') };
   if (source_ip) query.source_ip = { $regex: new RegExp(source_ip, 'i') };
 
-  
+  if (conversation_id) query.conversation_id = conversation_id;
 
   const sort = { timestamp: order === 'asc' ? 1 : -1 };
 
   const limit = parseInt(req.query.limit, 10) || 10;
   const page = parseInt(req.query.page, 10) || 1;
   const skip = (page - 1) * limit;
-
-
 
   let client;
   try {
@@ -151,15 +146,16 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
     if (leak) {
       const leakRegex = new RegExp(leak, 'i');
 
-      // Use aggregation pipeline when filtering by leak keys
       const pipeline = [
         { $match: query },
-        { $addFields: {
+        {
+          $addFields: {
             leakRegexArray: { $objectToArray: "$leak.regex" },
             leakNerArray: { $objectToArray: "$leak.ner" }
           }
         },
-        { $match: {
+        {
+          $match: {
             $or: [
               { "leakRegexArray.v": { $regex: leakRegex } },
               { "leakNerArray.k": { $regex: leakRegex } },
@@ -174,13 +170,21 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
 
       const events = await event_collection.aggregate(pipeline).toArray();
 
-      res.render('explore', { title: 'Explore', events, filters: req.query });
+      res.render('explore', {
+        title: 'Explore',
+        events,
+        filters: req.query
+      });
     } else {
-      // If no leak filter, simple find + sort
       const events = await event_collection.find(query).sort(sort).skip(skip).limit(limit).toArray();
 
-      res.render('explore', { title: 'Explore', events, filters: req.query });
+      res.render('explore', {
+        title: 'Explore',
+        events,
+        filters: req.query
+      });
     }
+
   } catch (err) {
     console.error('Error in /explore:', err);
     res.status(500).send('Internal Server Error');
@@ -188,6 +192,7 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
     if (client) await client.close();
   }
 });
+
 
 app.get('/rules', authMiddleware, requirePermission("rules"), (req, res) => {
   res.render('rules-menu', { title: "Rules Dashboard" });

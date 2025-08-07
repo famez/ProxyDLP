@@ -102,8 +102,8 @@ class Site:
     def account_check_callback(self, email):
         return self.on_account_check_callback(self, email, self.source_ip)
 
-    def conversation_callback(self, email, conversation_text):
-        return self.on_conversation_callback(self, email, conversation_text, self.source_ip)
+    def conversation_callback(self, email, conversation_text, conversation_id = None):
+        return self.on_conversation_callback(self, email, conversation_text, self.source_ip, conversation_id)
 
     def attached_file_callback(self, email, file_name, filepath, content_type):
         return self.on_attached_file_callback(self, email, file_name, filepath, content_type, self.source_ip)
@@ -111,8 +111,8 @@ class Site:
     def allow_anonymous_access(self):
         return self.on_allow_anonymous_access(self)
     
-    def anonymous_conversation_callback(self, conversation_text):
-        return self.on_anonymous_conversation_callback(self, conversation_text, self.source_ip)
+    def anonymous_conversation_callback(self, conversation_text, conversation_id = None):
+        return self.on_anonymous_conversation_callback(self, conversation_text, self.source_ip, conversation_id)
 
 
 #Helper functions
