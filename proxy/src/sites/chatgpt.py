@@ -138,7 +138,8 @@ class ChatGPT(Site):
                     json_body = flow.request.json()
                     conversation_text = json_body["messages"][0]["content"]["parts"][0]
 
-                    self.conversation_callback(email, conversation_text)
+                    if  isinstance(conversation_text, str):
+                        self.conversation_callback(email, conversation_text)
 
                     return
                 
