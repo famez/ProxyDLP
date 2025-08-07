@@ -15,6 +15,7 @@ from sites.microsoft_copilot import Microsoft_Copilot
 from sites.deepseek import DeepSeek
 from sites.blackbox import BlackBox
 from sites.gemini import Gemini
+from sites.deepl import DeepL
 
 
 from mitm_term import launch_ws_term
@@ -125,6 +126,7 @@ proxy.register_site(Github_Copilot, ["githubcopilot.com", "api.github.com/user"]
 proxy.register_site(DeepSeek, ["deepseek.com"])
 proxy.register_site(BlackBox, ["blackbox.ai"])
 proxy.register_site(Gemini, ["gemini.google.com"])
+proxy.register_site(DeepL, ["deepl.com"])
 
 
 #Add sites to the database for being checked later on the web interface.
