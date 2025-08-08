@@ -44,7 +44,6 @@ def anonymous_conversation_callback(site, content, source_ip, conversation_id):
 
     #Workaround for DeepL to avoid receiving several successive events in few seconds
     if site.get_name() == "DeepL":
-        ctx.log.info("Hello 1")
 
         latest_event = events_collection.find_one(
             {"site": "DeepL"},
@@ -54,11 +53,9 @@ def anonymous_conversation_callback(site, content, source_ip, conversation_id):
         latest_timestamp = latest_event.get("timestamp")
 
         if latest_timestamp:
-            ctx.log.info("Hello 2")
             if isinstance(latest_timestamp, str):
-                ctx.log.info("Hello 3")
                 latest_timestamp = datetime.fromisoformat(latest_timestamp)
-                
+
             # Ensure latest_timestamp is timezone-aware (UTC)
             if latest_timestamp.tzinfo is None:
                 latest_timestamp = latest_timestamp.replace(tzinfo=timezone.utc)
@@ -66,7 +63,6 @@ def anonymous_conversation_callback(site, content, source_ip, conversation_id):
 
             #If the event was sent less than 10 seconds ago and the new event content contains the latest one, update the last event content to the current one.
             if (now - latest_timestamp).total_seconds() < 10 and latest_event.get("content") in content:
-                ctx.log.info("Hello 4")
                 events_collection.update_one({"_id": latest_event["_id"]}, {"$set": {"content": content, "timestamp": now}})
 
                 #Retrigger monitor analysis
