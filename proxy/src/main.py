@@ -166,7 +166,7 @@ proxy.register_site(Microsoft_Copilot, ["substrate.office.com/m365Copilot/Chathu
 proxy.register_site(Github_Copilot, ["githubcopilot.com", "api.github.com/user"])
 proxy.register_site(DeepSeek, ["deepseek.com"])
 proxy.register_site(BlackBox, ["blackbox.ai"])
-proxy.register_site(Gemini, ["gemini.google.com"])
+proxy.register_site(Gemini, ["gemini.google.com", "push.clients6.google.com/upload"])
 proxy.register_site(DeepL, ["deepl.com"])
 
 
