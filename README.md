@@ -41,6 +41,7 @@ ProxyDLP helps organizations:
 - Detect confidential or sensitive data in uploads and messages
 - Link AI usage to individual users or accounts
 - Provide a centralized interface for reviewing activity and enforcing policy
+- Ideal as a technical tool to provide compliance for ISO/IEC 27001 and ISO/IEC 42001
 
 ---
 
