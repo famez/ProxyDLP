@@ -47,8 +47,12 @@ class DeepSeek(Site):
 
                         return
                     
-                    #ctx.log.info(f"Registering conversation: {conversation}")
-                    self.conversation_callback(self.users[auth_header], conversation)
+                    chat_session_id = None
+
+                    if "chat_session_id" in json_body:
+                        chat_session_id = json_body["chat_session_id"]
+
+                    self.conversation_callback(self.users[auth_header], conversation, conversation_id = chat_session_id)
 
 
         elif flow.request.method == "POST" and "deepseek.com/api/v0/file/upload_file" in flow.request.pretty_url:
