@@ -30,6 +30,15 @@ import smtplib
 from email.mime.text import MIMEText
 import json
 
+import nltk
+from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import TfidfVectorizer
+import numpy as np
+
+
+import schedule
+import threading
+import time
 
 
 INDEX_PATH = '/var/faiss/faiss_index.index'
@@ -47,6 +56,7 @@ alert_destinations_collection = db_client["ProxyDLP"]["alert-destinations"]
 alert_rules_collection = db_client["ProxyDLP"]["alert-rules"]
 alert_locallogs_collection = db_client["ProxyDLP"]["alert-logs"]
 
+nltk.download('stopwords')
 
 #nlp = spacy.load("en_core_web_sm")
 
@@ -779,9 +789,65 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
 
 
+def perform_tf_idf():
+
+    # Create combined stopwords set from all needed languages
+    all_stopwords = set()
+    for lang in ['english', 'spanish', 'french']:
+        all_stopwords.update(stopwords.words(lang))
+
+    all_stopwords = list(all_stopwords)
+
+    # Extract all text from events and keep their _id for mapping
+    event_ids = []
+    texts = []
+    for event in events_collection.find({}, {"_id": 1, "content": 1, "filepath": 1, "content_type": 1, "rational": 1}):
+        if event.get("rational") == "Conversation" and event.get("content"):
+            texts.append(event["content"])
+            event_ids.append(event["_id"])
+        elif event.get("rational") == "Attached file" and event.get("filepath") and event.get("content_type"):
+            try:
+                text = decode_file(event["filepath"], event["content_type"])
+                if text:
+                    texts.append(text)
+                    event_ids.append(event["_id"])
+            except Exception as e:
+                print(f"Error decoding file {event['filepath']}: {e}")
+
+    if not texts:
+        print("No events to process for TF-IDF.")
+        return
+
+    # Initialize vectorizer with combined stop words
+    vectorizer = TfidfVectorizer(stop_words=all_stopwords)
+    tfidf_matrix = vectorizer.fit_transform(texts)
+    feature_names = vectorizer.get_feature_names_out()
+
+    for i, (event_id, text) in enumerate(zip(event_ids, texts)):
+        scores = tfidf_matrix[i].toarray().flatten()
+        top_n = 5
+        top_indices = np.argsort(scores)[::-1][:top_n]
+        top_words = []
+        for idx in top_indices:
+            if scores[idx] > 0:
+                word_score = {"word": feature_names[idx], "score": float(scores[idx])}
+                top_words.append(word_score)
+                
+        # Store top words in the database for this event
+        events_collection.update_one(
+            {"_id": event_id},
+            {"$set": {"tfidf_top_words": top_words}}
+        )
+
+
+
 def main():
 
     reload_all_rules()  # Load all rules at startup
+
+    #Initialize scheduled task for performing TF-IDF over the text data
+    threading.Thread(target=perform_tf_idf, daemon=True).start()
+    schedule.every(2).hours.do(perform_tf_idf)
 
     # Initialize gRPC server
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

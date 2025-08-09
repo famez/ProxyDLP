@@ -32,10 +32,11 @@
       <canvas id="usersChart" class="w-full h-48"></canvas>
     </div>
 
-    <!-- Risky Events Trend -->
+
+    <!-- Word Relevance -->
     <div class="bg-white p-4 rounded-lg shadow">
-      <h2 class="text-lg font-medium mb-2">Daily Leaked Topic Events Trend</h2>
-      <canvas id="trendChart" class="w-full h-48"></canvas>
+      <h2 class="text-lg font-medium mb-2">Word Relevance</h2>
+      <canvas id="wordRelevancyChart" class="w-full h-48"></canvas>
     </div>
 
     <!-- Regex Label Word Cloud -->
@@ -72,7 +73,7 @@
             </tr>
           <% }) %>
         <% } else { %>
-          <tr><td colspan="5" class="px-4 py-2 text-center">No risky events found.</td></tr>
+          <tr><td colspan="6" class="px-4 py-2 text-center">No risky events found.</td></tr>
         <% } %>
       </tbody>
     </table>
@@ -113,7 +114,12 @@
     <canvas id="regexWordsChart" class="w-full h-56"></canvas>
   </div>
 
-
+  
+<!-- File Extensions -->
+<div class="bg-white p-4 rounded-lg shadow max-w-4xl mx-auto mt-6"">
+  <h2 class="text-lg font-medium mb-2">File Extensions Stats</h2>
+  <canvas id="fileExtensionsChart" class="w-full h-36"></canvas>
+</div>
 
 
   <!-- Chart.js Config -->
@@ -142,21 +148,53 @@
       options: { plugins: { legend: { display: false } }, responsive: true }
     });
 
-    const trendLabels = <%- JSON.stringify(trendDates) %>;
-    const trendCounts = <%- JSON.stringify(trendCounts) %>;
-    new Chart(document.getElementById('trendChart'), {
-      type: 'line',
+
+    // Word Relevance Chart
+    const wordRelevancyLabels = <%- JSON.stringify(wordRelevancyStats.map(w => w.word)) %>;
+    const wordRelevancyData = <%- JSON.stringify(wordRelevancyStats.map(w => w.count)) %>;
+    new Chart(document.getElementById('wordRelevancyChart'), {
+      type: 'bar',
       data: {
-        labels: trendLabels,
+        labels: wordRelevancyLabels,
         datasets: [{
-          label: 'Risky Events Per Day',
-          data: trendCounts,
-          borderColor: '#10b981',
-          fill: false,
-          tension: 0.3
+          label: 'Relevancy Score',
+          data: wordRelevancyData,
+          backgroundColor: '#10b981'
         }]
       },
-      options: { responsive: true }
+      options: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100, // Adjust based on your data
+          }
+        },
+        responsive: true,
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // File Extensions Chart
+    const fileExtensionLabels = <%- JSON.stringify(fileExtensionsStats.map(f => f.extension)) %>;
+    const fileExtensionData = <%- JSON.stringify(fileExtensionsStats.map(f => f.count)) %>;
+    new Chart(document.getElementById('fileExtensionsChart'), {
+      type: 'pie',
+      data: {
+        labels: fileExtensionLabels,
+        datasets: [{
+          label: 'File Extension Usage',
+          data: fileExtensionData,
+          backgroundColor: [
+            '#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#6366f1', '#22d3ee'
+          ]
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'right' }
+        }
+      }
     });
 
     const regexLabels = <%- JSON.stringify(regexLabelStats.map(r => [r._id, r.count])) %>;
@@ -191,8 +229,6 @@
         responsive: true
       }
     });
-
-
 
   </script>
 

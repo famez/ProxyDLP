@@ -52,6 +52,8 @@ COPY --chown=appuser:appgroup proto/ proto/
 # Generate gRPC code
 RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. proto/monitor.proto
 
+RUN pip install schedule
+
 # Copy application code with correct ownership
 COPY --chown=appuser:appgroup monitor/src/ .
 

@@ -192,6 +192,17 @@
                 </span>
               <% }) %>
             <% } %>
+            <% if (event.tfidf_top_words && event.tfidf_top_words.length > 0) { %>
+              <div class="mt-2 flex flex-wrap items-center gap-2">
+                <span class="text-xs text-gray-500 mr-2">Top words:</span>
+                <% event.tfidf_top_words.forEach(wordObj => { %>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <%= wordObj.word %>
+                      <span class="ml-1 text-gray-400 font-normal">(<%= (wordObj.score * 100).toFixed(1) %>%)</span>
+                  </span>
+                <% }) %>
+              </div>
+            <% } %>
           </li>
         <% }) %>
       </ol>

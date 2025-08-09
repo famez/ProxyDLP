@@ -12,3 +12,7 @@ faiss-cpu==1.11.0
 yara-python==4.5.4
 syslog-rfc5424-formatter==1.2.3
 readerwriterlock==1.0.9
+nltk==3.8.1
+langdetect==1.0.9
+scikit-learn==1.3.0
+numpy==1.25.0

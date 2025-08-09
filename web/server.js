@@ -826,44 +826,6 @@ app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, r
     ]).toArray();
 
 
-
-    const trendData = await db.collection('events').aggregate([
-      // Step 1: Compute max score from leak.topic
-      {
-        $addFields: {
-          cos_score: {
-            $max: {
-              $map: {
-                input: { $ifNull: ["$leak.topic", []] },
-                as: "t",
-                in: "$$t.score"
-              }
-            }
-          }
-        }
-      },
-      // Step 2: Filter valid scores
-      {
-        $match: {
-          cos_score: { $type: "number" }
-        }
-      },
-      // Step 3: Group by date string
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
-          count: { $sum: 1 },
-          avg_score: { $avg: "$cos_score" }
-        }
-      },
-      // Step 4: Sort by date
-      {
-        $sort: { "_id": 1 }
-      }
-    ]).toArray();
-
-
-
       const regexLabelStats = await db.collection('events').aggregate([
         {
           $project: {
@@ -931,7 +893,70 @@ app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, r
         { $sort: { count: -1 } },
         { $limit: 10 }
       ]).toArray();
-  
+
+      // Backend data example
+      wordRelevancyStats = await db.collection('events').aggregate([
+        { $unwind: '$tfidf_top_words' },
+        { $group: { _id: '$tfidf_top_words.word', count: { $sum: 1 } } },
+        { $project: { word: '$_id', count: 1, _id: 0 } },  // rename _id to word, remove _id
+        { $sort: { count: -1 } },
+        { $limit: 15 }
+      ]).toArray();
+
+
+      console.log("Word stats:" + JSON.stringify(wordRelevancyStats, null, 2))
+
+      fileExtensionsStats = await db.collection('events').aggregate([
+        // Filter only events with a filename field (uploaded files)
+        { $match: { filename: { $exists: true, $ne: null } } },
+
+        // Extract file extension from filename
+        {
+          $addFields: {
+            extension: {
+              $toLower: {
+                $let: {
+                  vars: {
+                    parts: { $split: ["$filename", "."] }
+                  },
+                  in: {
+                    $cond: [
+                      { $gt: [{ $size: "$$parts" }, 1] },
+                      { $concat: [".", { $arrayElemAt: ["$$parts", { $subtract: [{ $size: "$$parts" }, 1] }] }] },
+                      ""  // no extension found
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+
+        // Group by extension and count
+        {
+          $group: {
+            _id: "$extension",
+            count: { $sum: 1 }
+          }
+        },
+
+        // Sort descending
+        { $sort: { count: -1 } },
+
+        // Limit if you want top N extensions, e.g., 10
+        { $limit: 15 },
+
+        // Project to rename _id to extension
+        {
+          $project: {
+            extension: "$_id",
+            count: 1,
+            _id: 0
+          }
+        }
+      ]).toArray();
+
+    console.log("File extensions stats:", fileExtensionsStats);    
     await client.close();
 
     res.render('stats', {title: "Statistics", 
@@ -939,11 +964,11 @@ app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, r
       topicStats,
       toolUsage,
       userStats,
-      trendDates: trendData.map(d => d._id),
-      trendCounts: trendData.map(d => d.count),
       regexLabelStats,
       regexHeavyEvents,
-      topMatchedWords
+      topMatchedWords,
+      wordRelevancyStats,
+      fileExtensionsStats
     });
 
   } catch (err) {
