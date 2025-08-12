@@ -60,6 +60,7 @@ class BlackBox(Site):
                 if not "messages" in json_body:
                     return
                 
+                conversation_id = json_body.get("id", None)
                 
                 for message in reversed(json_body['messages']): 
                     if 'role' in message and message['role'] == "user" and 'content' in message:
@@ -75,9 +76,10 @@ class BlackBox(Site):
                                 self.sessions[session_id] = {'email': email}        #Keep track of email from conversation id.
                                 ctx.log.info("Added session 2")
 
-                            self.conversation_callback(json_body['session']['user']['email'], message['content'])
+                            self.conversation_callback(json_body['session']['user']['email'], message['content'],
+                                                       conversation_id = conversation_id)
                         else:
-                            self.anonymous_conversation_callback(message['content'])
+                            self.anonymous_conversation_callback(message['content'], conversation_id = conversation_id)
                         break
 
 
