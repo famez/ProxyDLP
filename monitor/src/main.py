@@ -335,9 +335,9 @@ def on_event_added(event_id):
         result = {}
 
         if event['rational'] == "Conversation":
-            print(f"Conversation, analysing: {event['content']}")
+            #print(f"Conversation, analysing: {event['content']}")
             leak = analyze_text(event['content'])
-            print(f"Done: {leak}")
+            #print(f"Done: {leak}")
 
 
             result = events_collection.update_one(
