@@ -25,8 +25,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-const upload = multer({ dest: '/uploads/' });
 
+// Import routes
+const agentRoutes = require('./agents');
+
+// Mount routes under /api/agent
+app.use('/api/agent', agentRoutes);
+
+const upload = multer({ dest: '/uploads/' });
 
 // Load the protobuf
 const packageDefinition = protoLoader.loadSync(
