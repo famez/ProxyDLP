@@ -1,7 +1,40 @@
 // agents.js
 const express = require('express');
 const router = express.Router();
+const { v4: uuidv4 } = require('uuid');
 const { connectToDB } = require('./db');
+
+
+router.get('/register', async (req, res) => {
+
+  console.log('Register received');
+
+  //For the moment, no security
+
+  // Generate a GUID
+  const guid = uuidv4();
+
+  let client;
+
+  try {
+    ({ client, db } = await connectToDB());
+
+    const result = await db.collection('agents').insertOne({ guid });
+
+    console.log('Agent registered');
+
+  } catch (err) {
+    console.error('Error updating agent information:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+
+  // Return it in a JSON object
+  res.json({ guid });
+
+
+});
 
 
 // Heartbeat endpoint

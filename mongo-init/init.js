@@ -32,6 +32,8 @@ db.yara_rules.createIndex({ "name": 1 }, { unique: true });
 db.sites.createIndex({ "name": 1 }, { unique: true });
 db["alert-destinations"].createIndex({ "name": 1 }, { unique: true });
 db["alert-rules"].createIndex({ "name": 1 }, { unique: true });
+db.agents.createIndex({ "guid": 1 }, { unique: true });
+
 
 db["alert-destinations"].insertOne({
       name: "Local logs",
