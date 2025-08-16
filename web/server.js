@@ -1,5 +1,4 @@
 const express = require('express');
-const { MongoClient } = require('mongodb');
 const { ObjectId } = require('mongodb');
 const path = require('path');
 const expressLayouts = require('express-ejs-layouts');
@@ -11,11 +10,11 @@ const requirePermission = require('./middleware/requirePermission');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const multer = require('multer');
+const { connectToDB } = require('./db');
 
 
 const app = express();
 const PORT = 3000;
-const mongoUri = process.env.MONGO_URI;
 
 app.set('view engine', 'ejs');
 app.use(expressLayouts);
@@ -66,13 +65,6 @@ function isStrongPassword(password) {
 }
 
 
-async function connectToDB() {
-  const client = new MongoClient(mongoUri);
-  await client.connect();
-  const db = client.db('ProxyDLP');
-  
-  return { client, db };
-}
 
 async function getRegexRules() {
   const { client, db } = await connectToDB();
@@ -1841,44 +1833,23 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
 });
 
 app.get('/agents', authMiddleware, requirePermission("agents"), async (req, res) => {
+    
+    let client;
+
   try {
-    // Placeholder list of agents
-    const agents = [
-      {
-        _id: "1",
-        hostname: "WIN-12345",
-        os: "Windows 10",
-        version: "1.0.0",
-        status: "online",
-        last_seen: "2025-08-16 10:00:00"
-      },
-      {
-        _id: "2",
-        hostname: "OFFICE-PC",
-        os: "Windows 11",
-        version: "1.2.3",
-        status: "offline",
-        last_seen: "2025-08-15 19:42:00"
-      },
-      {
-        _id: "3",
-        hostname: "LAPTOP-DEV",
-        os: "Windows 10",
-        version: "2.0.1",
-        status: "online",
-        last_seen: "2025-08-16 09:30:00"
-      }
-    ];
+    ({ client, db } = await connectToDB());
+    const agents = await db.collection('agents').find().toArray();
 
     res.render('agents', { title: 'Installed Agents', agents });
+
   } catch (err) {
-    console.error('Error rendering agents:', err);
-    res.status(500).send('Internal Server Error');
+    console.error('Error retrieving agents:', err);
+    res.status(500).send('Internal server error.');
+  } finally {
+    if (client) await client.close();
   }
+
 });
-
-
-
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
