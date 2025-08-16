@@ -335,9 +335,9 @@ def on_event_added(event_id):
         result = {}
 
         if event['rational'] == "Conversation":
-            print(f"Conversation, analysing: {event['content']}")
+            #print(f"Conversation, analysing: {event['content']}")
             leak = analyze_text(event['content'])
-            print(f"Done: {leak}")
+            #print(f"Done: {leak}")
 
 
             result = events_collection.update_one(
@@ -802,17 +802,20 @@ def perform_tf_idf():
     event_ids = []
     texts = []
     for event in events_collection.find({}, {"_id": 1, "content": 1, "filepath": 1, "content_type": 1, "rational": 1}):
+        text = ""
         if event.get("rational") == "Conversation" and event.get("content"):
-            texts.append(event["content"])
-            event_ids.append(event["_id"])
+            text = event["content"]
         elif event.get("rational") == "Attached file" and event.get("filepath") and event.get("content_type"):
             try:
                 text = decode_file(event["filepath"], event["content_type"])
-                if text:
-                    texts.append(text)
-                    event_ids.append(event["_id"])
+                
             except Exception as e:
                 print(f"Error decoding file {event['filepath']}: {e}")
+
+        #Check that we are indeed appending a string
+        if isinstance(text, str) and text:
+            texts.append(text)
+            event_ids.append(event["_id"])
 
     if not texts:
         print("No events to process for TF-IDF.")
