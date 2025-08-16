@@ -1065,7 +1065,7 @@ app.get('/sites', authMiddleware, requirePermission("sites"), async (req, res) =
 
 const allPermissions = [
   "playground", "mitmterminal", "user_management", "rules",
-  "events", "domains", "sites", "statistics", "alerts", "conversations"
+  "events", "domains", "sites", "statistics", "alerts", "conversations", "agents"
 ];
 
 // GET /manage-permissions
@@ -1839,6 +1839,44 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
     if (client) await client.close();
   }
 });
+
+app.get('/agents', authMiddleware, requirePermission("agents"), async (req, res) => {
+  try {
+    // Placeholder list of agents
+    const agents = [
+      {
+        _id: "1",
+        hostname: "WIN-12345",
+        os: "Windows 10",
+        version: "1.0.0",
+        status: "online",
+        last_seen: "2025-08-16 10:00:00"
+      },
+      {
+        _id: "2",
+        hostname: "OFFICE-PC",
+        os: "Windows 11",
+        version: "1.2.3",
+        status: "offline",
+        last_seen: "2025-08-15 19:42:00"
+      },
+      {
+        _id: "3",
+        hostname: "LAPTOP-DEV",
+        os: "Windows 10",
+        version: "2.0.1",
+        status: "online",
+        last_seen: "2025-08-16 09:30:00"
+      }
+    ];
+
+    res.render('agents', { title: 'Installed Agents', agents });
+  } catch (err) {
+    console.error('Error rendering agents:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 
 
 
