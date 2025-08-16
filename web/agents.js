@@ -5,28 +5,43 @@ const { connectToDB } = require('./db');
 
 
 // Heartbeat endpoint
-router.get('/heartbeat', async (req, res) => {
+router.post('/heartbeat', async (req, res) => {
   console.log('Heartbeat received:', req.body);
 
-  // Get client IP
+
+  // Destructure expected fields
+  const { computer_name, os_version, user, ip_addresses, agent_version } = req.body;
+
+  console.log(`--> Computer: ${computer_name}`);
+  console.log(`--> OS: ${os_version}`);
+  console.log(`--> User: ${user}`);
+  console.log(`--> IP(s): ${ip_addresses}`);
+  console.log(`--> Agent Version: ${agent_version}`);
+
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
 
   let client;
 
   try {
     ({ client, db } = await connectToDB());
 
-    await db.collection('agents').updateOne(
-      { ip }, // find by ip
-      {
-        $set: {
-          ip,
-          lastHeartbeat: new Date(),
-          status: "online" // store extra info if needed
-        }
-      },
-      { upsert: true }
-    );
+  await db.collection('agents').updateOne(
+    { ip }, // find by IP
+    {
+      $set: {
+        ip,
+        lastHeartbeat: new Date(),
+        status: "online",
+        computer_name,
+        os_version,
+        user,
+        ip_addresses,
+        agent_version
+      }
+    },
+    { upsert: true }
+  );
 
     res.json({
       status: 'ok',
