@@ -32,7 +32,6 @@ router.post('/heartbeat', async (req, res) => {
       $set: {
         ip,
         lastHeartbeat: new Date(),
-        status: "online",
         computer_name,
         os_version,
         user,

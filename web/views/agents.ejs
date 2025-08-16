@@ -14,21 +14,25 @@
 
       <% if (agents && agents.length > 0) { %>
         <ul class="space-y-4 mb-6">
-          <% agents.forEach(agent => { %>
+          <% agents.forEach(agent => { 
+              const lastSeen = new Date(agent.lastHeartbeat);
+              const now = new Date();
+              const diffMinutes = (now - lastSeen) / 1000 / 60; // difference in minutes
+              const isOnline = diffMinutes <= 5;
+          %>
             <li class="border rounded-lg p-4 bg-gray-50 hover:bg-indigo-50 transition">
               <div class="flex justify-between items-start">
                 <div>
                   <div class="font-bold text-lg text-gray-800"><%= agent.ip %></div>
                   <div class="text-sm text-gray-600">Last Seen: <%= agent.lastHeartbeat %></div>
                   <div class="text-sm mt-1">
-                    <% if (agent.status === 'online') { %>
+                    <% if (isOnline) { %>
                       <span class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Online</span>
                     <% } else { %>
                       <span class="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Offline</span>
                     <% } %>
                   </div>
                 </div>
-
               </div>
             </li>
           <% }) %>
@@ -36,6 +40,7 @@
       <% } else { %>
         <p class="text-gray-600">No agents installed.</p>
       <% } %>
+
 
       <!-- Register New Agent Form -->
       <h2 class="text-xl font-semibold mb-4 mt
