@@ -54,60 +54,72 @@ router.get('/register', async (req, res) => {
   // Return it in a JSON object
   res.json({ guid, token });
 
-
 });
-
 
 // Heartbeat endpoint
 router.post('/heartbeat', async (req, res) => {
+
   console.log('Heartbeat received:', req.body);
 
-
   // Destructure expected fields
-  const { computer_name, os_version, user, ip_addresses, agent_version } = req.body;
-
-  console.log(`--> Computer: ${computer_name}`);
-  console.log(`--> OS: ${os_version}`);
-  console.log(`--> User: ${user}`);
-  console.log(`--> IP(s): ${ip_addresses}`);
-  console.log(`--> Agent Version: ${agent_version}`);
-
+  const { guid, computer_name, os_version, user, ip_addresses, agent_version } = req.body;
+  const authHeader = req.headers['authorization'];
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
+  if (!guid) {
+    return res.status(400).json({ error: 'Missing guid' });
+  }
 
-  let client;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+
+  const providedToken = authHeader.split(' ')[1];
+
+  let client, db;
 
   try {
     ({ client, db } = await connectToDB());
 
-  await db.collection('agents').updateOne(
-    { ip }, // find by IP
-    {
-      $set: {
-        ip,
-        lastHeartbeat: new Date(),
-        computer_name,
-        os_version,
-        user,
-        ip_addresses,
-        agent_version
-      }
-    },
-    { upsert: true }
-  );
+    // Find agent by guid
+    const agent = await db.collection('agents').findOne({ guid });
 
-    res.json({
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    // Check token hash
+    if (!verifyToken(agent.hashedToken, providedToken)) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Update agent info
+    await db.collection('agents').updateOne(
+      { guid },
+      {
+        $set: {
+          ip,
+          lastHeartbeat: new Date(),
+          computer_name,
+          os_version,
+          user,
+          ip_addresses,
+          agent_version
+        }
+      }
+    );
+
+    return res.json({
       status: 'ok',
       timestamp: new Date().toISOString()
     });
 
   } catch (err) {
     console.error('Error updating agent information:', err);
-    res.status(500).send('Internal Server Error');
+    return res.status(500).send('Internal Server Error');
   } finally {
     if (client) await client.close();
   }
-
 });
 
 module.exports = router;
