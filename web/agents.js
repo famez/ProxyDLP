@@ -89,7 +89,8 @@ router.post('/heartbeat', async (req, res) => {
     }
 
     // Check token hash
-    if (!verifyToken(agent.hashedToken, providedToken)) {
+    const valid = await verifyToken(providedToken, agent.hashedToken);
+    if (!valid) {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
