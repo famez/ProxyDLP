@@ -3,7 +3,23 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { connectToDB } = require('./db');
+const crypto = require("crypto");
+const bcrypt = require("bcrypt");
 
+
+function generateAccessToken(length = 48) {
+  return crypto.randomBytes(length).toString("hex");
+}
+
+async function hashToken(token) {
+  const saltRounds = 12; // adjust cost factor as needed
+  return await bcrypt.hash(token, saltRounds);
+}
+
+// Verify token against stored hash
+async function verifyToken(token, hash) {
+  return await bcrypt.compare(token, hash);
+}
 
 router.get('/register', async (req, res) => {
 
@@ -14,12 +30,17 @@ router.get('/register', async (req, res) => {
   // Generate a GUID
   const guid = uuidv4();
 
+  //Generate random access token
+  const token = generateAccessToken(32); // 32 bytes = 64 hex characters
+
+  const hashedToken = await hashToken(token);
+
   let client;
 
   try {
     ({ client, db } = await connectToDB());
 
-    const result = await db.collection('agents').insertOne({ guid });
+    const result = await db.collection('agents').insertOne({ guid, hashedToken });
 
     console.log('Agent registered');
 
@@ -31,7 +52,7 @@ router.get('/register', async (req, res) => {
   }
 
   // Return it in a JSON object
-  res.json({ guid });
+  res.json({ guid, token });
 
 
 });
