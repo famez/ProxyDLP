@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package proxy;
+
+service Proxy {
+  rpc SiteRejectEnabled (Enabled) returns (ProxyReply);
+}
+
+message Enabled {
+  bool enabled = 1;
+}
+
+message ProxyReply {
+  int32 result = 1;
+}

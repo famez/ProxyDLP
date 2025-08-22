@@ -23,6 +23,7 @@ db.createCollection('alert-rules');
 db.createCollection('alert-destinations');
 db.createCollection('alert-logs');
 db.createCollection('domain-settings');
+db.createCollection('site-settings');
 
 
 db.topic_rules.createIndex({ "name": 1 }, { unique: true });

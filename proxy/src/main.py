@@ -1,4 +1,6 @@
 from mitmproxy import http, ctx, websocket
+from mitmproxy.http import Response
+
 import re
 import os
 from datetime import datetime, timezone
@@ -7,6 +9,11 @@ from pymongo import MongoClient
 import grpc
 import monitor_pb2
 import monitor_pb2_grpc
+import proxy_pb2
+import proxy_pb2_grpc
+from grpc_health.v1 import health, health_pb2, health_pb2_grpc
+
+from concurrent import futures
 
 from proxy import Proxy
 from sites.chatgpt import ChatGPT
@@ -28,6 +35,11 @@ events_collection = db_client["ProxyDLP"]["events"]
 domains_collection = db_client["ProxyDLP"]["domains"]
 sites_collection = db_client["ProxyDLP"]["sites"]
 domain_settings_collection = db_client["ProxyDLP"]["domain-settings"]
+site_settings_collection = db_client["ProxyDLP"]["site-settings"]
+
+
+site_settings = site_settings_collection.find_one()
+rejectSiteTraffic = (site_settings and "rejectTraffic" in site_settings and site_settings['rejectTraffic'])
 
 
 #Anonymous access is allowed if no account check is enabled to authorize several account domains
@@ -189,7 +201,9 @@ stub = monitor_pb2_grpc.MonitorStub(channel)
 
 
 def request(flow: http.HTTPFlow) -> None:
-    proxy.route_request(flow)
+    if not proxy.route_request(flow) and rejectSiteTraffic:
+        flow.response = Response.make(403)
+
 
 def response(flow: http.HTTPFlow) -> None:
     proxy.route_response(flow)
@@ -207,3 +221,27 @@ class WSHandler:
 
 addons = [WSHandler()]
 
+
+class ProxyServicer(proxy_pb2_grpc.ProxyServicer):
+
+    def SiteRejectEnabled(self, request, context):
+        global rejectSiteTraffic
+        ctx.log.info(f"Received SiteRejectedEnabled: {request.enabled}")
+        rejectSiteTraffic = request.enabled
+
+        return proxy_pb2.ProxyReply(result=0)       #Everything ok :)
+
+
+# Initialize gRPC server
+server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+proxy_pb2_grpc.add_ProxyServicer_to_server(ProxyServicer(), server)
+
+#For health check to ensure proper start up of the containers
+# Add health service
+health_servicer = health.HealthServicer()
+health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+health_servicer.set('', health_pb2.HealthCheckResponse.SERVING)
+
+server.add_insecure_port("[::]:50051")
+server.start()
+print("Server running on port 50051...")

@@ -23,6 +23,7 @@ RUN npm install --include=dev
 COPY --chown=appuser:appgroup web/. .
 
 COPY --chown=appuser:appgroup proto/monitor.proto .
+COPY --chown=appuser:appgroup proto/proxy.proto .
 
 RUN npm run build:css
 

@@ -21,11 +21,15 @@ class Proxy:
         self.sites.append(site)
 
     def route_request(self, flow):
+        routed = False
         url = flow.request.pretty_url
         for site in self.sites:
             for site_url in site.get_urls():
                 if site_url in url:
                     site.handle_request(flow)
+                    routed = True
+
+        return routed
 
     def route_response(self, flow):
         url = flow.request.pretty_url
