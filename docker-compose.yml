@@ -14,7 +14,7 @@ services:
     stdin_open: true
     tty: true
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c 'import socket; s=socket.socket(); s.settimeout(1); s.connect((\"localhost\",8765)); s.close()'"]
+      test: ["CMD-SHELL", "python3 -c 'import socket; s=socket.socket(); s.settimeout(1); s.connect((\"localhost\",8765)); s.close()' && grpc_health_probe -addr=:50051 -rpc-timeout=2s || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

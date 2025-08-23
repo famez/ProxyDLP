@@ -36,7 +36,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 
 
-import schedule
 import threading
 import time
 
@@ -70,7 +69,7 @@ faiss_rw_lock = rwlock.RWLockFair()
 yara_rules_compiled = None
 yara_rw_lock = rwlock.RWLockFair()
 
-embeddings_model = SentenceTransformer('all-MiniLM-L6-v2')
+embeddings_model = None
 
 
 def load_regex_rules():
@@ -842,15 +841,24 @@ def perform_tf_idf():
             {"$set": {"tfidf_top_words": top_words}}
         )
 
+def run_tf_idf_periodically():
+    """Run perform_tf_idf immediately and then every 2 hours."""
+    while True:
+        try:
+            perform_tf_idf()
+        except Exception as e:
+            print(f"Error in perform_tf_idf: {e}")
+        time.sleep(2 * 60 * 60)  # Sleep for 2 hours
+
 
 
 def main():
 
     reload_all_rules()  # Load all rules at startup
 
-    #Initialize scheduled task for performing TF-IDF over the text data
-    threading.Thread(target=perform_tf_idf, daemon=True).start()
-    schedule.every(2).hours.do(perform_tf_idf)
+    # Start TF-IDF background thread
+    threading.Thread(target=run_tf_idf_periodically, daemon=True).start()
+
 
     # Initialize gRPC server
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

@@ -13,8 +13,14 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    tmux libmagic1 \
+    tmux libmagic1 curl\
     && rm -rf /var/lib/apt/lists/*
+
+# Download grpc_health_probe as root, set permissions for appuser
+RUN curl -L https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.11/grpc_health_probe-linux-amd64 \
+    -o /usr/local/bin/grpc_health_probe \
+    && chmod +x /usr/local/bin/grpc_health_probe \
+    && chown appuser:appgroup /usr/local/bin/grpc_health_probe
 
 # Copy requirements.txt with proper ownership
 COPY --chown=appuser:appgroup proxy/requirements.txt .
@@ -26,7 +32,9 @@ RUN python -m venv $VENV_PATH && \
 
 # Install Python dependencies as appuser
 USER appuser
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt \
+    && pip install grpcio grpcio-tools grpcio-health-checking
 
 # Switch back to root for cert setup and copying other files
 USER root
@@ -55,5 +63,6 @@ WORKDIR /app
 
 # Generate gRPC Python files using the installed venv python
 RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. monitor.proto
+RUN python -m grpc_tools.protoc -Iproto --python_out=. --grpc_python_out=. proxy.proto
 
 CMD ["tmux", "new", "-As", "mitmsession", "mitmproxy", "-s", "main.py"]

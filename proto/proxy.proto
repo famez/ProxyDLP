@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package proxy;
+
+service Proxy {
+  rpc SiteRejectEnabled (Enabled) returns (ProxyReply);
+  rpc SiteMonitoringToggled (Site) returns (ProxyReply);
+}
+
+message Site {
+  string id = 1;
+  bool enabled = 2;
+}
+
+message Enabled {
+  bool enabled = 1;
+}
+
+message ProxyReply {
+  int32 result = 1;
+}

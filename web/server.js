@@ -34,7 +34,7 @@ app.use('/api/agent', agentRoutes);
 const upload = multer({ dest: '/uploads/' });
 
 // Load the protobuf
-const packageDefinition = protoLoader.loadSync(
+const monitorPackageDefinition = protoLoader.loadSync(
   path.resolve(__dirname, 'monitor.proto'),
   {
     keepCase: true,
@@ -45,10 +45,27 @@ const packageDefinition = protoLoader.loadSync(
   }
 );
 
-const proto = grpc.loadPackageDefinition(packageDefinition).monitor;
+const monitor_proto = grpc.loadPackageDefinition(monitorPackageDefinition).monitor;
+
+// Load the protobuf
+const proxyPackageDefinition = protoLoader.loadSync(
+  path.resolve(__dirname, 'proxy.proto'),
+  {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true
+  }
+);
+
+const proxy_proto = grpc.loadPackageDefinition(proxyPackageDefinition).proxy;
+
 
 // Create the client
-const gRPC_client = new proto.Monitor('monitor:50051', grpc.credentials.createInsecure());
+const gRPC_monitor_client = new monitor_proto.Monitor('monitor:50051', grpc.credentials.createInsecure());
+const gRPC_proxy_client = new proxy_proto.Proxy('proxy:50051', grpc.credentials.createInsecure());
+
 
 function isValidRegex(pattern) {
   try {
@@ -244,7 +261,7 @@ app.post('/rules/regex/add', authMiddleware, requirePermission("rules"), async (
   try {
     ({ client, db } = await connectToDB());
     const result = await db.collection('regex_rules').insertOne({ [name]: pattern });
-    gRPC_client.RegexRuleAdded({ id: result.insertedId }, () => {});
+    gRPC_monitor_client.RegexRuleAdded({ id: result.insertedId }, () => {});
     res.redirect('/rules/regex');
   } catch (err) {
     console.error('Error adding regex rule:', err);
@@ -264,7 +281,7 @@ app.post('/rules/topic/add', authMiddleware, requirePermission("rules"), async (
   try {
     ({ client, db } = await connectToDB());
     const result = await db.collection('topic_rules').insertOne({ name, pattern });
-    gRPC_client.TopicRuleAdded({ id: result.insertedId }, () => {});
+    gRPC_monitor_client.TopicRuleAdded({ id: result.insertedId }, () => {});
     res.redirect('/rules/topic');
   } catch (err) {
     if (err.code === 11000) {
@@ -284,7 +301,7 @@ app.post('/rules/yara/add', authMiddleware, requirePermission("rules"), async (r
   }
 
   //Send gRPC notification to monitor as it can check if the rule is valid
-  const result = gRPC_client.YaraRuleAdded({ name: name, content: content }, (err, response) => {
+  const result = gRPC_monitor_client.YaraRuleAdded({ name: name, content: content }, (err, response) => {
     if (err) {
       console.error('gRPC YaraRuleAdded error:', err);
       console.error('Error adding YARA rule:', err);
@@ -335,15 +352,15 @@ app.post('/rules/:type/delete/:id', authMiddleware, requirePermission("rules"), 
 
     if (type === 'topic') {
       // Notify gRPC service about topic rule deletion
-      gRPC_client.TopicRuleRemoved({ id }, () => {});   //Monitor service will handle the deletion from the database
+      gRPC_monitor_client.TopicRuleRemoved({ id }, () => {});   //Monitor service will handle the deletion from the database
     } else if (type === 'yara') { 
       // Notify gRPC service about YARA rule deletion
       await db.collection(`${type}_rules`).deleteOne({ _id: new ObjectId(id) });
-      gRPC_client.YaraRuleRemoved({ id }, () => {});
+      gRPC_monitor_client.YaraRuleRemoved({ id }, () => {});
     } else if (type === 'regex') {
       // Notify gRPC service about regex rule deletion
       await db.collection(`${type}_rules`).deleteOne({ _id: new ObjectId(id) });
-      gRPC_client.RegexRuleRemoved({ id }, () => {});
+      gRPC_monitor_client.RegexRuleRemoved({ id }, () => {});
     }
 
     res.redirect(`/rules/${type}`);
@@ -417,13 +434,13 @@ app.post('/rules/:type/edit/:id', authMiddleware, requirePermission("rules"), as
 
     if (type === 'topic') {
       // Notify gRPC service about topic rule update
-      gRPC_client.TopicRuleEdited({ id }, () => {});   //Monitor service will handle the update from the database
+      gRPC_monitor_client.TopicRuleEdited({ id }, () => {});   //Monitor service will handle the update from the database
     } else if (type === 'yara') { 
       // Notify gRPC service about YARA rule update
-      gRPC_client.YaraRuleEdited({ id: {id}, rule: updateData }, () => {});
+      gRPC_monitor_client.YaraRuleEdited({ id: {id}, rule: updateData }, () => {});
     } else if (type === 'regex') {
       // Notify gRPC service about regex rule update
-      gRPC_client.RegexRuleEdited({ id }, () => {});
+      gRPC_monitor_client.RegexRuleEdited({ id }, () => {});
     }
 
     res.redirect(`/rules/${type}`);
@@ -1006,7 +1023,7 @@ app.post('/playground', authMiddleware, requirePermission("playground"), upload.
       "source_ip": req.ip,
     });
 
-    gRPC_client.EventAdded({ id: result.insertedId }, () => {});
+    gRPC_monitor_client.EventAdded({ id: result.insertedId }, () => {});
 
     if (file) {
       console.log('Uploaded file:', file.originalname);
@@ -1020,7 +1037,7 @@ app.post('/playground', authMiddleware, requirePermission("playground"), upload.
         "content_type": file.mimetype, 
         "site": "Playground"
       });
-      gRPC_client.EventAdded({ id: result.insertedId }, () => {});
+      gRPC_monitor_client.EventAdded({ id: result.insertedId }, () => {});
     }
 
     res.redirect('/playground');
@@ -1042,9 +1059,13 @@ app.get('/sites', authMiddleware, requirePermission("sites"), async (req, res) =
     ({ client, db } = await connectToDB());
     const site_docs = await db.collection('sites').find().toArray();
 
-    console.log('Loaded sites:', site_docs);
+    const site_settings = await db.collection("site-settings").findOne();
+    const rejectTraffic = site_settings ? site_settings.rejectTraffic : false;
 
-    res.render('sites', { title: "Sites", site_docs});
+    console.log("rejectTraffic: ", rejectTraffic)
+
+
+    res.render('sites', { title: "Sites", site_docs, rejectTraffic});
 
   } catch (err) {
     console.error('Error showing sites:', err);
@@ -1054,6 +1075,83 @@ app.get('/sites', authMiddleware, requirePermission("sites"), async (req, res) =
   }  
 
 });
+
+
+app.post('/sites/reject-traffic', authMiddleware, requirePermission("sites"), async (req, res) => {
+
+
+  let client;
+  try {
+
+    ({ client, db } = await connectToDB());
+
+    const site_settings = await db.collection('site-settings').find().toArray();
+
+    const { reject_traffic } = req.body;
+
+    if (typeof reject_traffic !== "boolean") {
+      return res.status(400).send("reject_traffic must be a boolean");
+    }
+
+    const result = await db.collection('site-settings').updateOne(
+      {}, // filter - empty means update the first document found
+      { $set: { rejectTraffic: reject_traffic } },
+      { upsert: true }
+    );
+
+    if (result.modifiedCount === 0 && result.upsertedCount === 0) {
+      return res.status(500).send("Failed to update site settings");
+    }
+
+    gRPC_proxy_client.SiteRejectEnabled({ enabled: reject_traffic }, () => {});
+
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    console.error('Error setting sites config:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }  
+
+});
+
+app.post('/sites/toggle-monitoring', authMiddleware, requirePermission("sites"), async (req, res) => {
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+
+    const { site_id, enabled } = req.body;
+
+    if (!site_id || typeof enabled !== "boolean") {
+      return res.status(400).send("site_id and enabled (boolean) are required");
+    }
+
+    // Update the site document
+    const result = await db.collection('sites').updateOne(
+      { _id: new ObjectId(site_id) }, // filter by site_id
+      { $set: { enabled } },
+      { upsert: false }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).send("Site not found or already in desired state");
+    }
+
+    gRPC_proxy_client.SiteMonitoringToggled({ id: site_id, enabled }, () => {});
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    console.error('Error toggling site monitoring:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
 
 const allPermissions = [
   "playground", "mitmterminal", "user_management", "rules",
@@ -1131,7 +1229,7 @@ app.post('/add-event-to-topic-rules', authMiddleware, requirePermission("events"
 
     const result = await db.collection('topic_rules').insertOne({ name, pattern: event.content });
 
-    gRPC_client.TopicRuleAdded({ id: result.insertedId }, () => {});
+    gRPC_monitor_client.TopicRuleAdded({ id: result.insertedId }, () => {});
 
     res.redirect('/event/' + eventId);
 
