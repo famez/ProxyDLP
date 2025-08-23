@@ -24,31 +24,43 @@ class Proxy:
         routed = False
         url = flow.request.pretty_url
         for site in self.sites:
-            for site_url in site.get_urls():
-                if site_url in url:
-                    site.handle_request(flow)
-                    routed = True
+            if site.isEnabled():
+                for site_url in site.get_urls():
+                    if site_url in url:
+                        site.handle_request(flow)
+                        routed = True
 
         return routed
 
     def route_response(self, flow):
+        routed = False
         url = flow.request.pretty_url
         for site in self.sites:
-            for site_url in site.get_urls():
-                if site_url in url:
-                    site.handle_response(flow)
+            if site.isEnabled():
+                for site_url in site.get_urls():
+                    if site_url in url:
+                        site.handle_response(flow)
+                        routed = True
+                        
+        return routed
 
                     
     def route_ws_from_client_to_server(self, flow, message):
         url = flow.request.pretty_url
         for site in self.sites:
-            for site_url in site.get_urls():
-                if site_url in url:
-                    site.handle_ws_from_client_to_server(flow, message)
-                    return
+            if site.isEnabled():
+                for site_url in site.get_urls():
+                    if site_url in url:
+                        site.handle_ws_from_client_to_server(flow, message)
+                        return True
+        return False
                 
     def get_sites(self):
         return self.sites
+    
+    def get_site(self, name: str):
+        # Find the first matching object
+        return next((x for x in self.sites if x.get_name() == name), None)
     
 
 class EmailNotFoundException(Exception):
@@ -69,6 +81,17 @@ class Site:
         self.on_attached_file_callback = attached_file_callback
         self.on_allow_anonymous_access = allow_anonymous_access
         self.on_anonymous_conversation_callback = anonymous_conversation_callback
+
+        self.enabled = False
+
+    def enable(self):
+        self.enabled = True
+
+    def disable(self):
+        self.enabled = False
+
+    def isEnabled(self):
+        return self.enabled
 
     def get_urls(self):
         return self.urls

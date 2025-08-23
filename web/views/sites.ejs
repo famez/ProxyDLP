@@ -46,22 +46,45 @@
       </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto overflow-visible">
       <table class="min-w-full divide-y divide-gray-200">
         <thead>
           <tr class="bg-indigo-50">
             <th class="px-6 py-3 text-left text-sm font-semibold text-indigo-700 uppercase tracking-wider">Site</th>
             <th class="px-6 py-3 text-left text-sm font-semibold text-indigo-700 uppercase tracking-wider">Watched URLs</th>
+
+            <!-- New Checkbox Column Header with Tooltip -->
+            <th class="px-6 py-3 text-left text-sm font-semibold text-indigo-700 uppercase tracking-wider">
+              Enable Monitoring
+              <div class="relative inline-block group ml-1">
+                <svg xmlns="http://www.w3.org/2000/svg"
+                  class="h-4 w-4 text-indigo-500 cursor-pointer inline"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 10h.01M12 14v.01M12 2a10 10 0 100 20 10 10 0 000-20zm0 6h.01M12 10v4" />
+                </svg>
+                <div
+                  class="absolute right-6 top-1/2 -translate-y-1/2 w-64 
+                        bg-white text-gray-700 text-xs rounded-lg shadow-lg p-3 
+                        opacity-0 group-hover:opacity-100 transition z-50">
+                    Tick this box to <span class="font-semibold text-green-600">enable monitoring</span>
+                    for this site. Untick to <span class="font-semibold text-red-600">disable monitoring</span>.
+                </div>
+
+              </div>
+            </th>
           </tr>
         </thead>
-        <tbody class="bg-white divide-y divide-gray-100">
 
+        <tbody class="bg-white divide-y divide-gray-100">
           <% site_docs.forEach(site => { %>
             <tr class="hover:bg-indigo-50 transition">
               <td class="px-6 py-4 flex items-center gap-3 text-indigo-700 font-medium">
                 <!-- Globe icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m0 14v1m8-8h1M4 12H3m15.364-6.364l.707.707M6.343 17.657l-.707.707m0-12.728l.707-.707M17.657 17.657l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500"
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 4v1m0 14v1m8-8h1M4 12H3m15.364-6.364l.707.707M6.343 17.657l-.707.707m0-12.728l.707-.707M17.657 17.657l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
                 </svg>
                 <%= site.name %>
               </td>
@@ -70,10 +93,19 @@
                   <div><%= url %></div>
                 <% }) %>
               </td>
+
+              <!-- New Checkbox Cell -->
+              <td class="px-6 py-4">
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  data-site-id="<%= site._id %>"
+                  <%= site.enabled ? 'checked' : '' %> />
+              </td>
             </tr>
           <% }) %>
-
         </tbody>
+
       </table>
     </div>
     
@@ -118,15 +150,46 @@
               throw new Error('Failed to update reject traffic setting');
             }
 
-            console.log('Reject traffic setting updated:');
+            console.log('Reject traffic setting updated');
           } catch (error) {
             console.error('Error updating reject traffic setting:', error);
             alert('Failed to update setting. Please try again.');
             event.target.checked = !rejectTraffic; // Rollback checkbox state
           }
         });
+
+        // Handle Site Monitoring Checkboxes
+        const siteCheckboxes = document.querySelectorAll('input[data-site-id]');
+        siteCheckboxes.forEach(checkbox => {
+          checkbox.addEventListener('change', async (event) => {
+            const siteId = event.target.dataset.siteId;
+            const enabled = event.target.checked;
+
+            try {
+              const response = await fetch('/sites/toggle-monitoring', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ site_id: siteId, enabled })
+              });
+
+              if (!response.ok) {
+                throw new Error('Failed to update monitoring state');
+              }
+
+              console.log(`Monitoring ${enabled ? 'enabled' : 'disabled'} for site ${siteId}`);
+            } catch (error) {
+              console.error('Error updating site monitoring:', error);
+              alert('Failed to update site monitoring. Please try again.');
+              event.target.checked = !enabled; // Rollback checkbox state
+            }
+          });
+        });
       });
     </script>
+
 
   </main>
 </body>

@@ -6,6 +6,8 @@ import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
 
+from bson.objectid import ObjectId
+
 import grpc
 import monitor_pb2
 import monitor_pb2_grpc
@@ -188,12 +190,34 @@ for site in proxy.get_sites():
     
     try:
         result = sites_collection.insert_one({
-            "name": site.get_name(),
-            "urls": site.get_urls()
+            "name": site.get_name(),        #Name is unique ID, so once it is added the first time, this will "fail"
+            "urls": site.get_urls(),
+            "enabled": False                #Let's default to disable all the sites.
         })
     except Exception as e:
         #ctx.log.error(f"Failed to register site {site.get_name()}: {e}")
         pass
+
+
+#When initializing, let's check which sites are enabled and which are disabled.
+sites = proxy.get_sites()
+
+# Get the list of site names
+site_names = [site.get_name() for site in sites]
+
+# Query the DB for matching names
+db_sites = sites_collection.find({"name": {"$in": site_names}})
+
+# Create a mapping { name: enabled }
+enabled_map = {doc["name"]: doc.get("enabled", False) for doc in db_sites}
+
+# Update Site objects
+for site in sites:
+    if site.get_name() in enabled_map:
+        if enabled_map[site.get_name()]:
+            site.enable()
+        else:
+            site.disable()
 
 
 channel = grpc.insecure_channel('monitor:50051')
@@ -206,7 +230,8 @@ def request(flow: http.HTTPFlow) -> None:
 
 
 def response(flow: http.HTTPFlow) -> None:
-    proxy.route_response(flow)
+    if not proxy.route_response(flow) and rejectSiteTraffic:
+        flow.response = Response.make(403)
 
 
 class WSHandler:
@@ -216,7 +241,9 @@ class WSHandler:
         if message.from_client:
             #ctx.log.info(f"Client -> Server: {message.content}")
             #ctx.log.info(f"Request URL: {flow.request.pretty_url}")
-            proxy.route_ws_from_client_to_server(flow, message)
+            if not proxy.route_ws_from_client_to_server(flow, message) and rejectSiteTraffic:
+                # Prevent the message from being sent to the server
+                message.kill()
         
 
 addons = [WSHandler()]
@@ -228,6 +255,21 @@ class ProxyServicer(proxy_pb2_grpc.ProxyServicer):
         global rejectSiteTraffic
         ctx.log.info(f"Received SiteRejectedEnabled: {request.enabled}")
         rejectSiteTraffic = request.enabled
+
+        return proxy_pb2.ProxyReply(result=0)       #Everything ok :)
+    
+    def SiteMonitoringToggled(self, request, context):
+
+        ctx.log.info(f"Received SiteMonitoringToggled: {request.id}, {request.enabled}")
+
+        db_site = sites_collection.find_one({"_id": ObjectId(request.id)})
+
+        site = proxy.get_site(db_site['name'])
+
+        if request.enabled:
+            site.enable()
+        else:
+            site.disable()
 
         return proxy_pb2.ProxyReply(result=0)       #Everything ok :)
 

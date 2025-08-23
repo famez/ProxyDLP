@@ -1119,6 +1119,42 @@ app.post('/sites/reject-traffic', authMiddleware, requirePermission("sites"), as
 
 });
 
+app.post('/sites/toggle-monitoring', authMiddleware, requirePermission("sites"), async (req, res) => {
+
+  let client;
+  try {
+    ({ client, db } = await connectToDB());
+
+    const { site_id, enabled } = req.body;
+
+    if (!site_id || typeof enabled !== "boolean") {
+      return res.status(400).send("site_id and enabled (boolean) are required");
+    }
+
+    // Update the site document
+    const result = await db.collection('sites').updateOne(
+      { _id: new ObjectId(site_id) }, // filter by site_id
+      { $set: { enabled } },
+      { upsert: false }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).send("Site not found or already in desired state");
+    }
+
+    gRPC_proxy_client.SiteMonitoringToggled({ id: site_id, enabled }, () => {});
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    console.error('Error toggling site monitoring:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
 const allPermissions = [
   "playground", "mitmterminal", "user_management", "rules",
   "events", "domains", "sites", "statistics", "alerts", "conversations"
