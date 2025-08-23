@@ -141,7 +141,7 @@
               title="View full event">
 
             <% if (event.conversation_id) { %>
-              <a href="?<%= new URLSearchParams({ ...filters, conversation_id: event.conversation_id }).toString() %>"
+              <a href="?<%= new URLSearchParams({ conversation_id: event.conversation_id }).toString() %>"
                 onclick="event.stopPropagation();"
                 class="hidden group-hover:inline-block absolute right-2 top-2 bg-indigo-500 text-white text-xs px-3 py-1 rounded-full shadow hover:bg-indigo-600 transition">
                 Follow Conversation
