@@ -129,14 +129,34 @@
       if (chart) chart.destroy();
       chart = new Chart(chartCtx, {
         type: "line",
-        data: { labels: [], datasets: [{ label: currentMetric, data: [], borderColor: "#6366F1", backgroundColor: "rgba(99,102,241,0.2)", tension: 0.2 }] },
+        data: {
+          labels: [], // will populate via updateChart()
+          datasets: [{
+            label: currentMetric,
+            data: [],
+            borderColor: "#6366F1",
+            backgroundColor: "rgba(99,102,241,0.2)",
+            tension: 0.2
+          }]
+        },
         options: {
           scales: {
-            x: { type: "time", time: { unit: "minute", tooltipFormat: "HH:mm:ss" }, adapters: { date: luxon.DateTime } },
-            y: { beginAtZero: true }
+            x: {
+              type: "time",
+              time: {
+                unit: "minute",
+                tooltipFormat: "HH:mm:ss"
+              },
+              title: { display: true, text: "Time" } // <- X-axis label
+            },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: currentMetric }
+            }
           }
         }
       });
+
       updateChart();
     }
 
