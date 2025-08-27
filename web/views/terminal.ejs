@@ -4,76 +4,189 @@
   <meta charset="UTF-8">
   <title>MITMPROXY Terminal</title>
   <link rel="stylesheet" href="/css/tailwind.css" />
-
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
+
   <style>
     body, html { margin: 0; height: 100%; }
-    #terminal {
-      width: 100%;
-      height: 100%;
-      /* Or */
-      min-height: 0;  /* This helps flexbox sizing inside overflow-auto containers */
-    }
-
+    #terminal { width: 100%; height: 100%; min-height: 0; }
+    .cursor-pointer { cursor: pointer; }
   </style>
 </head>
-<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 min-h-screen flex items-center justify-center p-4">
-  <div id="terminal" class="w-full h-full min-h-0"></div>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 min-h-screen flex flex-col items-center justify-start p-6">
 
+  <!-- Button to toggle stats -->
+  <button id="toggleStats"
+    class="mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow-md transition">
+    Show MitMproxy Stats
+  </button>
 
+  <!-- Hidden stats card -->
+  <div id="statsCard" class="hidden w-full max-w-2xl bg-white p-6 rounded-2xl shadow-xl mb-6">
+    <h2 class="text-2xl font-bold text-indigo-700 mb-4">MitMproxy Stats</h2>
+    <div class="grid grid-cols-2 gap-4 text-gray-700">
+      <div data-stat="active_connections" class="stat-box p-4 bg-indigo-50 rounded-lg shadow-inner cursor-pointer hover:bg-indigo-100 transition">
+        <span class="font-semibold">Active Connections:</span> <span id="active_connections">0</span>
+      </div>
+      <div data-stat="peak_connections" class="stat-box p-4 bg-indigo-50 rounded-lg shadow-inner cursor-pointer hover:bg-indigo-100 transition">
+        <span class="font-semibold">Peak Connections:</span> <span id="peak_connections">0</span>
+      </div>
+      <div data-stat="rps" class="stat-box p-4 bg-indigo-50 rounded-lg shadow-inner cursor-pointer hover:bg-indigo-100 transition">
+        <span class="font-semibold">Requests/sec (RPS):</span> <span id="rps">0.0</span>
+      </div>
+      <div data-stat="mem" class="stat-box p-4 bg-indigo-50 rounded-lg shadow-inner cursor-pointer hover:bg-indigo-100 transition">
+        <span class="font-semibold">Memory Usage (MB):</span> <span id="mem">0.0</span>
+      </div>
+      <div data-stat="dropped_flows" class="stat-box p-4 bg-indigo-50 rounded-lg shadow-inner cursor-pointer hover:bg-indigo-100 transition col-span-2">
+        <span class="font-semibold">Dropped Flows:</span> <span id="dropped_flows">0</span>
+      </div>
+    </div>
+
+    <!-- Graph container -->
+    <div id="chartContainer" class="hidden mt-6 p-4 bg-gray-50 rounded-xl shadow-inner">
+      <h3 id="chartTitle" class="text-lg font-semibold text-indigo-700 mb-3"></h3>
+      <canvas id="statsChart" height="200"></canvas>
+      <div class="mt-3 flex gap-2">
+        <button class="time-btn bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600" data-minutes="5">5m</button>
+        <button class="time-btn bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600" data-minutes="10">10m</button>
+        <button class="time-btn bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600" data-minutes="30">30m</button>
+        <button class="time-btn bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600" data-minutes="60">60m</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Terminal -->
+  <div id="terminal" class="w-full h-full min-h-0 flex-1"></div>
+
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.3.0/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0/dist/chartjs-adapter-luxon.min.js"></script>
 
   <script>
+    // === Terminal setup ===
     const term = new Terminal();
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
-
     const terminalEl = document.getElementById('terminal');
     term.open(terminalEl);
-
-    setTimeout(() => {
-      fitAddon.fit();
-    }, 100); // try tweaking delay: 50–150ms
-
-
-
-    window.addEventListener("resize", () => {
-      fitAddon.fit();
-    });
-
+    setTimeout(() => { fitAddon.fit(); }, 100);
+    window.addEventListener("resize", () => { fitAddon.fit(); });
 
     const socket = new WebSocket('wss://' + window.location.hostname + '/ws/');
     socket.binaryType = 'arraybuffer';
+    socket.onopen = () => { term.write('Connected to tmux session\r\n'); };
+    socket.onmessage = (event) => { term.write(new TextDecoder().decode(new Uint8Array(event.data))); };
+    socket.onclose = () => { term.write('\r\nConnection closed'); };
+    socket.onerror = (err) => { console.error('WebSocket error:', err); term.write('\r\nWebSocket error'); };
+    term.onData(data => { socket.send(data); });
+    term.onResize(({cols, rows}) => { socket.send(JSON.stringify({type: 'resize', cols, rows})); });
 
-    socket.onopen = () => {
-      term.write('Connected to tmux session\r\n');
-    };
+    // === Stats logic ===
+    const toggleBtn = document.getElementById('toggleStats');
+    const statsCard = document.getElementById('statsCard');
 
-    socket.onmessage = (event) => {
-        const data = new Uint8Array(event.data);
-        const textDecoder = new TextDecoder();
-        term.write(textDecoder.decode(data));
-    };
+    // Metrics history buffer
+    const metricsHistory = { active_connections: [], peak_connections: [], rps: [], mem: [], dropped_flows: [] };
+    const maxPoints = 60 * 12; // 60 min @ 5s intervals
+    let statsInterval = null;
+    let currentMetric = null;
+    let chartMinutes = 10;
+    const chartCtx = document.getElementById("statsChart").getContext("2d");
+    let chart = null;
 
-    socket.onclose = () => {
-      term.write('\r\nConnection closed');
-    };
+    function pushMetric(metric, value) {
+      const now = new Date();
+      metricsHistory[metric].push({ time: now, value });
+      if (metricsHistory[metric].length > maxPoints) metricsHistory[metric].shift();
+    }
 
-    socket.onerror = (err) => {
-      console.error('WebSocket error:', err);
-      term.write('\r\nWebSocket error');
-    };
+    async function fetchStats() {
+      try {
+        const response = await fetch('/terminal/stats');
+        if (!response.ok) throw new Error("Failed to fetch stats");
+        const stats = await response.json();
 
-    term.onData(data => {
-      socket.send(data);
+        // Update DOM
+        document.getElementById("active_connections").textContent = stats.active_connections;
+        document.getElementById("peak_connections").textContent = stats.peak_connections;
+        document.getElementById("rps").textContent = stats.rps.toFixed(2);
+        document.getElementById("mem").textContent = stats.mem.toFixed(2);
+        document.getElementById("dropped_flows").textContent = stats.dropped_flows;
+
+        // Push to history
+        Object.keys(stats).forEach(k => pushMetric(k, stats[k]));
+
+        if (currentMetric) updateChart();
+      } catch (err) { console.error("Error fetching stats:", err); }
+    }
+
+    function showChart(metric) {
+      currentMetric = metric;
+      document.getElementById("chartContainer").classList.remove("hidden");
+      document.getElementById("chartTitle").textContent = metric.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase());
+      if (chart) chart.destroy();
+      chart = new Chart(chartCtx, {
+        type: "line",
+        data: {
+          labels: [], // will populate via updateChart()
+          datasets: [{
+            label: currentMetric,
+            data: [],
+            borderColor: "#6366F1",
+            backgroundColor: "rgba(99,102,241,0.2)",
+            tension: 0.2
+          }]
+        },
+        options: {
+          scales: {
+            x: {
+              type: "time",
+              time: {
+                unit: "minute",
+                tooltipFormat: "HH:mm:ss"
+              },
+              title: { display: true, text: "Time" } // <- X-axis label
+            },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: currentMetric }
+            }
+          }
+        }
+      });
+
+      updateChart();
+    }
+
+    function updateChart() {
+      if (!chart || !currentMetric) return;
+      const cutoff = new Date(Date.now() - chartMinutes * 60000);
+      const filtered = metricsHistory[currentMetric].filter(p => p.time >= cutoff);
+      chart.data.labels = filtered.map(p => p.time);
+      chart.data.datasets[0].data = filtered.map(p => p.value);
+      chart.update();
+    }
+
+    // Stat box click opens chart
+    document.querySelectorAll(".stat-box").forEach(el => {
+      el.addEventListener("click", () => showChart(el.dataset.stat));
     });
 
-    // Handle terminal resize and send to server (optional)
-    term.onResize(({cols, rows}) => {
-        socket.send(JSON.stringify({type: 'resize', cols, rows}));
+    // Time range buttons
+    document.querySelectorAll(".time-btn").forEach(btn => {
+      btn.addEventListener("click", () => { chartMinutes = parseInt(btn.dataset.minutes, 10); updateChart(); });
     });
 
+    // Toggle stats card
+    toggleBtn.addEventListener('click', () => {
+      statsCard.classList.toggle('hidden');
+      const visible = !statsCard.classList.contains('hidden');
+      toggleBtn.textContent = visible ? "Hide MitMproxy Stats" : "Show MitMproxy Stats";
+      if (visible) { fetchStats(); statsInterval = setInterval(fetchStats, 5000); }
+      else clearInterval(statsInterval);
+    });
   </script>
 </body>
 </html>

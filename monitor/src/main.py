@@ -69,7 +69,7 @@ faiss_rw_lock = rwlock.RWLockFair()
 yara_rules_compiled = None
 yara_rw_lock = rwlock.RWLockFair()
 
-embeddings_model = None
+embeddings_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
 def load_regex_rules():

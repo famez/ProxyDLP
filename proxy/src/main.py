@@ -5,6 +5,7 @@ import re
 import os
 from datetime import datetime, timezone
 from pymongo import MongoClient
+import psutil
 
 from bson.objectid import ObjectId
 
@@ -16,6 +17,7 @@ import proxy_pb2_grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
 from concurrent import futures
+import time
 
 from proxy import Proxy
 from sites.chatgpt import ChatGPT
@@ -30,6 +32,9 @@ from sites.deepl import DeepL
 from mitm_term import launch_ws_term
 
 launch_ws_term()
+
+last_check = time.time()
+last_request_count = 0
 
 
 db_client = MongoClient(os.getenv("MONGO_URI"))
@@ -244,9 +249,40 @@ class WSHandler:
             if not proxy.route_ws_from_client_to_server(flow, message) and rejectSiteTraffic:
                 # Prevent the message from being sent to the server
                 message.kill()
-        
 
-addons = [WSHandler()]
+class Monitor:
+    def __init__(self):
+        self.active_flows = set()
+        self.request_count = 0
+        self.dropped_flows = 0
+        self.peak_connections = 0
+
+    def client_connected(self, client_conn):
+        """Called when a new TCP connection starts."""
+        ctx.log.info("tcp_start")
+        self.active_flows.add(client_conn.id)
+        self.request_count += 1
+        if len(self.active_flows) > self.peak_connections:
+            self.peak_connections = len(self.active_flows)
+
+    def client_disconnected(self, client_conn):
+        """Called when a TCP connection ends."""
+        ctx.log.info("tcp_end")
+        self.active_flows.discard(client_conn.id)
+
+    def request(self, flow):
+        """Called when a HTTP/HTTPS request is processed."""
+        self.request_count += 1
+
+    def error(self, flow, msg):
+        """Called when a flow encounters an error (dropped/malformed)."""
+        self.dropped_flows += 1
+        ctx.log.warn(f"Flow error: {msg}")
+
+monitor = Monitor()
+
+
+addons = [WSHandler(), monitor]
 
 
 class ProxyServicer(proxy_pb2_grpc.ProxyServicer):
@@ -272,6 +308,25 @@ class ProxyServicer(proxy_pb2_grpc.ProxyServicer):
             site.disable()
 
         return proxy_pb2.ProxyReply(result=0)       #Everything ok :)
+    
+
+    def GetMitmStats(self, request, context):
+
+        """Called every second by mitmproxy."""
+        global last_check, last_request_count, mem, rps
+        now = time.time()
+        elapsed = now - last_check
+        pid = os.getpid()
+        process = psutil.Process(pid)
+        mem = process.memory_info().rss / (1024 * 1024)  # MB
+        rps = (monitor.request_count - last_request_count) / elapsed
+        
+        last_request_count = monitor.request_count
+        last_check = now
+
+
+        return proxy_pb2.MitmStats(active_connections = len(monitor.active_flows), peak_connections = monitor.peak_connections, rps = rps, 
+                                    mem = mem, dropped_flows = monitor.dropped_flows)
 
 
 # Initialize gRPC server

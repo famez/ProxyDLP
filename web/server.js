@@ -114,6 +114,29 @@ app.get('/dashboard', authMiddleware, async (req, res) => {
 app.get('/terminal', authMiddleware, requirePermission("mitmterminal"), (req, res) => {
   res.render('terminal', { title: 'Terminal' }); // renders views/terminal.ejs
 });
+
+app.get('/terminal/stats', authMiddleware, requirePermission("mitmterminal"), (req, res) => {
+
+  gRPC_proxy_client.GetMitmStats({}, (err, response) => {
+    if (err) {
+      console.error("Error fetching stats:", err);
+      return;
+    }
+
+    // response is a JS object with your fields
+
+    res.json({
+      active_connections: response.active_connections,
+      peak_connections: response.peak_connections,
+      rps: response.rps,
+      mem: response.mem,
+      dropped_flows: response.dropped_flows
+    });
+
+  });
+
+});
+
 app.get('/explore', authMiddleware, requirePermission("events"), async (req, res) => {
 
   const {
