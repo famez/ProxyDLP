@@ -118,7 +118,7 @@ router.post('/heartbeat', async (req, res) => {
     client = dbClient;
     db = database;
 
-    const { computer_name, os_version, user, ip_addresses, agent_version } = req.body;
+    const { computer_name, os_version, user, ip_addresses, agent_version, telemetry } = req.body;
 
     // Update agent info
     await db.collection('agents').updateOne(
@@ -131,7 +131,8 @@ router.post('/heartbeat', async (req, res) => {
           os_version,
           user,
           ip_addresses,
-          agent_version
+          agent_version,
+          telemetry
         }
       }
     );

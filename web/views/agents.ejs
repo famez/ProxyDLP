@@ -28,6 +28,21 @@
                   <div class="text-sm text-gray-600">OS: <%= agent.os_version %></div>
                   <div class="text-sm text-gray-600">User: <%= agent.user %></div>
                   <div class="text-sm text-gray-600">IP addresses: <%= agent.ip_addresses %></div>
+                  <div class="text-sm text-gray-600 mt-2">
+                  <h3 class="font-semibold">Hosts and IP addresses:</h3>
+                  <% if (agent.telemetry && Object.keys(agent.telemetry).length > 0) { %>
+                    <ul class="ml-4 list-disc">
+                      <% Object.keys(agent.telemetry).forEach(hostname => { %>
+                        <li>
+                          <span class="font-medium"><%= hostname %>:</span>
+                          <%= agent.telemetry[hostname].join(", ") %>
+                        </li>
+                      <% }) %>
+                    </ul>
+                  <% } else { %>
+                    <p>No telemetry data.</p>
+                  <% } %>
+                </div>
                   <div class="text-sm text-gray-600">Version: <%= agent.agent_version %></div>
                   <div class="text-sm text-gray-600">Last Seen: <%= agent.lastHeartbeat %></div>
                   <div class="text-sm mt-1">
