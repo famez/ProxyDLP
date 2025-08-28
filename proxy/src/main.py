@@ -43,11 +43,21 @@ domains_collection = db_client["ProxyDLP"]["domains"]
 sites_collection = db_client["ProxyDLP"]["sites"]
 domain_settings_collection = db_client["ProxyDLP"]["domain-settings"]
 site_settings_collection = db_client["ProxyDLP"]["site-settings"]
+agents_collection = db_client["ProxyDLP"]["agents"]
 
 
 site_settings = site_settings_collection.find_one()
 rejectSiteTraffic = (site_settings and "rejectTraffic" in site_settings and site_settings['rejectTraffic'])
 
+
+def find_agent_by_source_ip(ip):
+    # Search for the document with the given IP
+    agent = agents_collection.find_one({'ip': ip})
+
+    # Return the GUID if document exists
+    if agent:
+        return agent.get('guid')
+    return None
 
 #Anonymous access is allowed if no account check is enabled to authorize several account domains
 def allow_anonymous_access(site):
@@ -98,6 +108,10 @@ def anonymous_conversation_callback(site, content, source_ip, conversation_id):
     if conversation_id:
         event['conversation_id'] = conversation_id
 
+    agent_id = find_agent_by_source_ip(source_ip)
+    if agent_id:
+        event['agent_id'] = agent_id
+
     result = events_collection.insert_one(event)
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
     ctx.log.info("Sent event to monitor...")
@@ -147,6 +161,10 @@ def conversation_callback(site, email, content, source_ip, conversation_id):
     if conversation_id:
         event['conversation_id'] = conversation_id
 
+    agent_id = find_agent_by_source_ip(source_ip)
+    if agent_id:
+        event['agent_id'] = agent_id
+
     result = events_collection.insert_one(event)
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
     ctx.log.info("Sent event to monitor...")
@@ -163,7 +181,11 @@ def attached_file_callback(site, email, filename, filepath, content_type, source
     else:
         event = {"timestamp": datetime.now(timezone.utc), "rational": "Attached file", "filename" : filename, "filepath" : filepath, 
                             "content_type": content_type, "site": site.get_name(), "source_ip": source_ip}
-                
+
+    agent_id = find_agent_by_source_ip(source_ip)
+    if agent_id:
+        event['agent_id'] = agent_id
+
     result = events_collection.insert_one(event)
     
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))

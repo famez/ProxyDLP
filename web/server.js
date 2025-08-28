@@ -201,6 +201,16 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
             ]
           }
         },
+        // Add this $lookup stage to join agent data
+        {
+          $lookup: {
+            from: "agents",            // The agent collection
+            localField: "agent_id",    // Field in events
+            foreignField: "guid",      // Field in agents
+            as: "agentData"            // The new field in the output
+          }
+        },
+        { $unwind: { path: "$agentData", preserveNullAndEmptyArrays: true } }, // Flatten array
         { $sort: sort },
         { $skip: skip },
         { $limit: limit }
@@ -214,7 +224,24 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
         filters: req.query
       });
     } else {
-      const events = await event_collection.find(query).sort(sort).skip(skip).limit(limit).toArray();
+      // Same logic for non-leak queries
+      const pipeline = [
+        { $match: query },
+        {
+          $lookup: {
+            from: "agents",
+            localField: "agent_id",
+            foreignField: "guid",
+            as: "agentData"
+          }
+        },
+        { $unwind: { path: "$agentData", preserveNullAndEmptyArrays: true } },
+        { $sort: sort },
+        { $skip: skip },
+        { $limit: limit }
+      ];
+
+      const events = await event_collection.aggregate(pipeline).toArray();
 
       res.render('explore', {
         title: 'Explore',
