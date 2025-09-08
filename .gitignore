@@ -1,9 +1,9 @@
 *.pyc
-nginx_server/server.crt
-nginx_server/server.key
-proxy/mitmCA.pem
-proxy/mitmCA.key
 .gitignore
 .env
 proxy/mitmCA.srl
 nginx_server/san.cnf
+*.pem
+*.key
+*.crt
+web/hostname

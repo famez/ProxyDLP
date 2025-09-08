@@ -15,6 +15,7 @@ NGINX_SAN="$1"
 NGINX_DIR="./nginx_server"
 MITM_DIR="./proxy"
 ENV_FILE=".env"
+HOST_FILE="web/hostname"
 
 # File names
 NGINX_CERT="$NGINX_DIR/server.crt"
@@ -36,12 +37,17 @@ mkdir -p "$NGINX_DIR" "$MITM_DIR"
 echo "Generating .env file..."
 MONGO_PASSWORD=$(generate_secret 32)
 JWT_SECRET=$(generate_secret 64)
+PROXY_HOSTNAME=${NGINX_SAN}
 
 cat <<EOF > "$ENV_FILE"
 MONGO_INITDB_ROOT_PASSWORD=$MONGO_PASSWORD
 JWT_SECRET=$JWT_SECRET
 EOF
 echo ".env file created."
+
+cat <<EOF > "$HOST_FILE"
+PROXY_HOSTNAME=$PROXY_HOSTNAME
+EOF
 
 # Generate mitmproxy CA cert and key if not provided
 if [[ ! -f "$MITM_CERT" || ! -f "$MITM_KEY" ]]; then
@@ -54,6 +60,9 @@ if [[ ! -f "$MITM_CERT" || ! -f "$MITM_KEY" ]]; then
 else
   echo "mitmproxy CA cert and key already exist. Skipping generation."
 fi
+
+#Make the CA cert available to the web image.
+cp $MITM_CERT ./web/
 
 # Generate nginx key
 if [[ ! -f "$NGINX_KEY" ]]; then
