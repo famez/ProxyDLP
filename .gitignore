@@ -5,3 +5,5 @@ proxy/mitmCA.pem
 proxy/mitmCA.key
 .gitignore
 .env
+proxy/mitmCA.srl
+nginx_server/san.cnf
