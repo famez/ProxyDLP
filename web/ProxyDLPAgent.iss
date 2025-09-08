@@ -38,6 +38,12 @@ Root: HKLM; Subkey: "Software\ProxyDLP"; ValueType: string; ValueName: "ProxyHos
 ; Install certificate into ROOT store
 Filename: "certutil.exe"; Parameters: "-addstore root ""{tmp}\mitmCA.pem"""; Flags: runhidden
 
+; Register proxydlp.exe as a Windows service
+Filename: "sc.exe"; Parameters: "create ProxyDLPAgent binPath= ""{app}\proxydlp.exe"" start= auto DisplayName= ""ProxyDLP Agent"""; Flags: runhidden
+
+; Start the service immediately
+Filename: "sc.exe"; Parameters: "start ProxyDLPAgent"; Flags: runhidden
+
 ; Run agent after install (optional)
 ; Filename: "{app}\proxydlp.exe"; Description: "Run ProxyDLP Agent"; Flags: nowait postinstall
 

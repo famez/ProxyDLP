@@ -1999,6 +1999,19 @@ app.get('/agents', authMiddleware, requirePermission("agents"), async (req, res)
 
 });
 
+
+app.get('/downloads/ProxyDLPAgentSetup.exe', authMiddleware, requirePermission("agents"), (req, res) => {
+  const filePath = path.join('/', 'agentInstaller', 'ProxyDLPAgentSetup.exe');
+  
+  res.download(filePath, (err) => {
+    if (err) {
+      console.error('File download error:', err);
+      res.status(404).send('File not found.');
+    }
+  });
+});
+
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

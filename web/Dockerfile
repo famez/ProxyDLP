@@ -11,7 +11,7 @@ RUN apt-get update && \
 WORKDIR /build
 
 # Clone the ProxyDLPAgent repo
-RUN git clone --branch dev --single-branch https://github.com/famez/ProxyDLPAgent.git
+RUN git clone --branch dev --single-branch https://github.com/famez/ProxyDLPAgent.git 
 WORKDIR /build/ProxyDLPAgent/src/
 
 # Build Windows exe with mingw
@@ -73,8 +73,8 @@ COPY --chown=appuser:appgroup web/. .
 COPY --chown=appuser:appgroup proto/monitor.proto .
 COPY --chown=appuser:appgroup proto/proxy.proto .
 
-# Copy built installer into public folder
-#COPY --from=installer /iss/Output/ProxyDLPAgentSetup.exe ./public/ProxyDLPAgentSetup.exe
+# Copy built installer into the volume
+COPY --from=installer /iss/Output/ProxyDLPAgentSetup.exe /agentInstaller/ProxyDLPAgentSetup.exe
 
 RUN npm run build:css
 
