@@ -53,8 +53,10 @@ COPY web/mitmCA.pem .
 # Copy .env file into the installer stage
 COPY web/hostname .
 
-RUN export PROXY_HOSTNAME=$(grep PROXY_HOSTNAME hostname | cut -d '=' -f2) && \
-    wine "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" /DProxyHostname="$PROXY_HOSTNAME" ProxyDLPAgent.iss
+# Replace "placeholder" with actual hostname
+RUN PROXY_HOSTNAME=$(grep '^PROXY_HOSTNAME=' hostname | cut -d '=' -f2-) && \
+    sed -i "s/#define ProxyHostname \".*\"/#define ProxyHostname \"$PROXY_HOSTNAME\"/" ProxyDLPAgent.iss && \
+    wine "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" ProxyDLPAgent.iss
 
 
 # ---------- Stage 3: Node.js web app ----------

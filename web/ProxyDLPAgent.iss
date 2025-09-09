@@ -2,7 +2,7 @@
 ; ProxyDLP Agent Installer Script
 ; --------------------------------------------
 
-#define ProxyHostname "127.0.0.1"  ; default, will override from .env
+#define ProxyHostname "placeholder"  ; default, will override from .env
 
 [Setup]
 AppName=ProxyDLP Agent
