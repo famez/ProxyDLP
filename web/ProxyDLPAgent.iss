@@ -1,8 +1,8 @@
 ; --------------------------------------------
-; ProxyDLP Agent Installer Script
+; ProxyDLP Agent Installer Script (Silent + Logging)
 ; --------------------------------------------
 
-#define ProxyHostname "placeholder"  ; default, will override from .env
+#define ProxyHostname "placeholder"  ; default, overridden at compile-time
 
 [Setup]
 AppName=ProxyDLP Agent
@@ -27,26 +27,33 @@ Source: "libwinpthread-1.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "WinDivert.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion
 
-; Certificate (to be imported later)
+; Certificate
 Source: "mitmCA.pem"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Registry]
-; Example registry keys
 Root: HKLM; Subkey: "Software\ProxyDLP"; ValueType: string; ValueName: "ProxyHostname"; ValueData: "{#ProxyHostname}"
 
 [Run]
-; Install certificate into ROOT store
-Filename: "certutil.exe"; Parameters: "-addstore root ""{tmp}\mitmCA.pem"""; Flags: runhidden
+; Create a log directory if not exists
+Filename: "cmd.exe"; Parameters: "/C if not exist ""{commonappdata}\ProxyDLPAgent"" mkdir ""{commonappdata}\ProxyDLPAgent"""; Flags: runhidden
 
-; Register proxydlp.exe as a Windows service
-Filename: "sc.exe"; Parameters: "create ProxyDLPAgent binPath= ""{app}\proxydlp.exe"" start= auto DisplayName= ""ProxyDLP Agent"""; Flags: runhidden
+; Install certificate silently with logging
+Filename: "cmd.exe"; Parameters: "/C certutil.exe -addstore root ""{tmp}\mitmCA.pem"" >> ""{commonappdata}\ProxyDLPAgent\install.log"" 2>&1"; Flags: runhidden
 
-; Start the service immediately
-Filename: "sc.exe"; Parameters: "start ProxyDLPAgent"; Flags: runhidden
+; Register service (if not exists)
+Filename: "cmd.exe"; Parameters: "/C sc query ProxyDLPAgent || sc create ProxyDLPAgent binPath= ""{app}\proxydlp.exe"" start= auto DisplayName= ""ProxyDLP Agent"" >> ""{commonappdata}\ProxyDLPAgent\install.log"" 2>&1"; Flags: runhidden
 
-; Run agent after install (optional)
-; Filename: "{app}\proxydlp.exe"; Description: "Run ProxyDLP Agent"; Flags: nowait postinstall
+; Start service with logging
+Filename: "cmd.exe"; Parameters: "/C sc start ProxyDLPAgent >> ""{commonappdata}\ProxyDLPAgent\install.log"" 2>&1"; Flags: runhidden
 
 [Icons]
 Name: "{group}\ProxyDLP Agent"; Filename: "{app}\proxydlp.exe"
 Name: "{commondesktop}\ProxyDLP Agent"; Filename: "{app}\proxydlp.exe"
+
+[UninstallRun]
+; Stop and delete service during uninstall
+Filename: "cmd.exe"; Parameters: "/C sc stop ProxyDLPAgent >> ""{commonappdata}\ProxyDLPAgent\install.log"" 2>&1"; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/C sc delete ProxyDLPAgent >> ""{commonappdata}\ProxyDLPAgent\install.log"" 2>&1"; Flags: runhidden
+
+; Optionally delete driver and files (if not in [Files] uninstall)
+Filename: "cmd.exe"; Parameters: "/C del /F /Q ""{app}\WinDivert64.sys"" >> ""{commonappdata}\ProxyDLPAgent\install.log"" 2>&1"; Flags: runhidden
