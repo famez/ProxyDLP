@@ -185,5 +185,36 @@ router.get('/monitored_domains', async (req, res) => {
 
 });
 
+router.get('/deregister', async (req, res) => {
+  let client, db;
+
+  try {
+    const { agent, client: dbClient, db: database } = await authenticateRequest(req);
+    client = dbClient;
+    db = database;
+
+    const { guid } = req.query; // get guid from query string
+    if (!guid) {
+      return res.status(400).send('Missing guid');
+    }
+
+    // Delete the agent document with the given guid
+    const result = await db.collection('agents').deleteOne({ guid });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send('Agent not found');
+    }
+
+    return res.status(200).send('Agent deregistered successfully');
+
+  } catch (err) {
+    console.error('Error unregistering agent:', err);
+    return res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
 
 module.exports = router;
