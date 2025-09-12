@@ -10,6 +10,7 @@ AppVersion=1.0
 DefaultDirName={pf}\ProxyDLPAgent
 DefaultGroupName=ProxyDLP
 UninstallDisplayIcon={app}\proxydlp.exe
+DisableDirPage=yes
 Compression=lzma
 SolidCompression=yes
 OutputDir=Output
@@ -27,7 +28,9 @@ Source: "libwinpthread-1.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "WinDivert.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion
 
-; Certificate
+; Certificate (as we are using the mingw version of libcurl, this version is compiled using LibreSSL, not schannels, so the certificate must be installed on 
+; the Windows certificate storage and also in the program directory to be loaded by libcurl).
+Source: "mitmCA.pem"; DestDir: "{app}"; Flags: ignoreversion
 Source: "mitmCA.pem"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Registry]
