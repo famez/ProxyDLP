@@ -11,7 +11,14 @@ RUN apt-get update && \
 WORKDIR /build
 
 # Clone the ProxyDLPAgent repo
-RUN git clone --branch v1.1.1 --single-branch https://github.com/famez/ProxyDLPAgent.git
+#RUN git clone --branch v1.1.0 --single-branch https://github.com/famez/ProxyDLPAgent.git
+
+#For testing
+RUN git clone https://github.com/famez/ProxyDLPAgent.git \
+    && cd ProxyDLPAgent \
+    && git checkout 173af1ebec2e90251a16e032811454e06e24b16a
+
+
 WORKDIR /build/ProxyDLPAgent/src/
 
 # Build Windows exe with mingw
