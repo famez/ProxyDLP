@@ -6,7 +6,7 @@
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 p-8">
-  <div class="max-w-5xl mx-auto">
+  <div class="max-w-7xl mx-auto">
     <h1 class="text-3xl font-bold text-center mb-4 text-indigo-700">Installed Agents</h1>
 
     <!-- Download Installer Button -->
@@ -21,25 +21,35 @@
       <h2 class="text-xl font-semibold mb-4">Active Agents</h2>
 
       <% if (agents && agents.length > 0) { %>
-        <ul class="space-y-4 mb-6">
-          <% agents.forEach(agent => { 
-              const lastSeen = new Date(agent.lastHeartbeat);
-              const now = new Date();
-              const diffMinutes = (now - lastSeen) / 1000 / 60;
-              const isOnline = diffMinutes <= 5;
-          %>
-            <li class="border rounded-lg p-4 bg-gray-50 hover:bg-indigo-50 transition">
-              <div class="flex justify-between items-start">
-                <div>
-                  <div class="font-bold text-lg text-gray-800"><%= agent.computer_name %></div>
-                  <div class="text-sm text-gray-600">IP: <%= agent.ip %></div>
-                  <div class="text-sm text-gray-600">OS: <%= agent.os_version %></div>
-                  <div class="text-sm text-gray-600">User: <%= agent.user %></div>
-                  <div class="text-sm text-gray-600">IP addresses: <%= agent.ip_addresses %></div>
-                  <div class="text-sm text-gray-600 mt-2">
-                    <h3 class="font-semibold">Hosts and IP addresses:</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+            <thead class="bg-indigo-600 text-white">
+              <tr>
+                <th class="px-4 py-2 text-left text-sm font-semibold">Computer</th>
+                <th class="px-4 py-2 text-left text-sm font-semibold">OS</th>
+                <th class="px-4 py-2 text-left text-sm font-semibold">User</th>
+                <th class="px-4 py-2 text-left text-sm font-semibold">IP(s)</th>
+                <th class="px-4 py-2 text-left text-sm font-semibold">Telemetry</th>
+                <th class="px-4 py-2 text-left text-sm font-semibold">Version</th>
+                <th class="px-4 py-2 text-left text-sm font-semibold">Last Seen</th>
+                <th class="px-4 py-2 text-center text-sm font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+              <% agents.forEach(agent => { 
+                  const lastSeen = new Date(agent.lastHeartbeat);
+                  const now = new Date();
+                  const diffMinutes = (now - lastSeen) / 1000 / 60;
+                  const isOnline = diffMinutes <= 5;
+              %>
+                <tr class="hover:bg-indigo-50 transition">
+                  <td class="px-4 py-2 text-sm font-medium text-gray-800"><%= agent.computer_name %></td>
+                  <td class="px-4 py-2 text-sm text-gray-600"><%= agent.os_version %></td>
+                  <td class="px-4 py-2 text-sm text-gray-600"><%= agent.user %></td>
+                  <td class="px-4 py-2 text-sm text-gray-600"><%= agent.ip_addresses %></td>
+                  <td class="px-4 py-2 text-sm text-gray-600">
                     <% if (agent.telemetry && Object.keys(agent.telemetry).length > 0) { %>
-                      <ul class="ml-4 list-disc">
+                      <ul class="list-disc list-inside">
                         <% Object.keys(agent.telemetry).forEach(hostname => { %>
                           <li>
                             <span class="font-medium"><%= hostname %>:</span>
@@ -48,23 +58,27 @@
                         <% }) %>
                       </ul>
                     <% } else { %>
-                      <p>No telemetry data.</p>
+                      <span class="italic text-gray-400">No data</span>
                     <% } %>
-                  </div>
-                  <div class="text-sm text-gray-600">Version: <%= agent.agent_version %></div>
-                  <div class="text-sm text-gray-600">Last Seen: <%= agent.lastHeartbeat %></div>
-                  <div class="text-sm mt-1">
+                  </td>
+                  <td class="px-4 py-2 text-sm text-gray-600"><%= agent.agent_version %></td>
+                  <td class="px-4 py-2 text-sm text-gray-600"><%= agent.lastHeartbeat %></td>
+                  <td class="px-4 py-2 text-center">
                     <% if (isOnline) { %>
                       <span class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Online</span>
                     <% } else { %>
                       <span class="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Offline</span>
                     <% } %>
-                  </div>
-                </div>
-              </div>
-            </li>
-          <% }) %>
-        </ul>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
       <% } else { %>
         <p class="text-gray-600">No agents installed.</p>
       <% } %>
+    </div>
+  </div>
+</body>
+</html>
