@@ -57,6 +57,26 @@ ProxyDLP helps organizations:
 
 ---
 
+## 🔄 Deployment Modes
+
+ProxyDLP can be configured in two modes depending on your organizational needs:
+
+1. **Agentless Mode**
+
+   * No client software is required.
+   * Endpoint traffic is routed directly through the ProxyDLP monitoring proxy (via system proxy settings or PAC file).
+   * Suitable for environments where installing agents is impractical.
+
+2. **Agent-Enforced Mode**
+
+   * Uses the **[ProxyDLP Agent](https://github.com/famez/ProxyDLPAgent)** installed on client machines.
+   * Ensures that all AI-related traffic is captured and forwarded to the ProxyDLP server.
+   * Provides additional control and reporting on endpoints, complementing the agentless deployment.
+
+> Both modes ensure monitoring and compliance, but using the agent allows for stronger enforcement and more detailed activity logs.
+
+---
+
 ## 🚀 Quickstart
 
 ### 🔧 Prerequisites
@@ -76,11 +96,11 @@ docker-compose up
 
 ### 🌐 Ports
 
-| Component            | Port | Description                                 |
-| -------------------- | ---- | ------------------------------------------- |
-| **ProxyDLP UI**      | 443  | Secure web interface for monitoring (HTTPS) |
-|                      | 80   | Web interface (HTTP fallback)               |
-| **Monitoring Proxy** | 8080 | MiTM proxy for AI traffic                   |
+| Component            | Port | Description                                                                                |
+| -------------------- | ---- | ------------------------------------------------------------------------------------------ |
+| **ProxyDLP UI**      | 443  | Secure web interface for monitoring (HTTPS); used by agents to communicate with the server |
+|                      | 80   | Web interface (HTTP fallback)                                                              |
+| **Monitoring Proxy** | 8080 | MiTM proxy for AI traffic                                                                  |
 
 > Make sure client traffic to AI tools is routed through the proxy, e.g., via system proxy settings or PAC files.
 
@@ -94,26 +114,6 @@ docker-compose up
 * All activity is logged and linked to the user or session that initiated it
 * Default user is admin and password is admin (can be changed after installation)
 * It is recommended to configure a PAC file on the client machines (i.e. via GPO) so that only the traffic intended to the AI tools goes through the proxy, excluding the rest of the traffic. The PAC file can be automatically generated from the "SITES" page.
-
----
-
-## 🔄 Deployment Modes
-
-ProxyDLP can be configured in two modes depending on your organizational needs:
-
-1. **Agentless Mode**
-
-   * No client software is required.
-   * Endpoint traffic is routed directly through the ProxyDLP monitoring proxy (via system proxy settings or PAC file).
-   * Suitable for environments where installing agents is impractical.
-
-2. **Agent-Enforced Mode**
-
-   * Uses the **ProxyDLP Agent** installed on client machines.
-   * Ensures that all AI-related traffic is captured and forwarded to the ProxyDLP server.
-   * Provides additional control and reporting on endpoints, complementing the agentless deployment.
-
-> Both modes ensure monitoring and compliance, but using the agent allows for stronger enforcement and more detailed activity logs.
 
 ---
 
