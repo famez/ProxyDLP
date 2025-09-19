@@ -37,22 +37,23 @@ Its allows enterprise users to access AI tools like ChatGPT while ensuring **vis
 ## 🎯 Purpose
 
 ProxyDLP helps organizations:
-- Monitor and inspect conversations with AI assistants
-- Detect confidential or sensitive data in uploads and messages
-- Link AI usage to individual users or accounts
-- Provide a centralized interface for reviewing activity and enforcing policy
-- Ideal as a technical tool to provide compliance for ISO/IEC 27001 and ISO/IEC 42001
+
+* Monitor and inspect conversations with AI assistants
+* Detect confidential or sensitive data in uploads and messages
+* Link AI usage to individual users or accounts
+* Provide a centralized interface for reviewing activity and enforcing policy
+* Ideal as a technical tool to provide compliance for ISO/IEC 27001 and ISO/IEC 42001
 
 ---
 
 ## ⚙️ Key Features
 
-- **Proxy-based inspection** — AI-related traffic is routed through a local MiTM proxy (port `8080`)  
-- **Conversation monitoring** — Intercept and inspect chat requests and responses  
-- **File inspection** — Decode, extract, and analyze contents of uploaded PDFs, Excel files, and images (OCR)  
-- **Pattern-based detection** — Configurable regular expressions detect potential data leaks  
-- **Semantic topic matching** — Discover and match topics in conversations and files using Faiss vector indexes for efficient similarity search  
-- **Dashboard interface** — Real-time view of events, traffic, and alerts for security engineers (available on HTTP `80` and HTTPS `443`)
+* **Proxy-based inspection** — AI-related traffic is routed through a local MiTM proxy (port `8080`)
+* **Conversation monitoring** — Intercept and inspect chat requests and responses
+* **File inspection** — Decode, extract, and analyze contents of uploaded PDFs, Excel files, and images (OCR)
+* **Pattern-based detection** — Configurable regular expressions detect potential data leaks
+* **Semantic topic matching** — Discover and match topics in conversations and files using Faiss vector indexes for efficient similarity search
+* **Dashboard interface** — Real-time view of events, traffic, and alerts for security engineers (available on HTTP `80` and HTTPS `443`)
 
 ---
 
@@ -60,8 +61,8 @@ ProxyDLP helps organizations:
 
 ### 🔧 Prerequisites
 
-- Docker + docker-compose
-- (Optional) Custom TLS/CA certificates
+* Docker + docker-compose
+* (Optional) Custom TLS/CA certificates
 
 ### 🧪 Setup Steps
 
@@ -75,11 +76,11 @@ docker-compose up
 
 ### 🌐 Ports
 
-| Component             | Port  | Description                                  |
-|----------------------|-------|----------------------------------------------|
-| **ProxyDLP UI**      | 443   | Secure web interface for monitoring (HTTPS)  |
-|                      | 80    | Web interface (HTTP fallback)                |
-| **Monitoring Proxy** | 8080  | MiTM proxy for AI traffic                    |
+| Component            | Port | Description                                 |
+| -------------------- | ---- | ------------------------------------------- |
+| **ProxyDLP UI**      | 443  | Secure web interface for monitoring (HTTPS) |
+|                      | 80   | Web interface (HTTP fallback)               |
+| **Monitoring Proxy** | 8080 | MiTM proxy for AI traffic                   |
 
 > Make sure client traffic to AI tools is routed through the proxy, e.g., via system proxy settings or PAC files.
 
@@ -87,21 +88,42 @@ docker-compose up
 
 ## 🔒 Deployment Notes
 
-- The proxy intercepts TLS traffic using a custom Root CA (`mitmCA.pem`)
-- You must configure your client machines to trust this CA certificate (for example via GPO deployment).
-- The proxy inspects and decodes traffic from supported AI platforms
-- All activity is logged and linked to the user or session that initiated it
-- Default user is admin and password is admin (can be changed after installation)
-- It is recommended to configure a PAC file on the client machines (i.e. via GPO) so that only the traffic intended to the AI tools goes through the proxy, excluding the rest of the traffic. The PAC file can be automatically generated from the "SITES" page.
+* The proxy intercepts TLS traffic using a custom Root CA (`mitmCA.pem`)
+* You must configure your client machines to trust this CA certificate (for example via GPO deployment).
+* The proxy inspects and decodes traffic from supported AI platforms
+* All activity is logged and linked to the user or session that initiated it
+* Default user is admin and password is admin (can be changed after installation)
+* It is recommended to configure a PAC file on the client machines (i.e. via GPO) so that only the traffic intended to the AI tools goes through the proxy, excluding the rest of the traffic. The PAC file can be automatically generated from the "SITES" page.
+
+---
+
+## 🔄 Deployment Modes
+
+ProxyDLP can be configured in two modes depending on your organizational needs:
+
+1. **Agentless Mode**
+
+   * No client software is required.
+   * Endpoint traffic is routed directly through the ProxyDLP monitoring proxy (via system proxy settings or PAC file).
+   * Suitable for environments where installing agents is impractical.
+
+2. **Agent-Enforced Mode**
+
+   * Uses the **ProxyDLP Agent** installed on client machines.
+   * Ensures that all AI-related traffic is captured and forwarded to the ProxyDLP server.
+   * Provides additional control and reporting on endpoints, complementing the agentless deployment.
+
+> Both modes ensure monitoring and compliance, but using the agent allows for stronger enforcement and more detailed activity logs.
 
 ---
 
 ## 👥 Target Audience
 
 ProxyDLP is aimed at:
-- **Security engineers**
-- **SOC analysts**
-- **IT compliance teams**
+
+* **Security engineers**
+* **SOC analysts**
+* **IT compliance teams**
 
 It is intended for use inside organizations that wish to **embrace AI tools** without sacrificing **security oversight**.
 
@@ -123,10 +145,10 @@ We welcome community contributions!
 
 ### 🧪 Suggestions for Contribution
 
-- Add support for more AI tools
-- Improve PDF, Excel, and OCR parsing
-- Enhance the dashboard UI/UX
-- Add log filtering, alerting, or export options
+* Add support for more AI tools
+* Improve PDF, Excel, and OCR parsing
+* Enhance the dashboard UI/UX
+* Add log filtering, alerting, or export options
 
 ---
 
@@ -134,8 +156,6 @@ We welcome community contributions!
 
 If you discover a security vulnerability, please report it **privately**:
 
-- Contact: f.amez1992@gmail.com
-- Do not create public issues for security-related matters
-- We follow responsible disclosure best practices
-
----
+* Contact: [f.amez1992@gmail.com](mailto:f.amez1992@gmail.com)
+* Do not create public issues for security-related matters
+* We follow responsible disclosure best practices
