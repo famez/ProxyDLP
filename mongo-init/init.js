@@ -53,7 +53,7 @@ db["domain-settings"].insertOne(
 //Insert default admin user
 
 db.users.insertOne({username: "admin", password: "$2a$10$3lKl1v9l8Fe8PtAOCAEiaeXW.fTaCpKyCWJcuD1zELyFi2OZKIZBe",
-  permissions: ["playground", "mitmterminal", "user_management", "rules","events", "domains", "sites", "statistics", "alerts", "conversations"],
+  permissions: ["playground", "mitmterminal", "user_management", "rules","events", "domains", "sites", "statistics", "alerts", "conversations", "agents"],
 }) //Hashed password for "admin" password
 
 db.regex_rules.insertMany(regex_rules);
