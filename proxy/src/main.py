@@ -281,7 +281,7 @@ class Monitor:
 
     def client_connected(self, client_conn):
         """Called when a new TCP connection starts."""
-        ctx.log.info("tcp_start")
+        #ctx.log.info("tcp_start")
         self.active_flows.add(client_conn.id)
         self.request_count += 1
         if len(self.active_flows) > self.peak_connections:
@@ -289,7 +289,7 @@ class Monitor:
 
     def client_disconnected(self, client_conn):
         """Called when a TCP connection ends."""
-        ctx.log.info("tcp_end")
+        #ctx.log.info("tcp_end")
         self.active_flows.discard(client_conn.id)
 
     def request(self, flow):
@@ -299,7 +299,7 @@ class Monitor:
     def error(self, flow, msg):
         """Called when a flow encounters an error (dropped/malformed)."""
         self.dropped_flows += 1
-        ctx.log.warn(f"Flow error: {msg}")
+        #ctx.log.warn(f"Flow error: {msg}")
 
 monitor = Monitor()
 
