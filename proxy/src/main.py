@@ -27,6 +27,7 @@ from sites.deepseek import DeepSeek
 from sites.blackbox import BlackBox
 from sites.gemini import Gemini
 from sites.deepl import DeepL
+from sites.perplexity import Perplexity
 
 
 from mitm_term import launch_ws_term
@@ -209,6 +210,7 @@ proxy.register_site(DeepSeek, ["deepseek.com"])
 proxy.register_site(BlackBox, ["blackbox.ai"])
 proxy.register_site(Gemini, ["gemini.google.com", "push.clients6.google.com"])
 proxy.register_site(DeepL, ["deepl.com"])
+proxy.register_site(Perplexity, ["perplexity.ai"])
 
 
 #Add sites to the database for being checked later on the web interface.
