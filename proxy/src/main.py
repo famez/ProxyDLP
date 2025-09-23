@@ -210,7 +210,7 @@ proxy.register_site(DeepSeek, ["deepseek.com"])
 proxy.register_site(BlackBox, ["blackbox.ai"])
 proxy.register_site(Gemini, ["gemini.google.com", "push.clients6.google.com"])
 proxy.register_site(DeepL, ["deepl.com"])
-proxy.register_site(Perplexity, ["perplexity.ai"])
+proxy.register_site(Perplexity, ["perplexity.ai", "ppl-ai-file-upload.s3.amazonaws.com"])
 
 
 #Add sites to the database for being checked later on the web interface.

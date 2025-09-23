@@ -176,11 +176,13 @@ def extract_substring_between(s, start, end):
     return ""
 
 
-def parse_multipart(content_type_header, body_bytes):
+import re
+
+def parse_multipart(content_type_header, body_bytes, return_fields=False):
     # Extract boundary from Content-Type header
     match = re.search(r'boundary=(.*)', content_type_header)
     if not match:
-        return []
+        return [], {}
 
     boundary = match.group(1)
     if boundary.startswith('"') and boundary.endswith('"'):
@@ -190,6 +192,7 @@ def parse_multipart(content_type_header, body_bytes):
     delimiter = b'--' + boundary
     parts = body_bytes.split(delimiter)[1:-1]  # Skip preamble and epilogue
     files = []
+    fields = {}
 
     for part in parts:
         part = part.strip(b'\r\n')
@@ -201,9 +204,10 @@ def parse_multipart(content_type_header, body_bytes):
         headers_text = headers_raw.decode(errors='ignore')
         body = body.rstrip(b'\r\n')
 
-        # Extract filename and content-type
+        # Check if it's a file
         filename_match = re.search(r'filename="([^"]+)"', headers_text)
         content_type_match = re.search(r'Content-Type:\s*([^\r\n;]+)', headers_text, re.IGNORECASE)
+        name_match = re.search(r'name="([^"]+)"', headers_text)
 
         if filename_match:
             filename = filename_match.group(1)
@@ -214,5 +218,16 @@ def parse_multipart(content_type_header, body_bytes):
                 "content": body,
                 "content_type": content_type
             })
+        elif name_match:
+            # Treat as a normal form field
+            name = name_match.group(1)
+            try:
+                value = body.decode(errors='ignore')
+            except Exception:
+                value = body
+            fields[name] = value
 
+    if return_fields:
+        return files, fields
     return files
+
