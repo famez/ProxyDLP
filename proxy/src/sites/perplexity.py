@@ -1,5 +1,6 @@
 from proxy import Site, parse_multipart
 from mitmproxy import ctx
+from mitmproxy.http import Response
 import xml.etree.ElementTree as ET
 
 
@@ -46,18 +47,48 @@ class Perplexity(Site):
                     ctx.log.error(f"Error parsing text/event-stream: {e}")
 
 
-            json_body = flow.request.json()
-            conversation = json_body.get('query_str', None)
+            try:
+                json_body = flow.request.json()
+                ctx.log.info(f"[Debug] Parsed request JSON body: {json_body}")
+            except Exception as e:
+                ctx.log.error(f"[Error] Failed to parse request JSON: {e}")
+                flow.response = Response.make(
+                    400, b"Invalid JSON"
+                )
+                return
 
-            user_id = json_body['params']['user_nextauth_id']
+            conversation = json_body.get('query_str', None)
+            ctx.log.info(f"[Debug] Extracted conversation: {conversation}")
+
+            user_id = json_body.get('params', {}).get('user_nextauth_id', None)
+            ctx.log.info(f"[Debug] Extracted user_id: {user_id}")
 
             email = self.related_user_data.get(user_id, {}).get("email", None)
+            ctx.log.info(f"[Debug] Extracted email from related_user_data: {email}")
 
             if isinstance(conversation, str):
                 if email:
+                    ctx.log.info(f"[Debug] Email found, checking account...")
+                    if not self.account_check_callback(email):
+                        ctx.log.warn(f"[Warn] Account check failed for email: {email}")
+                        flow.response = Response.make(
+                            401
+                        )
+                        return
+                    ctx.log.info(f"[Debug] Account check passed, invoking conversation_callback")
                     self.conversation_callback(email, conversation, conversation_id)
                 else:
+                    ctx.log.info(f"[Debug] No email found, checking anonymous access...")
+                    if not self.allow_anonymous_access():
+                        ctx.log.warn(f"[Warn] Anonymous access not allowed")
+                        flow.response = Response.make(
+                            401
+                        )
+                        return
+                    ctx.log.info(f"[Debug] Anonymous access allowed, invoking anonymous_conversation_callback")
                     self.anonymous_conversation_callback(conversation, conversation_id)
+            else:
+                ctx.log.warn(f"[Warn] Conversation is not a string: {conversation}")
 
 
         elif flow.request.method == "GET" and "perplexity.ai/api/auth/session" in flow.request.pretty_url:
