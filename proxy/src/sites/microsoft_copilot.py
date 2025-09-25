@@ -160,9 +160,10 @@ class Microsoft_Copilot(Site):
 
             
 
-        if flow.request.method == "GET" and "substrate.office.com/m365Copilot/Chathub" in flow.request.pretty_url:
+        elif flow.request.method == "GET" and "substrate.office.com/m365Copilot/Chathub" in flow.request.pretty_url:
 
             auth_query_param = flow.request.query.get("access_token", "")
+            conversationId = flow.request.query.get("ConversationId", None)
 
             try :
                 email = get_email_from_auth_header(auth_query_param)
@@ -184,7 +185,7 @@ class Microsoft_Copilot(Site):
                                 if "message" in argument and "text" in argument["message"]:
                                     conversation_text = argument["message"]["text"]
                                     #ctx.log.info(f'Conversation: {conversation_text}')
-                                    self.conversation_callback(email, conversation_text)
+                                    self.conversation_callback(email, conversation_text, conversationId)
 
                     return
                 
