@@ -9,6 +9,9 @@ import re
 import os
 import gzip
 from io import BytesIO
+from urllib.parse import urlparse, parse_qs
+import magic
+
 
 class Microsoft_Copilot(Site):
 
@@ -21,70 +24,82 @@ class Microsoft_Copilot(Site):
     def on_request_handle(self, flow):
         
         if flow.request.method == "PUT" and "sharepoint.com/personal" in flow.request.pretty_url and "uploadSession" in flow.request.pretty_url:
-            
-            user_email = None
+            ctx.log.info(f"Handling PUT request for SharePoint uploadSession: {flow.request.pretty_url}")
 
             tempauth = flow.request.query.get("tempauth")
-            if tempauth.startswith("v1."):
-                #tempauth = tempauth[3:]
-                tempauth = tempauth.removeprefix("v1.")
-                
-
-                decoded = decode_special_microsoft_token(tempauth)
-
-                if not decoded:
-                    ctx.log.error("Failed to decode tempauth token")
-                    return
-
-                if "app_displayname" in decoded['header'] and decoded['header']["app_displayname"] == "M365ChatClient" and 'Emails' in decoded['payload_strings'] and len(decoded['payload_strings']['Emails']) > 0:
-                    emails = decoded['payload_strings']['Emails']
-
-                    for email in emails:
-                        if not 'live.comz' in email:
-                            ctx.log.info(f"Email extracted from tempauth: {email}")
-                            user_email = email
-                            break
-                    
+            user_email = extract_email_from_tempauth(tempauth)
+            
 
             if not user_email or not self.account_check_callback(user_email):
-
+                ctx.log.warn(f"User email invalid or not allowed: {user_email}")
                 flow.response = Response.make(
                     403,
                     b"Blocked by proxy",  # Body
                     {"Content-Type": "text/plain"}  # Headers
                 )
-
                 return
 
             content_type = flow.request.headers.get("Content-Type", "")
-            
+            ctx.log.debug(f"Content-Type of request: {content_type}")
+
             if "application/octet-stream" in content_type:
-                unique_id = uuid.uuid4().hex
 
-                filename = f"{unique_id}"
+                content_range = flow.request.headers.get("Content-Range", "")
 
-                filepath = os.path.join("/uploads", filename)
+                ctx.log.debug(f"Content-Range of request: {content_range}")
 
-                with open(filepath, "wb") as f:
-                    f.write(flow.request.raw_content)
+                # Parse Content-Range header
+                match = re.match(r"bytes (\d+)-(\d+)/(\d+)", content_range)
+                if match:
+                    start = int(match.group(1))
+                    end = int(match.group(2))
+                    total = int(match.group(3))
 
                 if user_email in self.uploaded_files:
+                    ctx.log.info(f"Calling attached_file_callback for user: {user_email}")
 
-                    self.attached_file_callback(user_email, self.uploaded_files[email]['filename'], filepath, self.uploaded_files[email]['filetype'])
-                    del self.uploaded_files[email]
+                    if start == 0:
+                        unique_id = uuid.uuid4().hex
+                        filename = f"{unique_id}"
+                        filepath = os.path.join("/uploads", filename)
+                        ctx.log.info(f"Saving uploaded file to: {filepath}")
+                        self.uploaded_files[user_email]['filepath'] = filepath
 
 
+                    with open(self.uploaded_files[user_email]['filepath'], "ab") as f:
+                        f.seek(start)
+                        f.write(flow.request.raw_content)
+                        ctx.log.info(f"File written successfully: {self.uploaded_files[user_email]['filepath']} from {start} to {end}")
 
-    
+                    if end + 1 == total:        #End of the file
+
+                        #Get content type by manually inspecting
+                        mime = magic.Magic(mime=True)
+
+                        # Get MIME type from file content
+                        content_type = mime.from_file(self.uploaded_files[user_email]['filepath'])
+
+                        self.attached_file_callback(user_email, self.uploaded_files[user_email]['filename'], self.uploaded_files[user_email]['filepath'], content_type)
+                        del self.uploaded_files[user_email]
+                        ctx.log.info(f"Removed uploaded_files entry for user: {user_email}")
+                else:
+                    ctx.log.warn(f"No uploaded_files entry found for user: {user_email}")
+
 
     def on_response_handle(self, flow):
 
 
-        if flow.request.method == "GET" and "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:" in flow.request.pretty_url:
+        if flow.request.method == "POST" and "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:" in flow.request.pretty_url:
+            
+            content_type = flow.request.headers.get("Content-Type", "")
+
+            content = flow.request.json()
+
+            filename = content.get("item", {}).get("name", None)
+
+            ctx.log.info(f"File name: {filename}")
             
             content_type = flow.response.headers.get("Content-Type", "")
-
-
 
             if "application/json" in content_type.lower():
 
@@ -93,12 +108,20 @@ class Microsoft_Copilot(Site):
                     # Try to parse as JSON
                     content = json.loads(flow.response.content.decode('utf-8'))
 
-                    email = content['lastModifiedBy']['user']['email']
-                    filename = content['name']
-                    file_type = content['file']['mimeType']
+                    upload_url = content.get('uploadUrl')
 
+                    if upload_url:
+                        parsed_url = urlparse(upload_url)
+                        query_params = parse_qs(parsed_url.query)
+                        tempauth = query_params.get("tempauth", [None])[0]
+                    else:
+                        tempauth = None
 
-                    self.uploaded_files[email] = {"filename": filename, "filetype": file_type}
+                    if tempauth:
+                        email = extract_email_from_tempauth(tempauth)
+
+                        ctx.log.info(f"Email: {email}")
+                        self.uploaded_files[email] = {"filename": filename}
 
                 except Exception as e:
                     ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
@@ -254,3 +277,32 @@ def decode_special_microsoft_token(token: str):
     except Exception as e:
         ctx.log.warn(f"JWT decoding error: {str(e)}")
         return None
+
+
+def extract_email_from_tempauth(tempauth):
+
+    ctx.log.debug(f"tempauth query param: {tempauth}")
+
+    if tempauth and tempauth.startswith("v1."):
+        tempauth = tempauth.removeprefix("v1.")
+        ctx.log.debug(f"tempauth after removing prefix: {tempauth}")
+
+        decoded = decode_special_microsoft_token(tempauth)
+        ctx.log.debug(f"Decoded tempauth token: {decoded}")
+
+        if not decoded:
+            ctx.log.error("Failed to decode tempauth token")
+            return
+
+        if "app_displayname" in decoded['header']:
+            ctx.log.debug(f"app_displayname in header: {decoded['header']['app_displayname']}")
+        if "app_displayname" in decoded['header'] and decoded['header']["app_displayname"] == "M365ChatClient" and 'Emails' in decoded['payload_strings'] and len(decoded['payload_strings']['Emails']) > 0:
+            emails = decoded['payload_strings']['Emails']
+            ctx.log.info(f"Emails extracted from payload: {emails}")
+
+            for email in emails:
+                if not 'live.comz' in email:
+                    ctx.log.info(f"Email extracted from tempauth: {email}")
+                    return email
+
+    return None
