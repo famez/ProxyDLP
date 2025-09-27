@@ -149,9 +149,13 @@
             <% } %>
 
             <div class="absolute w-4 h-4 bg-indigo-500 rounded-full -left-2 border-2 border-white"></div>
-            <time class="block text-sm text-gray-500"><%= event.timestamp %></time>
+
+            <!-- Updated <time> with data-utc -->
+            <time class="block text-sm text-gray-500" data-utc="<%= event.timestamp %>">
+              <%= event.timestamp %>
+            </time>
+
             <div class="mt-1 text-lg font-medium text-gray-800 relative">
-              <!-- Agent Status Badge -->
               <% if (event.agentData) { 
                    const lastHb = new Date(event.agentData.lastHeartbeat);
                    const now = new Date();
@@ -228,37 +232,37 @@
 
 
       <!-- Pagination Controls -->
-      <div class="mt-10 flex flex-col items-center gap-4">
-        <div class="flex items-center gap-4">
-          <% const currentPage = Number(filters.page || 1); %>
-          <% const limit = Number(filters.limit || 10); %>
-          <% const prevPage = currentPage > 1 ? currentPage - 1 : 1; %>
-          <% const nextPage = currentPage + 1; %>
+    <div class="mt-10 flex flex-col items-center gap-4">
+      <div class="flex items-center gap-4">
+        <% const currentPage = Number(filters.page || 1); %>
+        <% const limit = Number(filters.limit || 10); %>
+        <% const prevPage = currentPage > 1 ? currentPage - 1 : 1; %>
+        <% const nextPage = currentPage + 1; %>
 
-          <a href="?<%= new URLSearchParams({ ...filters, page: prevPage, limit }).toString() %>"
-             class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm <%= currentPage <= 1 ? 'opacity-50 pointer-events-none' : '' %>">
-            ← Previous
-          </a>
-          <span class="text-sm text-gray-600">Page <%= currentPage %></span>
-          <a href="?<%= new URLSearchParams({ ...filters, page: nextPage, limit }).toString() %>"
-             class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
-            Next →
-          </a>
-        </div>
-
-        <form method="GET" class="flex items-center gap-2 text-sm">
-          <% Object.entries(filters).forEach(([key, val]) => { if (key !== 'limit') { %>
-            <input type="hidden" name="<%= key %>" value="<%= val %>">
-          <% } }) %>
-          <label for="limitSelect" class="text-gray-600">Results per page:</label>
-          <select id="limitSelect" name="limit" onchange="this.form.submit()" class="border rounded px-2 py-1">
-            <option value="10" <%= limit == 10 ? 'selected' : '' %>>10</option>
-            <option value="50" <%= limit == 50 ? 'selected' : '' %>>50</option>
-            <option value="100" <%= limit == 100 ? 'selected' : '' %>>100</option>
-            <option value="250" <%= limit == 250 ? 'selected' : '' %>>250</option>
-          </select>
-        </form>
+        <a href="?<%= new URLSearchParams({ ...filters, page: prevPage, limit }).toString() %>"
+           class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm <%= currentPage <= 1 ? 'opacity-50 pointer-events-none' : '' %>">
+          ← Previous
+        </a>
+        <span class="text-sm text-gray-600">Page <%= currentPage %></span>
+        <a href="?<%= new URLSearchParams({ ...filters, page: nextPage, limit }).toString() %>"
+           class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
+          Next →
+        </a>
       </div>
+
+      <form method="GET" class="flex items-center gap-2 text-sm">
+        <% Object.entries(filters).forEach(([key, val]) => { if (key !== 'limit') { %>
+          <input type="hidden" name="<%= key %>" value="<%= val %>">
+        <% } }) %>
+        <label for="limitSelect" class="text-gray-600">Results per page:</label>
+        <select id="limitSelect" name="limit" onchange="this.form.submit()" class="border rounded px-2 py-1">
+          <option value="10" <%= limit == 10 ? 'selected' : '' %>>10</option>
+          <option value="50" <%= limit == 50 ? 'selected' : '' %>>50</option>
+          <option value="100" <%= limit == 100 ? 'selected' : '' %>>100</option>
+          <option value="250" <%= limit == 250 ? 'selected' : '' %>>250</option>
+        </select>
+      </form>
+    </div>
     
   </div>
 
@@ -310,11 +314,29 @@
     setupAutocomplete({ inputId: 'filetypeInput', listId: 'filetypeSuggestions', field: 'content_type' });
     setupAutocomplete({ inputId: 'ipInput', listId: 'ipSuggestions', field: 'source_ip' });
 
-
+    // Pulse animation on hover
     document.querySelectorAll("ol li").forEach(li => {
       li.addEventListener("mouseenter", () => li.setAttribute("data-pulse", "true"));
       li.addEventListener("mouseleave", () => li.setAttribute("data-pulse", "false"));
     });
-  </script>
-</body>
-</html>
+
+    // Convert all <time data-utc="..."> elements to local timezone
+    document.querySelectorAll('time[data-utc]').forEach(el => {
+      const utcString = el.dataset.utc;
+      const date = new Date(utcString);
+
+      el.textContent = date.toLocaleString(undefined, {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+
+      // Optional: tooltip showing original UTC
+      el.title = `UTC: ${utcString}`;
+    });
+</script>
