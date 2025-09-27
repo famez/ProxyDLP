@@ -22,30 +22,26 @@ class Github_Copilot(Site):
         if flow.request.method == "POST" and "githubcopilot.com/chat/completions" in flow.request.pretty_url:
             ctx.log.info(f"Request URL: {flow.request.pretty_url}")
 
-            body = flow.request.get_text()
             try:
-                json_body = json.loads(body)
+                json_body = flow.request.json()
 
                 if 'messages' in json_body:
                     messages = json_body['messages']
                     for message in reversed(messages):
                         if 'role' in message and message['role'] == 'user':
                             if 'content' in message:
-                                user_message = message['content']
-                                #ctx.log.info(f"User message: {user_message}")
-                                user_message = f"<root>{user_message}</root>"
-                                root = ET.fromstring(user_message)
-
-                                prompt = root.find('prompt').text if root.find('prompt') is not None else None
+                                prompt = message['content']
 
                                 if prompt:
-                                    #ctx.log.info(f"Prompt found: {prompt}")
+                                    ctx.log.info(f"Prompt found: {prompt}")
 
                                     ip_address = flow.client_conn.address[0]
 
                                     login = self.related_user_data.get(ip_address, {}).get("login", None)
                                     if login:
                                         self.conversation_callback(login, prompt)
+                                    else:
+                                        self.anonymous_conversation_callback(prompt)
   
                                 break
                             else:
