@@ -25,6 +25,12 @@ app.use(express.json());
 app.use(cookieParser());
 
 
+app.use((req, res, next) => {
+  res.locals.version = process.env.APP_VERSION || 'unknown';
+  next();
+});
+
+
 // Import routes
 const agentRoutes = require('./agents');
 
