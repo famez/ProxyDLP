@@ -11,9 +11,9 @@ import uuid
 class Github_Copilot(Site):
 
     def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback):
+                 allow_anonymous_access, anonymous_conversation_callback, exclude_urls):
         super().__init__("Github Copilot", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback)
+                         allow_anonymous_access, anonymous_conversation_callback, exclude_urls)
         self.related_user_data = {}
         
     

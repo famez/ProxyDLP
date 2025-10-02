@@ -13,9 +13,9 @@ import magic
 class Gemini(Site):
 
     def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback):
+                 allow_anonymous_access, anonymous_conversation_callback, exclude_urls):
         super().__init__("Google Gemini", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback)
+                         allow_anonymous_access, anonymous_conversation_callback, exclude_urls)
         
         self.related_user_data = {}
         self.related_file_data = {}
