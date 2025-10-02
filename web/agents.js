@@ -215,6 +215,11 @@ router.get('/deregister', async (req, res) => {
   }
 });
 
+router.get('/healthcheck', (req, res) => {
+  res.status(200).send('OK');
+});
+
+
 
 
 module.exports = router;
