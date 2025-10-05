@@ -74,7 +74,7 @@
     setTimeout(() => { fitAddon.fit(); }, 100);
     window.addEventListener("resize", () => { fitAddon.fit(); });
 
-    const socket = new WebSocket('wss://' + window.location.hostname + '/ws/');
+    const socket = new WebSocket('wss://' + window.location.hostname + ':8443/ws/');
     socket.binaryType = 'arraybuffer';
     socket.onopen = () => { term.write('Connected to tmux session\r\n'); };
     socket.onmessage = (event) => { term.write(new TextDecoder().decode(new Uint8Array(event.data))); };
