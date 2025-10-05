@@ -204,11 +204,8 @@ proxy = Proxy(account_login_callback, account_check_callback, conversation_callb
 
 
 proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"])
-
-#As substrate.office.com and outlook.office.com resolve to the same IP addresses, we need to exclude outlook.office.com for the analysis and the rejection by default
 proxy.register_site(Microsoft_Copilot, ["substrate.office.com", "sharepoint.com", "graph.microsoft.com",
-                                        "copilot.microsoft.com"], exclude_urls = ['outlook.office.com'])
-
+                                        "copilot.microsoft.com"])
 proxy.register_site(Github_Copilot, ["githubcopilot.com", "api.github.com"])
 proxy.register_site(DeepSeek, ["deepseek.com"])
 proxy.register_site(BlackBox, ["blackbox.ai"])

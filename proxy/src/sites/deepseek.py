@@ -11,9 +11,9 @@ import uuid
 class DeepSeek(Site):
 
     def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback, exclude_urls):
+                 allow_anonymous_access, anonymous_conversation_callback):
         super().__init__("DeepSeek", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback, exclude_urls)
+                         allow_anonymous_access, anonymous_conversation_callback)
         self.users = {}
     
     def on_request_handle(self, flow):

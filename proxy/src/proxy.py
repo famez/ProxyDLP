@@ -15,9 +15,9 @@ class Proxy:
         self.anonymous_conversation_callback = anonymous_conversation_callback
 
 
-    def register_site(self, cls, urls, exclude_urls = None):
+    def register_site(self, cls, urls):
         site = cls(urls, self.account_login_callback, self.account_check_callback, self.conversation_callback, self.attached_file_callback,
-                   self.allow_anonymous_access, self.anonymous_conversation_callback, exclude_urls)
+                   self.allow_anonymous_access, self.anonymous_conversation_callback)
         self.sites.append(site)
 
     def route_request(self, flow):
@@ -30,11 +30,6 @@ class Proxy:
                         site.handle_request(flow)
                         routed = True
 
-            if site.get_excluded_urls():
-                for site_url in site.get_excluded_urls():
-                    if site_url in url:
-                        return True
-
         return routed
 
     def route_response(self, flow):
@@ -46,31 +41,19 @@ class Proxy:
                     if site_url in url:
                         site.handle_response(flow)
                         routed = True
-
-            if site.get_excluded_urls():
-                for site_url in site.get_excluded_urls():
-                    if site_url in url:
-                        return True
                         
         return routed
 
                     
     def route_ws_from_client_to_server(self, flow, message):
-        routed = False
         url = flow.request.pretty_url
         for site in self.sites:
             if site.isEnabled():
                 for site_url in site.get_urls():
                     if site_url in url:
                         site.handle_ws_from_client_to_server(flow, message)
-                        routed = True
-                        
-            if site.get_excluded_urls():
-                for site_url in site.get_excluded_urls():
-                    if site_url in url:
                         return True
-                    
-        return routed
+        return False
                 
     def get_sites(self):
         return self.sites
@@ -88,10 +71,9 @@ class EmailNotFoundException(Exception):
 
 class Site:
     def __init__(self, name, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback, exclude_urls = None):
+                 allow_anonymous_access, anonymous_conversation_callback):
         self.name = name
         self.urls = urls
-        self.exclude_urls = exclude_urls
         self.source_ip = ""     #To keep track of the source IP address.
         self.on_account_login_callback = account_login_callback
         self.on_account_check_callback = account_check_callback
@@ -113,9 +95,6 @@ class Site:
 
     def get_urls(self):
         return self.urls
-
-    def get_excluded_urls(self):
-        return self.exclude_urls
     
     def get_name(self):
         return self.name
