@@ -38,7 +38,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "80:80"
-      - "443:443"
+      - "8443:8443"
+      - "4443:4443"
     restart: always
     depends_on:
       mongo:
