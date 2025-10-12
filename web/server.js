@@ -2056,7 +2056,7 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
     // --- Default groupBy ---
     const groupByField = groupBy || 'content_type';
 
-    // --- Level 1: Aggregation ---
+    // --- Level 1: Aggregation view ---
     if (!groupValue) {
       const groups = await event_collection.aggregate([
         { $match: match },
@@ -2079,7 +2079,7 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
       });
     }
 
-    // --- Level 2: Drilldown ---
+    // --- Level 2: Drilldown view ---
     const query = { ...match, [groupByField]: groupValue };
     const sort = { timestamp: order === 'asc' ? 1 : -1 };
     const limit = parseInt(limitQuery, 10) || 20;
@@ -2095,12 +2095,27 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
 
     const events = await event_collection.aggregate(pipeline).toArray();
 
+    // Detect repeated hashes within this group
+    const repeatedHashes = await event_collection.aggregate([
+      { $match: query },
+      { $group: { _id: "$hash", count: { $sum: 1 }, filenames: { $addToSet: "$filename" } } },
+      { $match: { count: { $gt: 1 } } }
+    ]).toArray();
+
+    // Mark events with a "repeated" flag
+    const repeatedSet = new Set(repeatedHashes.map(h => h._id));
+    const eventsWithDuplicates = events.map(e => ({
+      ...e,
+      isRepeated: repeatedSet.has(e.hash)
+    }));
+
     return res.render('files-group', {
       title: `Files where ${groupByField} = ${groupValue}`,
       group: groupValue,
       groupBy: groupByField,
-      events,
-      filters: req.query
+      events: eventsWithDuplicates,
+      filters: req.query,
+      repeatedHashes
     });
 
   } catch (err) {
@@ -2110,6 +2125,7 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
     if (client) await client.close();
   }
 });
+
 
 
 
