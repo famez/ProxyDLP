@@ -9,30 +9,53 @@
   <div class="max-w-6xl mx-auto py-10 px-4">
     <h1 class="text-3xl font-bold text-indigo-700 mb-6">Attached Files Dashboard</h1>
 
+    <!-- GroupBy Selector -->
+    <form method="get" action="/files" class="mb-6 flex items-center gap-2">
+      <label for="groupBy" class="text-sm font-medium text-gray-700">Group by:</label>
+      <select name="groupBy" id="groupBy" class="border rounded px-2 py-1">
+        <option value="content_type" <%= groupBy === 'content_type' ? 'selected' : '' %>>Content Type</option>
+        <option value="site" <%= groupBy === 'site' ? 'selected' : '' %>>Site</option>
+        <option value="user" <%= groupBy === 'user' ? 'selected' : '' %>>User</option>
+        <option value="source_ip" <%= groupBy === 'source_ip' ? 'selected' : '' %>>Source IP</option>
+        <option value="filename" <%= groupBy === 'filename' ? 'selected' : '' %>>Filename</option>
+      </select>
+
+      <!-- Preserve other filters -->
+      <% Object.keys(filters).forEach(key => { %>
+        <% if (key !== 'groupBy' && key !== 'group') { %>
+          <input type="hidden" name="<%= key %>" value="<%= filters[key] %>">
+        <% } %>
+      <% }) %>
+
+      <button type="submit" class="px-3 py-1 rounded bg-indigo-500 text-white text-sm hover:bg-indigo-600 transition">
+        Apply
+      </button>
+    </form>
+
     <% if (groups && groups.length > 0) { %>
       <div class="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         <% groups.forEach(group => { %>
-          <a href="?<%= new URLSearchParams({ ...filters, group: group._id }).toString() %>"
+          <a href="?<%= new URLSearchParams({ ...filters, groupValue: group._id, groupBy }).toString() %>"
              class="bg-white shadow rounded-lg p-6 hover:shadow-md transition flex flex-col">
             
-            <!-- Mimetype -->
+            <!-- Dynamic grouping label -->
             <h2 class="text-lg font-semibold text-indigo-600">
               <%= group._id || 'Unknown' %>
             </h2>
 
             <!-- Count -->
             <p class="text-gray-600 mt-2">
-              Files: <span class="font-bold"><%= group.count %></span>
+              Count: <span class="font-bold"><%= group.count %></span>
             </p>
 
             <!-- Latest file -->
             <p class="text-sm text-gray-500 mt-1 truncate">
-              Latest: <%= group.latestFile %>
+              Latest: <%= group.latestFile || 'N/A' %>
             </p>
 
             <!-- Timestamp -->
             <time class="text-xs text-gray-400 mt-1" data-utc="<%= group.latestTimestamp %>">
-              <%= group.latestTimestamp %>
+              <%= group.latestTimestamp ? new Date(group.latestTimestamp).toLocaleString() : '' %>
             </time>
           </a>
         <% }) %>

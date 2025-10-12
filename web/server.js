@@ -2018,35 +2018,51 @@ app.get('/downloads/ProxyDLPAgentSetup.exe', authMiddleware, requirePermission("
 });
 
 app.get('/files', authMiddleware, requirePermission("events"), async (req, res) => {
-  const { group, start, end, user, site, filename, filetype, content, source_ip, order = 'desc' } = req.query;
+  const {
+    groupBy,
+    groupValue,
+    start,
+    end,
+    user,
+    site,
+    filename,
+    filetype,
+    content,
+    source_ip,
+    order = 'desc',
+    limit: limitQuery,
+    page: pageQuery
+  } = req.query;
 
   let client;
   try {
     ({ client, db } = await connectToDB());
     const event_collection = db.collection('events');
 
-    if (!group) {
-      // === Level 1: Aggregated view by mimetype ===
-      const match = { rational: "Attached file" };
+    // --- Base match filters ---
+    const match = { rational: "Attached file" };
+    if (start || end) {
+      match.timestamp = {};
+      if (start) match.timestamp.$gte = new Date(start);
+      if (end) match.timestamp.$lte = new Date(end);
+    }
+    if (user) match.user = { $regex: new RegExp(user, 'i') };
+    if (site) match.site = { $regex: new RegExp(site, 'i') };
+    if (filename) match.filename = { $regex: new RegExp(filename, 'i') };
+    if (filetype) match.content_type = { $regex: new RegExp(filetype, 'i') };
+    if (source_ip) match.source_ip = { $regex: new RegExp(source_ip, 'i') };
+    if (content) match.content = { $regex: new RegExp(content, 'i') };
 
-      // Optional filters still apply (date range, user, site, etc.)
-      if (start || end) {
-        match.timestamp = {};
-        if (start) match.timestamp.$gte = new Date(start);
-        if (end) match.timestamp.$lte = new Date(end);
-      }
-      if (user) match.user = { $regex: new RegExp(user, 'i') };
-      if (site) match.site = { $regex: new RegExp(site, 'i') };
-      if (filename) match.filename = { $regex: new RegExp(filename, 'i') };
-      if (filetype) match.content_type = { $regex: new RegExp(filetype, 'i') };
-      if (source_ip) match.source_ip = { $regex: new RegExp(source_ip, 'i') };
-      if (content) match.content = { $regex: new RegExp(content, 'i') };
+    // --- Default groupBy ---
+    const groupByField = groupBy || 'content_type';
 
+    // --- Level 1: Aggregation ---
+    if (!groupValue) {
       const groups = await event_collection.aggregate([
         { $match: match },
         {
           $group: {
-            _id: "$content_type",
+            _id: `$${groupByField}`,
             count: { $sum: 1 },
             latestFile: { $last: "$filename" },
             latestTimestamp: { $last: "$timestamp" }
@@ -2056,56 +2072,37 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
       ]).toArray();
 
       return res.render('files-dashboard', {
-        title: 'Attached Files Dashboard',
+        title: `Attached Files Dashboard (grouped by ${groupByField})`,
         groups,
-        filters: req.query
-      });
-
-    } else {
-      // === Level 2: Drilldown view for a specific mimetype ===
-      const query = { rational: "Attached file", content_type: group };
-
-      if (start || end) {
-        query.timestamp = {};
-        if (start) query.timestamp.$gte = new Date(start);
-        if (end) query.timestamp.$lte = new Date(end);
-      }
-      if (user) query.user = { $regex: new RegExp(user, 'i') };
-      if (site) query.site = { $regex: new RegExp(site, 'i') };
-      if (filename) query.filename = { $regex: new RegExp(filename, 'i') };
-      if (source_ip) query.source_ip = { $regex: new RegExp(source_ip, 'i') };
-      if (content) query.content = { $regex: new RegExp(content, 'i') };
-
-      const sort = { timestamp: order === 'asc' ? 1 : -1 };
-      const limit = parseInt(req.query.limit, 10) || 20;
-      const page = parseInt(req.query.page, 10) || 1;
-      const skip = (page - 1) * limit;
-
-      const pipeline = [
-        { $match: query },
-        {
-          $lookup: {
-            from: "agents",
-            localField: "agent_id",
-            foreignField: "guid",
-            as: "agentData"
-          }
-        },
-        { $unwind: { path: "$agentData", preserveNullAndEmptyArrays: true } },
-        { $sort: sort },
-        { $skip: skip },
-        { $limit: limit }
-      ];
-
-      const events = await event_collection.aggregate(pipeline).toArray();
-
-      return res.render('files-group', {
-        title: `Files: ${group}`,
-        group,
-        events,
-        filters: req.query
+        filters: req.query,
+        groupBy: groupByField
       });
     }
+
+    // --- Level 2: Drilldown ---
+    const query = { ...match, [groupByField]: groupValue };
+    const sort = { timestamp: order === 'asc' ? 1 : -1 };
+    const limit = parseInt(limitQuery, 10) || 20;
+    const page = parseInt(pageQuery, 10) || 1;
+    const skip = (page - 1) * limit;
+
+    const pipeline = [
+      { $match: query },
+      { $sort: sort },
+      { $skip: skip },
+      { $limit: limit }
+    ];
+
+    const events = await event_collection.aggregate(pipeline).toArray();
+
+    return res.render('files-group', {
+      title: `Files where ${groupByField} = ${groupValue}`,
+      group: groupValue,
+      groupBy: groupByField,
+      events,
+      filters: req.query
+    });
+
   } catch (err) {
     console.error('Error in /files:', err);
     res.status(500).send('Internal Server Error');
