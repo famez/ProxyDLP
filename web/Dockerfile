@@ -55,7 +55,7 @@ COPY --from=builder /build/ProxyDLPAgent/libs/*.sys ./
 COPY web/ProxyDLPAgent.iss .
 
 #Copy the CA certificate to trust.
-COPY web/mitmCA.pem .
+COPY proxy/mitmCA.pem .
 
 # Copy .env file into the installer stage
 COPY web/hostname .

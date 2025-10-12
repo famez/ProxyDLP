@@ -61,8 +61,6 @@ else
   echo "mitmproxy CA cert and key already exist. Skipping generation."
 fi
 
-#Make the CA cert available to the web image.
-cp $MITM_CERT ./web/
 
 # Generate nginx key
 if [[ ! -f "$NGINX_KEY" ]]; then
