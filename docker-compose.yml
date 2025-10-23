@@ -10,6 +10,7 @@ services:
       mongo:
         condition: service_healthy
     ports:
+      - "8080:8080"
       - "443:8080"
       - "443:8080/udp"
     stdin_open: true
