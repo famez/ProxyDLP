@@ -10,9 +10,9 @@ import uuid
 class Grok(Site):
 
     def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback):
+                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
         super().__init__("Grok", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback)
+                         allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
         self.users = {}
     
     def on_request_handle(self, flow):

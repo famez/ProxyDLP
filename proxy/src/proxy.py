@@ -5,7 +5,7 @@ import re
 
 class Proxy:
     def __init__(self, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback):
+                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
         self.sites = []
         self.account_login_callback = account_login_callback
         self.account_check_callback = account_check_callback
@@ -13,11 +13,12 @@ class Proxy:
         self.attached_file_callback = attached_file_callback
         self.allow_anonymous_access = allow_anonymous_access
         self.anonymous_conversation_callback = anonymous_conversation_callback
+        self.store_file_callback = store_file_callback
 
 
     def register_site(self, cls, urls):
         site = cls(urls, self.account_login_callback, self.account_check_callback, self.conversation_callback, self.attached_file_callback,
-                   self.allow_anonymous_access, self.anonymous_conversation_callback)
+                   self.allow_anonymous_access, self.anonymous_conversation_callback, self.store_file_callback)
         self.sites.append(site)
 
     def route_request(self, flow):
@@ -71,7 +72,7 @@ class EmailNotFoundException(Exception):
 
 class Site:
     def __init__(self, name, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback):
+                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
         self.name = name
         self.urls = urls
         self.source_ip = ""     #To keep track of the source IP address.
@@ -81,6 +82,8 @@ class Site:
         self.on_attached_file_callback = attached_file_callback
         self.on_allow_anonymous_access = allow_anonymous_access
         self.on_anonymous_conversation_callback = anonymous_conversation_callback
+        self.store_file_callback = store_file_callback
+
 
         self.enabled = False
 
@@ -140,6 +143,9 @@ class Site:
     
     def anonymous_conversation_callback(self, conversation_text, conversation_id = None):
         return self.on_anonymous_conversation_callback(self, conversation_text, self.source_ip, conversation_id)
+
+    def store_file_callback(self, file_content):
+        return self.store_file_callback(self, file_content)
 
 
 #Helper functions

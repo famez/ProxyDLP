@@ -18,6 +18,8 @@ from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
 from concurrent import futures
 import time
+import uuid
+
 
 from proxy import Proxy
 from sites.chatgpt import ChatGPT
@@ -30,6 +32,7 @@ from sites.deepl import DeepL
 from sites.perplexity import Perplexity
 from sites.grok import Grok
 
+import hashlib
 
 from mitm_term import launch_ws_term
 
@@ -51,6 +54,13 @@ agents_collection = db_client["ProxyDLP"]["agents"]
 site_settings = site_settings_collection.find_one()
 rejectSiteTraffic = (site_settings and "rejectTraffic" in site_settings and site_settings['rejectTraffic'])
 
+def sha256_hash_file(filename):
+    sha256_hash = hashlib.sha256()
+    with open(filename, "rb") as f:
+        # Read and update hash in chunks (good for large files)
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(chunk)
+    return sha256_hash.hexdigest()
 
 def find_agent_by_source_ip(ip):
     # Search for the document with the given IP
@@ -173,16 +183,43 @@ def conversation_callback(site, email, content, source_ip, conversation_id):
     response = stub.EventAdded(mon_message)
     ctx.log.info(f"Response: {response}")
 
+def store_file_callback(site, file_content):
+
+    # Compute SHA-256 hash of the file content
+    file_hash = hashlib.sha256(file_content).hexdigest()
+
+    # Check if a document with the same hash exists
+    existing_doc = events_collection.find_one({"hash": file_hash, "rational": "Attached file"})
+
+    #If it is the same file, just reuse the path of an already uploaded file.
+    if existing_doc:
+        return existing_doc["filepath"]
+
+    unique_id = uuid.uuid4().hex
+    safe_filename = f"{unique_id}"
+    filepath = os.path.join("/uploads", safe_filename)
+
+    ctx.log.info(f"Saving uploaded file to {filepath}")
+    with open(filepath, "wb") as f:
+        f.write(file_content)
+
+    return filepath
+
+
+
 def attached_file_callback(site, email, filename, filepath, content_type, source_ip):
+
+
+    file_hash = sha256_hash_file(filepath)
 
     if email:
 
         event = {"timestamp": datetime.now(timezone.utc), "user": email, "rational": "Attached file", "filename" : filename, "filepath" : filepath, 
-                            "content_type": content_type, "site": site.get_name(), "source_ip": source_ip}
+                            "content_type": content_type, "site": site.get_name(), "source_ip": source_ip, "hash": file_hash}
         
     else:
         event = {"timestamp": datetime.now(timezone.utc), "rational": "Attached file", "filename" : filename, "filepath" : filepath, 
-                            "content_type": content_type, "site": site.get_name(), "source_ip": source_ip}
+                            "content_type": content_type, "site": site.get_name(), "source_ip": source_ip, "hash": file_hash}
 
     agent_id = find_agent_by_source_ip(source_ip)
     if agent_id:
@@ -200,7 +237,7 @@ def attached_file_callback(site, email, filename, filepath, content_type, source
 
 
 proxy = Proxy(account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-              allow_anonymous_access, anonymous_conversation_callback)
+              allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
 
 
 proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"])

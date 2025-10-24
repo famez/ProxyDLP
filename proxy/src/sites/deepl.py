@@ -11,9 +11,9 @@ from urllib.parse import parse_qs
 class DeepL(Site):
 
     def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback):
+                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
         super().__init__("DeepL", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback)
+                         allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
         
     def on_request_handle(self, flow):
             

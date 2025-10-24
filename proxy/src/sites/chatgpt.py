@@ -10,9 +10,9 @@ import uuid
 class ChatGPT(Site):
 
     def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback):
+                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
         super().__init__("ChatGPT", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback)
+                         allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
         self.files = {}
         self.file_ids = {}
     

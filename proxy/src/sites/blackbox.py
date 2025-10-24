@@ -5,15 +5,14 @@ from mitmproxy.http import Response
 import json
 
 import os
-import uuid
 
 
 class BlackBox(Site):
 
     def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback):
+                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
         super().__init__("BlackBox", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback)
+                         allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
 
         self.sessions = {}
         self.workspaces = {}
@@ -155,13 +154,9 @@ class BlackBox(Site):
                 uploaded_files = parse_multipart(content_type, body)
 
                 for file in uploaded_files:
-                    unique_id = uuid.uuid4().hex
-                    safe_filename = f"{unique_id}"
-                    filepath = os.path.join("/uploads", safe_filename)
-
-                    ctx.log.info(f"Saving uploaded file to {filepath}")
-                    with open(filepath, "wb") as f:
-                        f.write(file['content'])
+                    
+                    filepath = self.store_file_callback(file['content'])
+                    
                     ctx.log.info(f"Saved file: {filepath}")
 
                     self.workspaces[workspace_id].append({"filename": file['filename'], "filepath": filepath, "content_type": 
