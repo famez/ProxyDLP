@@ -303,24 +303,12 @@ def decode_file(filepath, content_type):
     return text
 
 
-def sha256_hash_file(filename):
-    sha256_hash = hashlib.sha256()
-    with open(filename, "rb") as f:
-        # Read and update hash in chunks (good for large files)
-        for chunk in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(chunk)
-    return sha256_hash.hexdigest()
 
 
 def analyze_file(filepath, content_type):
 
-    #Calculate sha256
-    file_hash = sha256_hash_file(filepath)
-
-    print(f"File hash: {file_hash}")
-
     text = decode_file(filepath, content_type)
-    return text, analyze_text(text), file_hash
+    return text, analyze_text(text)
 
 
 
@@ -362,11 +350,11 @@ def on_event_added(event_id):
             )
 
         elif event['rational'] == "Attached file":
-            text, leak, hash = analyze_file(event['filepath'], event['content_type'])
+            text, leak = analyze_file(event['filepath'], event['content_type'])
 
             result = events_collection.update_one(
                 {"_id": ObjectId(event_id)},
-                {"$set": {"leak": leak, "hash": hash}}
+                {"$set": {"leak": leak}}
             )
 
 
