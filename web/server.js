@@ -2025,7 +2025,6 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
     end,
     user,
     site,
-    filename,
     filetype,
     content,
     source_ip,
@@ -2048,7 +2047,6 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
     }
     if (user) match.user = { $regex: new RegExp(user, 'i') };
     if (site) match.site = { $regex: new RegExp(site, 'i') };
-    if (filename) match.filename = { $regex: new RegExp(filename, 'i') };
     if (filetype) match.content_type = { $regex: new RegExp(filetype, 'i') };
     if (source_ip) match.source_ip = { $regex: new RegExp(source_ip, 'i') };
     if (content) match.content = { $regex: new RegExp(content, 'i') };
@@ -2110,7 +2108,7 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
     }));
 
     return res.render('files-group', {
-      title: `Files where ${groupByField} = ${groupValue}`,
+      title: `Files grouped by ${groupByField} for ${groupValue}`,
       group: groupValue,
       groupBy: groupByField,
       events: eventsWithDuplicates,
