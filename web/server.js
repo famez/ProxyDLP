@@ -2093,19 +2093,34 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
 
     const events = await event_collection.aggregate(pipeline).toArray();
 
-    // Detect repeated hashes within this group
-    const repeatedHashes = await event_collection.aggregate([
+    // Get counts for all hashes within this group (so we can attach repeat counts to events)
+    const hashCountsArr = await event_collection.aggregate([
       { $match: query },
-      { $group: { _id: "$hash", count: { $sum: 1 }, filenames: { $addToSet: "$filename" } } },
-      { $match: { count: { $gt: 1 } } }
+      { $group: { _id: "$hash", count: { $sum: 1 }, filenames: { $addToSet: "$filename" } } }
     ]).toArray();
 
-    // Mark events with a "repeated" flag
-    const repeatedSet = new Set(repeatedHashes.map(h => h._id));
-    const eventsWithDuplicates = events.map(e => ({
-      ...e,
-      isRepeated: repeatedSet.has(e.hash)
-    }));
+    // Build maps for quick lookup
+    const hashCountMap = new Map();
+    const repeatedHashes = [];
+    for (const h of hashCountsArr) {
+      // _id can be null/undefined for items without a hash; handle gracefully
+      const key = h._id == null ? null : String(h._id);
+      hashCountMap.set(key, h.count);
+      if (key !== null && h.count > 1) {
+        repeatedHashes.push(h);
+      }
+    }
+
+    // Mark events with repeat info
+    const eventsWithDuplicates = events.map(e => {
+      const key = e.hash == null ? null : String(e.hash);
+      const count = hashCountMap.get(key) || 1;
+      return {
+        ...e,
+        isRepeated: count > 1,
+        repeatCount: count            // total occurrences of this hash
+      };
+    });
 
     return res.render('files-group', {
       title: `Files grouped by ${groupByField} for ${groupValue}`,
