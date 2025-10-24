@@ -211,10 +211,7 @@ class ChatGPT(Site):
 
                 content_type = flow.request.headers.get("Content-Type", "unknown")
 
-                filepath = os.path.join("/uploads", filename)
-
-                with open(filepath, "wb") as f:
-                    f.write(content)
+                filepath = self.store_file_callback(content)
 
                 ctx.log.info(f"Saved PUT upload to: {filepath}")
 

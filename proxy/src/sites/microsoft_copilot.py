@@ -45,7 +45,6 @@ class Microsoft_Copilot(Site):
             if "application/octet-stream" in content_type:
 
                 content_range = flow.request.headers.get("Content-Range", "")
-
                 ctx.log.debug(f"Content-Range of request: {content_range}")
 
                 # Parse Content-Range header
@@ -56,38 +55,46 @@ class Microsoft_Copilot(Site):
                     total = int(match.group(3))
 
                 if user_email in self.uploaded_files:
-                    ctx.log.info(f"Calling attached_file_callback for user: {user_email}")
-
-                    if start == 0:
-                        unique_id = uuid.uuid4().hex
-                        filename = f"{unique_id}"
-                        filepath = os.path.join("/uploads", filename)
-                        ctx.log.info(f"Saving uploaded file to: {filepath}")
-                        self.uploaded_files[user_email]['filepath'] = filepath
+                    ctx.log.info(f"Handling in-memory upload for user: {user_email}")
 
 
-                    with open(self.uploaded_files[user_email]['filepath'], "ab") as f:
-                        f.seek(start)
-                        f.write(flow.request.raw_content)
-                        ctx.log.info(f"File written successfully: {self.uploaded_files[user_email]['filepath']} from {start} to {end}")
+                    # Initialize or get existing bytearray buffer
+                    buf = self.uploaded_files[user_email].get('filecontent')
+                    if start == 0 or buf is None:
+                        buf = bytearray()
+                        self.uploaded_files[user_email]['filecontent'] = buf
+                        ctx.log.debug(f"Initialized in-memory buffer for user {user_email}")
 
-                    if end + 1 == total:        #End of the file
+                    # Ensure buffer length matches start (pad with zeros if needed)
+                    if start > len(buf):
+                        buf.extend(b'\x00' * (start - len(buf)))
 
-                        #Get content type by manually inspecting
-                        mime = magic.Magic(mime=True)
+                    # Write/overwrite the chunk into the buffer
+                    chunk = flow.request.raw_content
+                    buf[start:start + len(chunk)] = chunk
+                    ctx.log.info(f"In-memory chunk written for {user_email}: {start}-{end} (total {total}), buffer size now {len(buf)}")
 
-                        # Get MIME type from file content
-                        content_type = mime.from_file(self.uploaded_files[user_email]['filepath'])
+                    # If upload complete, detect mime type and invoke callback with in-memory content
+                    if end + 1 == total:
+                        try:
+                            mime = magic.Magic(mime=True)
+                            content_type_detected = mime.from_buffer(bytes(buf))
+                        except Exception as e:
+                            ctx.log.warn(f"Failed to detect MIME type from buffer: {e}")
+                            content_type_detected = "application/octet-stream"
 
-                        self.attached_file_callback(user_email, self.uploaded_files[user_email]['filename'], self.uploaded_files[user_email]['filepath'], content_type)
+                        filepath = self.store_file_callback(bytes(buf))
+
+                        # Call attached_file_callback with file content instead of a filepath
+                        self.attached_file_callback(user_email, self.uploaded_files[user_email]['filename'], filepath, content_type_detected)
+
+                        # Optionally remove the entry to free memory
                         del self.uploaded_files[user_email]
-                        ctx.log.info(f"Removed uploaded_files entry for user: {user_email}")
+                        ctx.log.info(f"Completed in-memory upload and removed entry for user: {user_email}")
                 else:
                     ctx.log.warn(f"No uploaded_files entry found for user: {user_email}")
 
-
     def on_response_handle(self, flow):
-
 
         if flow.request.method == "POST" and "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:" in flow.request.pretty_url:
             

@@ -71,14 +71,8 @@ class DeepSeek(Site):
                 uploaded_files = parse_multipart(content_type, body)
 
                 for file in uploaded_files:
-                    unique_id = uuid.uuid4().hex
-                    safe_filename = f"{unique_id}"
-                    filepath = os.path.join("/uploads", safe_filename)
 
-                    ctx.log.info(f"Saving uploaded file to {filepath}")
-                    with open(filepath, "wb") as f:
-                        f.write(file['content'])
-                    ctx.log.info(f"Saved file: {filepath}")
+                    filepath = self.store_file_callback(file['content'])
 
                     if auth_header in self.users:
                         self.attached_file_callback(self.users[auth_header], file['filename'], filepath, file['content_type'])

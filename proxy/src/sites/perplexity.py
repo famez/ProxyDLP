@@ -179,15 +179,8 @@ class Perplexity(Site):
                         break
 
                 for file in uploaded_files:
-                    unique_id = uuid.uuid4().hex
-                    safe_filename = f"{unique_id}"
-                    filepath = os.path.join("/uploads", safe_filename)
 
-                    ctx.log.info(f"Saving uploaded file to {filepath}")
-                    with open(filepath, "wb") as f:
-                        f.write(file['content'])
-                    ctx.log.info(f"Saved file: {filepath}")
-
+                    filepath = self.store_file_callback(file['content'])
                     self.attached_file_callback(email, file['filename'], filepath, file['content_type'])    #Send file attached event 
 
 

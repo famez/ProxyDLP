@@ -82,7 +82,7 @@ class Site:
         self.on_attached_file_callback = attached_file_callback
         self.on_allow_anonymous_access = allow_anonymous_access
         self.on_anonymous_conversation_callback = anonymous_conversation_callback
-        self.store_file_callback = store_file_callback
+        self.on_store_file_callback = store_file_callback
 
 
         self.enabled = False
@@ -145,7 +145,7 @@ class Site:
         return self.on_anonymous_conversation_callback(self, conversation_text, self.source_ip, conversation_id)
 
     def store_file_callback(self, file_content):
-        return self.store_file_callback(self, file_content)
+        return self.on_store_file_callback(self, file_content)
 
 
 #Helper functions

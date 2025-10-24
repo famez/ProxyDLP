@@ -86,21 +86,18 @@ class Gemini(Site):
                         ctx.log.error("Something went wrong retrieving filename")
                         return
 
-                    pdf_bytes = flow.request.raw_content
+                    file_content = flow.request.raw_content
 
                     #Need to determine ourselves the content type...
                     # Create a Magic object with mime detection enabled
                     mime = magic.Magic(mime=True)
 
                     # Get MIME type from file content
-                    content_type = mime.from_buffer(pdf_bytes)
+                    content_type = mime.from_buffer(file_content)
         
                     unique_id = uuid.uuid4().hex
 
-                    filepath = os.path.join("/uploads", f"{unique_id}")
-
-                    with open(filepath, "wb") as f:
-                        f.write(pdf_bytes)
+                    filepath = self.store_file_callback(file_content)
 
                     email = self.related_user_data.get(sid_cookie, {}).get("email", None)
 
