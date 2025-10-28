@@ -35,6 +35,9 @@ from sites.grok import Grok
 import hashlib
 
 from mitm_term import launch_ws_term
+import threading
+from datetime import datetime
+import time as _time
 
 launch_ws_term()
 
@@ -405,3 +408,21 @@ health_servicer.set('', health_pb2.HealthCheckResponse.SERVING)
 server.add_insecure_port("[::]:50051")
 server.start()
 print("Server running on port 50051...")
+
+
+def _midnight_watcher(check_interval: int = 10):
+    """
+    Check local time periodically and force flows cleanup every 24 hours.
+    """
+    while True:
+        now = datetime.now()
+        ctx.log.info(f"Checking time: Hour: {now.hour}, minute: {now.minute}.")
+        if now.hour == 14 and now.minute == 3:
+            ctx.log.info("Midnight reached (local time). Forcing process exit to allow restart.")
+            # small grace period for logs to flush
+            ctx.master.view.clear()
+        _time.sleep(check_interval)
+
+# Start the watcher as a daemon thread
+_thread = threading.Thread(target=_midnight_watcher, name="midnight-watcher", daemon=True)
+_thread.start()
