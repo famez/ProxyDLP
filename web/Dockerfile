@@ -11,7 +11,7 @@ RUN apt-get update && \
 WORKDIR /build
 
 # Clone the ProxyDLPAgent repo
-RUN git clone --branch 1.2.0 --single-branch https://github.com/famez/ProxyDLPAgent.git
+RUN git clone --branch v1.2.0 --single-branch https://github.com/famez/ProxyDLPAgent.git
 
 #For testing
 #RUN git clone https://github.com/famez/ProxyDLPAgent.git \
