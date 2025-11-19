@@ -96,11 +96,10 @@ docker-compose up
 
 ### 🌐 Ports
 
-| Component            | Port | Description                                                                                |
-| -------------------- | ---- | ------------------------------------------------------------------------------------------ |
-| **ProxyDLP UI**      | 443  | Secure web interface for monitoring (HTTPS); used by agents to communicate with the server |
-|                      | 80   | Web interface (HTTP fallback)                                                              |
-| **Monitoring Proxy** | 8080 | MiTM proxy for AI traffic                                                                  |
+| Component            | Port       | Description                                                                                |
+| -------------------- | ---------- | ------------------------------------------------------------------------------------------ |
+| **ProxyDLP UI**      | 8443       | Secure web interface for monitoring (HTTPS); used by agents to communicate with the server |
+| **Monitoring Proxy** | 8080/443   | MiTM proxy for AI traffic                                                                  |
 
 > Make sure client traffic to AI tools is routed through the proxy, e.g., via system proxy settings or PAC files.
 
