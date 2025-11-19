@@ -1059,17 +1059,18 @@ app.get('/ai-usage', authMiddleware, requirePermission("statistics"), async (req
     ({ client, db } = await connectToDB());
 
     // Parse query params
-    const { user, start, end } = req.query;
+    const { user, start, end, site } = req.query;
     const startDate = start ? new Date(start) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const endDate = end ? new Date(end) : new Date();
 
     // Build match filter
     const matchFilter = {
-      timestamp: { $gte: startDate, $lte: endDate },
-      site: { $in: ["Microsoft Copilot", "Other AI Tool"] }
+      timestamp: { $gte: startDate, $lte: endDate }
     };
     if (user) matchFilter.user = user;
+    if (site) matchFilter.site = site;
 
+    // Aggregate per-user usage
     const perUserUsage = await db.collection('events').aggregate([
       { $match: matchFilter },
       {
@@ -1089,11 +1090,14 @@ app.get('/ai-usage', authMiddleware, requirePermission("statistics"), async (req
     // Prepare chart data
     const labels = [...new Set(perUserUsage.map(item => item._id.day))];
     const datasets = user
-      ? [{ label: user, data: labels.map(day => {
-          const record = perUserUsage.find(item => item._id.day === day);
-          return record ? record.count : 0;
-        }) }]
-      : []; // If no user selected, empty chart
+      ? [{
+          label: user,
+          data: labels.map(day => {
+            const record = perUserUsage.find(item => item._id.day === day);
+            return record ? record.count : 0;
+          })
+        }]
+      : [];
 
     await client.close();
 
@@ -1102,6 +1106,7 @@ app.get('/ai-usage', authMiddleware, requirePermission("statistics"), async (req
       perUserUsage,
       chartData: { labels, datasets },
       selectedUser: user || "",
+      selectedSite: site || "",
       start,
       end
     });
