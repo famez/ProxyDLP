@@ -1052,6 +1052,70 @@ app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, r
 
 });
 
+app.get('/ai-usage', authMiddleware, requirePermission("statistics"), async (req, res) => {
+  let client;
+
+  try {
+    ({ client, db } = await connectToDB());
+
+    // Parse query params
+    const { user, start, end } = req.query;
+    const startDate = start ? new Date(start) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const endDate = end ? new Date(end) : new Date();
+
+    // Build match filter
+    const matchFilter = {
+      timestamp: { $gte: startDate, $lte: endDate },
+      site: { $in: ["Microsoft Copilot", "Other AI Tool"] }
+    };
+    if (user) matchFilter.user = user;
+
+    const perUserUsage = await db.collection('events').aggregate([
+      { $match: matchFilter },
+      {
+        $addFields: {
+          day: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } }
+        }
+      },
+      {
+        $group: {
+          _id: { day: "$day", user: "$user" },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { "_id.day": 1 } }
+    ]).toArray();
+
+    // Prepare chart data
+    const labels = [...new Set(perUserUsage.map(item => item._id.day))];
+    const datasets = user
+      ? [{ label: user, data: labels.map(day => {
+          const record = perUserUsage.find(item => item._id.day === day);
+          return record ? record.count : 0;
+        }) }]
+      : []; // If no user selected, empty chart
+
+    await client.close();
+
+    res.render('ai-usage', {
+      title: "AI Tool Usage",
+      perUserUsage,
+      chartData: { labels, datasets },
+      selectedUser: user || "",
+      start,
+      end
+    });
+
+  } catch (err) {
+    console.error('Error fetching AI usage stats:', err);
+    res.status(500).send('Internal Server Error');
+  } finally {
+    if (client) await client.close();
+  }
+});
+
+
+
 app.get('/playground', authMiddleware, requirePermission("playground"), async (req, res) => {
 
   res.render('playground', { title: "Playground" });

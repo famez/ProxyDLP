@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="max-w-4xl mx-auto py-10 px-4">
+    <h1 class="text-3xl font-bold text-indigo-700 mb-6"><%= title %></h1>
+
+    <!-- Filter Form -->
+    <form method="GET" action="/ai-usage" class="bg-white p-4 rounded-lg shadow mb-6 flex flex-col sm:flex-row gap-4">
+      <div class="flex-1">
+        <label class="block text-xs font-semibold text-gray-600 mb-1">User Email</label>
+        <input type="text" name="user" value="<%= selectedUser %>" placeholder="Enter user email"
+               class="w-full border rounded p-2" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">Start Date</label>
+        <input type="date" name="start" value="<%= start || '' %>" class="border rounded p-2" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">End Date</label>
+        <input type="date" name="end" value="<%= end || '' %>" class="border rounded p-2" />
+      </div>
+      <div class="flex items-end">
+        <button type="submit" class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">
+          Apply
+        </button>
+      </div>
+    </form>
+
+    <!-- Chart -->
+    <div class="bg-white p-6 rounded-lg shadow mb-8">
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">Usage Chart</h2>
+      <canvas id="usageChart" class="w-full h-64"></canvas>
+    </div>
+
+    <!-- Per User Stats Table -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">Per-User Daily Usage</h2>
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="bg-gray-100 text-gray-700 text-sm">
+            <th class="border p-2 text-left">Day</th>
+            <th class="border p-2 text-left">User</th>
+            <th class="border p-2 text-left">Events</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% perUserUsage.forEach(item => { %>
+            <tr class="text-gray-600 text-sm">
+              <td class="border p-2"><%= item._id.day %></td>
+              <td class="border p-2"><%= item._id.user %></td>
+              <td class="border p-2"><%= item.count %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Chart.js Script -->
+  <script>
+    const chartData = <%- JSON.stringify(chartData) %>;
+
+    const ctx = document.getElementById('usageChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: chartData.labels,
+        datasets: chartData.datasets.map(ds => ({
+          label: ds.label,
+          data: ds.data,
+          borderColor: getRandomColor(),
+          fill: false,
+          tension: 0.1
+        }))
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'AI Tool Usage per Day' }
+        },
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+
+    function getRandomColor() {
+      return `hsl(${Math.floor(Math.random() * 360)}, 70%, 50%)`;
+    }
+  </script>
+</body>
+</html>
