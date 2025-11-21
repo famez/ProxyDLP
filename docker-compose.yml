@@ -100,7 +100,7 @@ services:
     environment:
       MONGO_URI: mongodb://root:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/
       JWT_SECRET: ${JWT_SECRET}
-      APP_VERSION: v1.3.0
+      APP_VERSION: v1.4.0
     depends_on:
       mongo:
         condition: service_healthy
