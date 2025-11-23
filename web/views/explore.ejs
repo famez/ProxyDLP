@@ -231,39 +231,42 @@
     <% } %>
 
 
-      <!-- Pagination Controls -->
+    <!-- Pagination Controls -->
     <div class="mt-10 flex flex-col items-center gap-4">
       <div class="flex items-center gap-4">
-        <% const currentPage = Number(filters.page || 1); %>
-        <% const limit = Number(filters.limit || 10); %>
-        <% const prevPage = currentPage > 1 ? currentPage - 1 : 1; %>
-        <% const nextPage = currentPage + 1; %>
+        <% const params = { ...filters }; %>
 
-        <a href="?<%= new URLSearchParams({ ...filters, page: prevPage, limit }).toString() %>"
-           class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm <%= currentPage <= 1 ? 'opacity-50 pointer-events-none' : '' %>">
-          ← Previous
-        </a>
-        <span class="text-sm text-gray-600">Page <%= currentPage %></span>
-        <a href="?<%= new URLSearchParams({ ...filters, page: nextPage, limit }).toString() %>"
-           class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
-          Next →
-        </a>
+        <% if (prevCursor) { %>
+          <a href="?<%= new URLSearchParams({ ...params, before: prevCursor, after: undefined }).toString() %>"
+            class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
+            ← Newer
+          </a>
+        <% } %>
+
+        <% if (nextCursor) { %>
+          <a href="?<%= new URLSearchParams({ ...params, after: nextCursor, before: undefined }).toString() %>"
+            class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
+            Older →
+          </a>
+        <% } %>
       </div>
 
       <form method="GET" class="flex items-center gap-2 text-sm">
-        <% Object.entries(filters).forEach(([key, val]) => { if (key !== 'limit') { %>
-          <input type="hidden" name="<%= key %>" value="<%= val %>">
-        <% } }) %>
-        <label for="limitSelect" class="text-gray-600">Results per page:</label>
-        <select id="limitSelect" name="limit" onchange="this.form.submit()" class="border rounded px-2 py-1">
-          <option value="10" <%= limit == 10 ? 'selected' : '' %>>10</option>
-          <option value="50" <%= limit == 50 ? 'selected' : '' %>>50</option>
-          <option value="100" <%= limit == 100 ? 'selected' : '' %>>100</option>
-          <option value="250" <%= limit == 250 ? 'selected' : '' %>>250</option>
+        <% Object.entries(filters).forEach(([key, val]) => { %>
+          <% if (key !== 'limit' && key !== 'after' && key !== 'before') { %>
+            <input type="hidden" name="<%= key %>" value="<%= val %>">
+          <% } %>
+        <% }) %>
+
+        <label class="text-gray-600">Results per page:</label>
+        <select name="limit" onchange="this.form.submit()" class="border rounded px-2 py-1">
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
         </select>
       </form>
-    </div>
-    
+    </div> 
+       
   </div>
 
   <script>
