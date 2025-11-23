@@ -149,7 +149,7 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
     start, end, user, site, rational,
     filename, filetype, content, leak,
     playground, source_ip, conversation_id,
-    limit: rawLimit = '20', after, before, debug
+    limit: rawLimit = '20', after, before, goto, order
   } = req.query;
 
   function parseISODateMaybe(s) {
@@ -195,7 +195,13 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
   let reverseAfterFetch = false; // needed when fetching newer items
 
   // Cursor logic
-  if (beforeDate) {
+  if (goto === 'end') {
+
+    // Go to oldest events
+    sort = { timestamp: 1 };
+    reverseAfterFetch = true; // keep newest → oldest display
+
+  } else if (beforeDate) {
     // "Newer" pagination → fetch timestamp > before
     query.timestamp = query.timestamp || {};
     query.timestamp.$gt = beforeDate;
@@ -273,7 +279,8 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
       events,
       filters: req.query,
       nextCursor,
-      prevCursor
+      prevCursor,
+      limit
     });
 
   } catch (err) {

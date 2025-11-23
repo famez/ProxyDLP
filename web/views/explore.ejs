@@ -232,40 +232,53 @@
 
 
     <!-- Pagination Controls -->
-    <div class="mt-10 flex flex-col items-center gap-4">
-      <div class="flex items-center gap-4">
-        <% const params = { ...filters }; %>
+  <div class="mt-10 flex flex-col items-center gap-4">
+    <div class="flex items-center gap-4">
+      <% const params = { ...filters }; %>
 
-        <% if (prevCursor) { %>
-          <a href="?<%= new URLSearchParams({ ...params, before: prevCursor, after: undefined }).toString() %>"
-            class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
-            ← Newer
-          </a>
+      <!-- Go to Start (newest) -->
+      <a href="?<%= new URLSearchParams({ ...params, goto: undefined, before: undefined, after: undefined }).toString() %>"
+        class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
+        ⏮ Go to Start
+      </a>
+
+      <% if (prevCursor) { %>
+        <a href="?<%= new URLSearchParams({ ...params, before: prevCursor, after: undefined, goto: undefined }).toString() %>"
+          class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
+          ← Newer
+        </a>
+      <% } %>
+
+      <% if (nextCursor) { %>
+        <a href="?<%= new URLSearchParams({ ...params, after: nextCursor, before: undefined, goto: undefined }).toString() %>"
+          class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
+          Older →
+        </a>
+      <% } %>
+
+      <!-- Go to End (oldest) -->
+      <a href="?<%= new URLSearchParams({ ...params, goto: 'end' }).toString() %>"
+        class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
+        ⏭ Go to End
+      </a>
+    </div>
+
+    <!-- Results per page -->
+    <form method="GET" class="flex items-center gap-2 text-sm">
+      <% Object.entries(filters).forEach(([key, val]) => { %>
+        <% if (key !== 'limit' && key !== 'after' && key !== 'before' && key !== 'goto') { %>
+          <input type="hidden" name="<%= key %>" value="<%= val %>">
         <% } %>
+      <% }) %>
 
-        <% if (nextCursor) { %>
-          <a href="?<%= new URLSearchParams({ ...params, after: nextCursor, before: undefined }).toString() %>"
-            class="px-3 py-1 rounded border bg-white hover:bg-gray-100 shadow text-sm">
-            Older →
-          </a>
-        <% } %>
-      </div>
+      <label class="text-gray-600">Results per page:</label>
+      <select name="limit" onchange="this.form.submit()" class="border rounded px-2 py-1">
+        <option value="10" <%= limit == 10 ? 'selected' : '' %>>10</option>
+        <option value="20" <%= limit == 20 ? 'selected' : '' %>>20</option>
+        <option value="50" <%= limit == 50 ? 'selected' : '' %>>50</option>      </select>
+    </form>
+  </div>
 
-      <form method="GET" class="flex items-center gap-2 text-sm">
-        <% Object.entries(filters).forEach(([key, val]) => { %>
-          <% if (key !== 'limit' && key !== 'after' && key !== 'before') { %>
-            <input type="hidden" name="<%= key %>" value="<%= val %>">
-          <% } %>
-        <% }) %>
-
-        <label class="text-gray-600">Results per page:</label>
-        <select name="limit" onchange="this.form.submit()" class="border rounded px-2 py-1">
-          <option value="10">10</option>
-          <option value="20">20</option>
-          <option value="50">50</option>
-        </select>
-      </form>
-    </div> 
        
   </div>
 
