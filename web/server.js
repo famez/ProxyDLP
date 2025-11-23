@@ -143,55 +143,87 @@ app.get('/terminal/stats', authMiddleware, requirePermission("mitmterminal"), (r
 
 });
 
-app.get('/explore', authMiddleware, requirePermission("events"), async (req, res) => {
 
+app.get('/explore', authMiddleware, requirePermission("events"), async (req, res) => {
   const {
     start, end, user, site, rational,
-    filename, filetype, content, leak, order = 'desc',
-    playground, source_ip, conversation_id
+    filename, filetype, content, leak,
+    playground, source_ip, conversation_id,
+    limit: rawLimit = '20', after, before, debug
   } = req.query;
 
+  function parseISODateMaybe(s) {
+    if (!s) return null;
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return null;
+    return d;
+  }
+
+  // Limit sanitization
+  let limit = parseInt(rawLimit, 10) || 20;
+  limit = Math.max(1, Math.min(limit, 500));
+
+  // Build base query
   const query = {};
 
-  // Date filter
+  // Date range
   if (start || end) {
     query.timestamp = {};
-    if (start) query.timestamp.$gte = new Date(start);
-    if (end) query.timestamp.$lte = new Date(end);
+    const sd = parseISODateMaybe(start);
+    const ed = parseISODateMaybe(end);
+    if (sd) query.timestamp.$gte = sd;
+    if (ed) query.timestamp.$lte = ed;
   }
 
-  // Simple text filters with regex (case insensitive)
+  // Simple filters
   if (user) query.user = { $regex: new RegExp(user, 'i') };
-  if (site) {
-    query.site = { $regex: new RegExp(site, 'i') };
-  } else if (playground !== '1') {    //Exclude Playground site if not specified
-    query.site = { $ne: 'Playground' };
-  }
-
+  if (site) query.site = { $regex: new RegExp(site, 'i') };
+  else if (playground !== '1') query.site = { $ne: 'Playground' };
   if (rational) query.rational = { $regex: new RegExp(rational, 'i') };
   if (content) query.content = { $regex: new RegExp(content, 'i') };
   if (filename) query.filename = { $regex: new RegExp(filename, 'i') };
   if (filetype) query.content_type = { $regex: new RegExp(filetype, 'i') };
   if (source_ip) query.source_ip = { $regex: new RegExp(source_ip, 'i') };
-
   if (conversation_id) query.conversation_id = conversation_id;
 
-  const sort = { timestamp: order === 'asc' ? 1 : -1 };
+  // Cursor parsing
+  const afterDate = parseISODateMaybe(after);
+  const beforeDate = parseISODateMaybe(before);
 
-  const limit = parseInt(req.query.limit, 10) || 10;
-  const page = parseInt(req.query.page, 10) || 1;
-  const skip = (page - 1) * limit;
+  // Default sort: newest → oldest
+  let sort = { timestamp: -1 };
+  let reverseAfterFetch = false; // needed when fetching newer items
+
+  // Cursor logic
+  if (beforeDate) {
+    // "Newer" pagination → fetch timestamp > before
+    query.timestamp = query.timestamp || {};
+    query.timestamp.$gt = beforeDate;
+
+    // Must sort oldest→newest to correctly window the next-newer items
+    sort = { timestamp: 1 };
+    reverseAfterFetch = true;
+
+  } else if (afterDate) {
+    // "Older" pagination → fetch timestamp < after
+    query.timestamp = query.timestamp || {};
+    query.timestamp.$lt = afterDate;
+
+    // Descending sort is correct for older items
+    sort = { timestamp: -1 };
+  }
 
   let client;
   try {
     ({ client, db } = await connectToDB());
     const event_collection = db.collection('events');
 
+    const pipeline = [{ $match: query }];
+
+    // Leak search
     if (leak) {
       const leakRegex = new RegExp(leak, 'i');
-
-      const pipeline = [
-        { $match: query },
+      pipeline.push(
         {
           $addFields: {
             leakRegexArray: { $objectToArray: "$leak.regex" },
@@ -206,63 +238,51 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
               { "leak.topic": leakRegex }
             ]
           }
-        },
-        // Add this $lookup stage to join agent data
-        {
-          $lookup: {
-            from: "agents",            // The agent collection
-            localField: "agent_id",    // Field in events
-            foreignField: "guid",      // Field in agents
-            as: "agentData"            // The new field in the output
-          }
-        },
-        { $unwind: { path: "$agentData", preserveNullAndEmptyArrays: true } }, // Flatten array
-        { $sort: sort },
-        { $skip: skip },
-        { $limit: limit }
-      ];
-
-      const events = await event_collection.aggregate(pipeline).toArray();
-
-      res.render('explore', {
-        title: 'Explore',
-        events,
-        filters: req.query
-      });
-    } else {
-      // Same logic for non-leak queries
-      const pipeline = [
-        { $match: query },
-        {
-          $lookup: {
-            from: "agents",
-            localField: "agent_id",
-            foreignField: "guid",
-            as: "agentData"
-          }
-        },
-        { $unwind: { path: "$agentData", preserveNullAndEmptyArrays: true } },
-        { $sort: sort },
-        { $skip: skip },
-        { $limit: limit }
-      ];
-
-      const events = await event_collection.aggregate(pipeline).toArray();
-
-      res.render('explore', {
-        title: 'Explore',
-        events,
-        filters: req.query
-      });
+        }
+      );
     }
 
+    // Join agents, apply sort + limit
+    pipeline.push(
+      {
+        $lookup: {
+          from: "agents",
+          localField: "agent_id",
+          foreignField: "guid",
+          as: "agentData"
+        }
+      },
+      { $unwind: { path: "$agentData", preserveNullAndEmptyArrays: true } },
+      { $sort: sort },
+      { $limit: limit }
+    );
+
+    let events = await event_collection.aggregate(pipeline, { allowDiskUse: true }).toArray();
+
+    // Fix ordering after "before" pagination
+    if (reverseAfterFetch) {
+      events.reverse(); // Restore newest → oldest for display
+    }
+
+    // Cursors
+    const nextCursor = events.length ? events[events.length - 1].timestamp.toISOString() : null; // older
+    const prevCursor = events.length ? events[0].timestamp.toISOString() : null;                // newer
+
+    res.render('explore', {
+      title: 'Explore',
+      events,
+      filters: req.query,
+      nextCursor,
+      prevCursor
+    });
+
   } catch (err) {
-    console.error('Error in /explore:', err);
     res.status(500).send('Internal Server Error');
   } finally {
     if (client) await client.close();
   }
 });
+
 
 
 app.get('/rules', authMiddleware, requirePermission("rules"), (req, res) => {
