@@ -112,13 +112,6 @@
         <label class="block text-xs font-semibold text-gray-600 mb-1">Leak tag</label>
         <input type="text" name="leak" placeholder="PII / Address" value="<%= filters.leak || '' %>" class="w-full border rounded p-1" />
       </div>
-      <div>
-        <label class="block text-xs font-semibold text-gray-600 mb-1">Sort</label>
-        <select name="order" class="w-full border rounded p-1">
-          <option value="desc" <%= filters.order !== 'asc' ? 'selected' : '' %>>Newest first</option>
-          <option value="asc" <%= filters.order === 'asc' ? 'selected' : '' %>>Oldest first</option>
-        </select>
-      </div>
       <div class="flex items-center mt-2">
         <input type="checkbox" id="playground" name="playground" value="1" <%= filters.playground ? 'checked' : '' %> class="mr-2">
         <label for="playground" class="text-sm text-gray-700 font-medium">Show Playground Events</label>

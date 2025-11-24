@@ -149,7 +149,7 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
     start, end, user, site, rational,
     filename, filetype, content, leak,
     playground, source_ip, conversation_id,
-    limit: rawLimit = '20', after, before, goto, order
+    limit: rawLimit = '20', after, before, goto
   } = req.query;
 
   function parseISODateMaybe(s) {
