@@ -1877,7 +1877,10 @@ app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req,
         $project: {
           timestamp: 1,
           leak: 1,
-          alert_rule: 1
+          alert_rule: 1,
+          username: 1,
+          ip_address: 1,
+          event_id: 1
         }
       }
     ]).toArray();
@@ -1885,12 +1888,15 @@ app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req,
     const formattedLogs = logs.map(log => {
       const ts = new Date(log.timestamp.$date || log.timestamp).toISOString().replace('T', ' ').substring(0, 16);
       const alert_rule = log.alert_rule || 'Unknown Rule';
+      const username = log.username || 'Unknown Username';
+      const ip_address = log.ip_address || 'Unknown IP address';
+      const event_id = log.event_id || 'Unknown Event';
 
       const yaraNames = Array.isArray(log.leak?.yara) ? log.leak.yara.map(y => y.name).join(', ') : '';
       const regexEntries = log.leak?.regex ? Object.entries(log.leak.regex).map(([k, v]) => `${k}: ${v}`).join('; ') : '';
       const topicNames = Array.isArray(log.leak?.topic) ? log.leak.topic.map(t => t.name).join(', ') : '';
 
-      return { time: ts, alert_rule, yara: yaraNames, regex: regexEntries, topic: topicNames };
+      return { time: ts, alert_rule, yara: yaraNames, regex: regexEntries, topic: topicNames, username: username, ip_address: ip_address, event_id: event_id };
     });
 
     const localDest = await db.collection('alert-destinations').findOne({ type: 'local_logs' });

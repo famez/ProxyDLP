@@ -363,7 +363,7 @@ def on_event_added(event_id):
         else:
             print("No changes made or document not found.")
 
-        check_alerts(leak)
+        check_alerts(leak, event)
         
 
         print(f"Finished long task for Event ID: {event_id}")
@@ -373,7 +373,7 @@ def on_event_added(event_id):
         print(f"An error occurred: {e}")
 
 
-def check_alerts(leak):
+def check_alerts(leak, event):
 
     # Count regex values
     regex_counts = Counter(leak["regex"].values())
@@ -495,20 +495,23 @@ def check_alerts(leak):
         for destination in alert["destinations"]:
             if(destination['type'] == "local_logs"):
                 rotation_limit = destination.get("rotationLimit", 500)
-                send_alert_to_local_logs(alert, leak, rotation_limit)
+                send_alert_to_local_logs(alert, leak, rotation_limit, event)
             elif(destination['type'] == "syslog"):
-                send_alert_to_syslog(alert, destination, leak)
+                send_alert_to_syslog(alert, destination, leak, event)
             elif(destination['type'] == "email"):
-                send_alert_to_email(alert, destination, leak)
+                send_alert_to_email(alert, destination, leak, event)
 
 
-def send_alert_to_local_logs(alert, leak, rotation_limit):
+def send_alert_to_local_logs(alert, leak, rotation_limit, event):
     
     alert_locallogs_collection.insert_one(
         {
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": event["timestamp"],
             "alert_rule": alert['name'],
-            "leak": leak
+            "leak": leak,
+            "username": event["user"],
+            "ip_address": event["source_ip"],
+            "event_id": event["_id"]
         }
     )
 
@@ -526,7 +529,7 @@ def send_alert_to_local_logs(alert, leak, rotation_limit):
         alert_locallogs_collection.delete_many({"_id": {"$in": ids_to_delete}})
 
 
-def send_alert_to_syslog(alert, destination, leak):
+def send_alert_to_syslog(alert, destination, leak, event):
     # Create a syslog handler
     print("Send to syslog...")
     #print(f"Alert: {alert}")
@@ -539,14 +542,18 @@ def send_alert_to_syslog(alert, destination, leak):
     logger.addHandler(syslog_handler)
 
     log_data = {
+        "timestamp": event["timestamp"],
         "alert_rule": alert['name'],
-        "leak": leak
+        "leak": leak,
+        "username": event["user"],
+        "ip_address": event["source_ip"],
+        "event_id": event["_id"]
     }
 
     logger.info(json.dumps(log_data))
 
 
-def send_alert_to_email(alert, destination, leak):
+def send_alert_to_email(alert, destination, leak, event):
     smtp_host = destination.get("smtpHost")
     smtp_port = int(destination.get("smtpPort", 25))
     smtp_user = destination.get("email")
@@ -600,18 +607,24 @@ def send_alert_to_email(alert, destination, leak):
             <tr>
               <th>Time</th>
               <th>Alert Rule</th>
+              <th>Username</th>
+              <th>IP address</th>
               <th>Matched Yara</th>
               <th>Regex Matches</th>
               <th>Matched Topics</th>
+              <th>Event ID</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>{leak.get('time', 'N/A')}</td>
+              <td>{event.get('timestamp', 'N/A')}</td>
               <td>{alert.get('name')}</td>
+              <td>{event.get('user', 'N/A')}</td>
+              <td>{event.get('source_ip', 'N/A')}</td>
               <td>{leak.get('yara', 'N/A')}</td>
               <td>{leak.get('regex', 'N/A')}</td>
               <td>{leak.get('topic', 'N/A')}</td>
+              <td>{event.get('_id', 'N/A')}</td>
             </tr>
           </tbody>
         </table>
