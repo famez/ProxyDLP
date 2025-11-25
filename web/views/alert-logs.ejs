@@ -7,6 +7,9 @@
       <tr>
         <th class="px-4 py-2 text-left">Time</th>
         <th class="px-4 py-2 text-left">Alert Rule</th>
+        <th class="px-4 py-2 text-left">Username</th>
+        <th class="px-4 py-2 text-left">IP address</th>
+        <th class="px-4 py-2 text-left">Event</th>
         <th class="px-4 py-2 text-left">Matched Yara</th>
         <th class="px-4 py-2 text-left">Regex Matches</th>
         <th class="px-4 py-2 text-left">Matched Topics</th>
@@ -17,6 +20,13 @@
         <tr class="border-b">
           <td class="px-4 py-2"><%= log.time %></td>
           <td class="px-4 py-2"><%= log.alert_rule %></td>
+          <td class="px-4 py-2"><%= log.username %></td>
+          <td class="px-4 py-2"><%= log.ip_address %></td>          
+          <td class="px-4 py-2">
+              <a href="/event/<%= log.event_id %>">
+                Link to event
+              </a>
+          </td>
           <td class="px-4 py-2"><%= log.yara %></td>
           <td class="px-4 py-2"><%= log.regex %></td>
           <td class="px-4 py-2"><%= log.topic %></td>
