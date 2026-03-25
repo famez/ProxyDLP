@@ -4,6 +4,8 @@ services:
     build:
       context: ./
       dockerfile: ./proxy/Dockerfile
+    mem_limit: 512m
+    memswap_limit: 512m
     depends_on:
       monitor:
         condition: service_healthy
@@ -55,6 +57,8 @@ services:
     build:
       context: ./
       dockerfile: ./monitor/Dockerfile
+    mem_limit: 1536m
+    memswap_limit: 1536m
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=:50051", "-rpc-timeout=2s"]
       interval: 10s
@@ -96,6 +100,8 @@ services:
       context: ./
       dockerfile: ./web/Dockerfile
     container_name: web-console
+    mem_limit: 256m
+    memswap_limit: 256m
     restart: always
     environment:
       MONGO_URI: mongodb://root:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/

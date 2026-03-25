@@ -8,10 +8,13 @@ import uuid
 import re
 import os
 import gzip
+import time
+import threading
 from io import BytesIO
 from urllib.parse import urlparse, parse_qs
 import magic
 
+UPLOAD_TTL = 300  # seconds before a stale upload buffer is evicted
 
 class Microsoft_Copilot(Site):
 
@@ -20,7 +23,21 @@ class Microsoft_Copilot(Site):
         super().__init__("Microsoft Copilot", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
                          allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
         self.uploaded_files = {}
-        
+        self._upload_timestamps = {}
+        self._lock = threading.Lock()
+        threading.Thread(target=self._cleanup_stale_uploads, daemon=True).start()
+
+    def _cleanup_stale_uploads(self):
+        while True:
+            time.sleep(60)
+            now = time.time()
+            with self._lock:
+                stale = [email for email, ts in self._upload_timestamps.items() if now - ts > UPLOAD_TTL]
+                for email in stale:
+                    self.uploaded_files.pop(email, None)
+                    self._upload_timestamps.pop(email, None)
+                    ctx.log.info(f"Evicted stale upload buffer for: {email}")
+
     def on_request_handle(self, flow):
         
         if flow.request.method == "PUT" and "sharepoint.com/personal" in flow.request.pretty_url and "uploadSession" in flow.request.pretty_url:
@@ -54,42 +71,48 @@ class Microsoft_Copilot(Site):
                     end = int(match.group(2))
                     total = int(match.group(3))
 
-                if user_email in self.uploaded_files:
+                with self._lock:
+                    entry = self.uploaded_files.get(user_email)
+
+                if entry is not None:
                     ctx.log.info(f"Handling in-memory upload for user: {user_email}")
 
+                    with self._lock:
+                        # Initialize or get existing bytearray buffer
+                        buf = entry.get('filecontent')
+                        if start == 0 or buf is None:
+                            buf = bytearray()
+                            entry['filecontent'] = buf
+                            ctx.log.debug(f"Initialized in-memory buffer for user {user_email}")
 
-                    # Initialize or get existing bytearray buffer
-                    buf = self.uploaded_files[user_email].get('filecontent')
-                    if start == 0 or buf is None:
-                        buf = bytearray()
-                        self.uploaded_files[user_email]['filecontent'] = buf
-                        ctx.log.debug(f"Initialized in-memory buffer for user {user_email}")
+                        # Ensure buffer length matches start (pad with zeros if needed)
+                        if start > len(buf):
+                            buf.extend(b'\x00' * (start - len(buf)))
 
-                    # Ensure buffer length matches start (pad with zeros if needed)
-                    if start > len(buf):
-                        buf.extend(b'\x00' * (start - len(buf)))
-
-                    # Write/overwrite the chunk into the buffer
-                    chunk = flow.request.raw_content
-                    buf[start:start + len(chunk)] = chunk
-                    ctx.log.info(f"In-memory chunk written for {user_email}: {start}-{end} (total {total}), buffer size now {len(buf)}")
+                        # Write/overwrite the chunk into the buffer
+                        chunk = flow.request.raw_content
+                        buf[start:start + len(chunk)] = chunk
+                        ctx.log.info(f"In-memory chunk written for {user_email}: {start}-{end} (total {total}), buffer size now {len(buf)}")
 
                     # If upload complete, detect mime type and invoke callback with in-memory content
                     if end + 1 == total:
+                        with self._lock:
+                            buf_snapshot = bytes(buf)
+                            filename = entry['filename']
+                            self.uploaded_files.pop(user_email, None)
+                            self._upload_timestamps.pop(user_email, None)
+
                         try:
                             mime = magic.Magic(mime=True)
-                            content_type_detected = mime.from_buffer(bytes(buf))
+                            content_type_detected = mime.from_buffer(buf_snapshot)
                         except Exception as e:
                             ctx.log.warn(f"Failed to detect MIME type from buffer: {e}")
                             content_type_detected = "application/octet-stream"
 
-                        filepath = self.store_file_callback(bytes(buf))
+                        filepath = self.store_file_callback(buf_snapshot)
 
                         # Call attached_file_callback with file content instead of a filepath
-                        self.attached_file_callback(user_email, self.uploaded_files[user_email]['filename'], filepath, content_type_detected)
-
-                        # Optionally remove the entry to free memory
-                        del self.uploaded_files[user_email]
+                        self.attached_file_callback(user_email, filename, filepath, content_type_detected)
                         ctx.log.info(f"Completed in-memory upload and removed entry for user: {user_email}")
                 else:
                     ctx.log.warn(f"No uploaded_files entry found for user: {user_email}")
@@ -128,7 +151,9 @@ class Microsoft_Copilot(Site):
                         email = extract_email_from_tempauth(tempauth)
 
                         ctx.log.info(f"Email: {email}")
-                        self.uploaded_files[email] = {"filename": filename}
+                        with self._lock:
+                            self.uploaded_files[email] = {"filename": filename}
+                            self._upload_timestamps[email] = time.time()
 
                 except Exception as e:
                     ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")

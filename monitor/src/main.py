@@ -45,6 +45,7 @@ import time
 INDEX_PATH = '/var/faiss/faiss_index.index'
 
 background_executor = futures.ThreadPoolExecutor(max_workers=15)
+_event_semaphore = threading.Semaphore(50)  # cap queued analysis tasks to prevent OOM
 
 db_client = MongoClient(os.getenv("MONGO_URI"))
 events_collection = db_client["ProxyDLP"]["events"]
@@ -269,7 +270,10 @@ def decode_file(filepath, content_type):
                     base_image = doc.extract_image(xref)
                     image_bytes = base_image["image"]
                     image = Image.open(io.BytesIO(image_bytes))
-                    text += pytesseract.image_to_string(image)
+                    try:
+                        text += pytesseract.image_to_string(image)
+                    finally:
+                        image.close()
                                     
     elif content_type == "application/vnd.ms-excel" or content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
         workbook = load_workbook(filename=filepath)
@@ -292,9 +296,12 @@ def decode_file(filepath, content_type):
 
 
     elif content_type == "image/jpeg" or content_type == "image/png" or content_type == "image/gif" or content_type == "image/bmp" or content_type == "image/webp" or content_type == "image/svg+xml" or content_type == "image/tiff" or content_type == "image/vnd.microsoft.icon":
-        
+
         image = Image.open(filepath)
-        text = pytesseract.image_to_string(image)
+        try:
+            text = pytesseract.image_to_string(image)
+        finally:
+            image.close()
 
     elif content_type == "text/plain":
         with open(filepath, 'r') as file:
@@ -718,7 +725,15 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
     def EventAdded(self, request, context):
         print(f"Received Event ID: {request.id}")
-        background_executor.submit(on_event_added, request.id)
+        if _event_semaphore.acquire(blocking=False):
+            def _run(event_id):
+                try:
+                    on_event_added(event_id)
+                finally:
+                    _event_semaphore.release()
+            background_executor.submit(_run, request.id)
+        else:
+            print(f"Warning: event analysis queue full, dropping event {request.id}")
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
     
     def TopicRuleAdded(self, request, context):

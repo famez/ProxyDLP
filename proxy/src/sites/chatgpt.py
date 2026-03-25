@@ -5,7 +5,10 @@ from mitmproxy.http import Response
 import json
 import os
 import uuid
+import time
+import threading
 
+FILE_ID_TTL = 300  # seconds before an unused file_id entry is evicted
 
 class ChatGPT(Site):
 
@@ -15,6 +18,18 @@ class ChatGPT(Site):
                          allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
         self.files = {}
         self.file_ids = {}
+        self._file_id_timestamps = {}
+        threading.Thread(target=self._cleanup_stale_file_ids, daemon=True).start()
+
+    def _cleanup_stale_file_ids(self):
+        while True:
+            time.sleep(60)
+            now = time.time()
+            stale = [fid for fid, ts in list(self._file_id_timestamps.items()) if now - ts > FILE_ID_TTL]
+            for fid in stale:
+                self.file_ids.pop(fid, None)
+                self._file_id_timestamps.pop(fid, None)
+                ctx.log.info(f"Evicted stale file_id entry: {fid}")
     
     def on_response_handle(self, flow):
             
@@ -97,6 +112,10 @@ class ChatGPT(Site):
 
                 self.attached_file_callback(email, self.files[email]['file_name'], self.files[email]['filepath'], self.files[email]['content_type'])
 
+                # Free state — no longer needed after callback
+                self.files.pop(email, None)
+                self.file_ids.pop(file_id, None)
+                self._file_id_timestamps.pop(file_id, None)
 
             except EmailNotFoundException as e:
                 ctx.log.error(f"Email not found on URL: {e}")
@@ -223,6 +242,7 @@ class ChatGPT(Site):
                 #ctx.log.info(f"File id: {file_id}")
 
                 self.file_ids[file_id] = { "filepath" : filepath, "content_type" : content_type }
+                self._file_id_timestamps[file_id] = time.time()
 
 
 
