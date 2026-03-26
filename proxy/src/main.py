@@ -318,6 +318,21 @@ def _config_poller(check_interval: int = 5):
 
 threading.Thread(target=_config_poller, name="config-poller", daemon=True).start()
 
+# Soft memory limit: exit cleanly before the container OOM-kills us.
+# Docker's restart: always will respawn a fresh replica automatically.
+_MEMORY_SOFT_LIMIT_MB = 400  # ~78% of the 512 MB container limit
+
+def _memory_watchdog(check_interval: int = 30):
+    process = psutil.Process(os.getpid())
+    while True:
+        _time.sleep(check_interval)
+        mem_mb = process.memory_info().rss / (1024 * 1024)
+        if mem_mb > _MEMORY_SOFT_LIMIT_MB:
+            print(f"[memory-watchdog] RSS {mem_mb:.1f} MB exceeds soft limit {_MEMORY_SOFT_LIMIT_MB} MB — exiting for clean restart.")
+            os._exit(0)
+
+threading.Thread(target=_memory_watchdog, name="memory-watchdog", daemon=True).start()
+
 # Maps client_conn.id -> real source IP extracted from X-Forwarded-For (injected by HAProxy).
 # Populated in http_connect (for CONNECT tunnels) and in request (for plain HTTP).
 _real_source_ips: dict = {}

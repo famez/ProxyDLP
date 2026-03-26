@@ -31,6 +31,28 @@ services:
       - internal-net
       - web-net
 
+  autoscaler:
+    build:
+      context: ./autoscaler
+    container_name: autoscaler
+    restart: always
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-proxygpt}
+      MIN_REPLICAS: "2"
+      MAX_REPLICAS: "10"
+      SCALE_UP_PCT: "70"    # add a replica when any replica exceeds 70% mem
+      SCALE_DOWN_PCT: "30"  # remove a replica when avg drops below 30% mem
+      CHECK_INTERVAL: "30"  # seconds between metric checks
+      COOLDOWN: "120"       # seconds between scale events
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker-compose.yml:/compose/docker-compose.yml:ro
+      - ./.env:/compose/.env:ro
+    depends_on:
+      - proxy
+    networks:
+      - web-net
+
   haproxy:
     image: haproxy:2.8
     container_name: haproxy

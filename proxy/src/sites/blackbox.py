@@ -3,8 +3,11 @@ from mitmproxy import ctx
 from mitmproxy.http import Response
 
 import json
-
 import os
+import threading
+import time
+
+SESSION_TTL = 600  # 10 minutes
 
 
 class BlackBox(Site):
@@ -16,6 +19,19 @@ class BlackBox(Site):
 
         self.sessions = {}
         self.workspaces = {}
+        self._sessions_ts = {}
+        self._workspaces_ts = {}
+        threading.Thread(target=self._cleanup_stale, daemon=True, name="blackbox-cleanup").start()
+
+    def _cleanup_stale(self):
+        while True:
+            time.sleep(60)
+            now = time.time()
+            for ts_dict, data_dict in [(self._sessions_ts, self.sessions), (self._workspaces_ts, self.workspaces)]:
+                stale = [k for k, ts in list(ts_dict.items()) if now - ts > SESSION_TTL]
+                for k in stale:
+                    data_dict.pop(k, None)
+                    ts_dict.pop(k, None)
             
     def on_request_handle(self, flow):
 
@@ -74,6 +90,7 @@ class BlackBox(Site):
                             else:
                                 self.sessions[session_id] = {'email': email}        #Keep track of email from conversation id.
                                 ctx.log.info("Added session 2")
+                            self._sessions_ts[session_id] = time.time()
 
                             self.conversation_callback(json_body['session']['user']['email'], message['content'],
                                                        conversation_id = conversation_id)
@@ -141,6 +158,7 @@ class BlackBox(Site):
                     if "id" in content:
                         workspace_id = content["id"]
                         self.workspaces[workspace_id] = []
+                        self._workspaces_ts[workspace_id] = time.time()
 
                 except Exception as e:
                     ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")

@@ -5,6 +5,10 @@ from mitmproxy.http import Response
 import json
 import os
 import uuid
+import threading
+import time
+
+SESSION_TTL = 600  # 10 minutes
 
 
 class Grok(Site):
@@ -14,6 +18,17 @@ class Grok(Site):
         super().__init__("Grok", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
                          allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
         self.users = {}
+        self._users_ts = {}
+        threading.Thread(target=self._cleanup_stale_users, daemon=True, name="grok-cleanup").start()
+
+    def _cleanup_stale_users(self):
+        while True:
+            time.sleep(60)
+            now = time.time()
+            stale = [k for k, ts in list(self._users_ts.items()) if now - ts > SESSION_TTL]
+            for k in stale:
+                self.users.pop(k, None)
+                self._users_ts.pop(k, None)
     
     def on_request_handle(self, flow):
         ctx.log.info(f"[Info] Handling request: {flow.request.method} {flow.request.pretty_url}")
@@ -59,6 +74,7 @@ class Grok(Site):
                     if email and session_id:
                         ctx.log.info(f"[Info] Extracted email from statsig log_event: {email}")
                         self.users[session_id] = {'email': email}
+                        self._users_ts[session_id] = time.time()
                         ctx.log.info(f"[Info] Stored user: session_id={session_id}, email={email}")
                         break
 

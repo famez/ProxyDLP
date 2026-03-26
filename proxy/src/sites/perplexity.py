@@ -7,6 +7,10 @@ import xml.etree.ElementTree as ET
 import json
 import os
 import uuid
+import threading
+import time
+
+SESSION_TTL = 600  # 10 minutes
 
 
 class Perplexity(Site):
@@ -15,9 +19,22 @@ class Perplexity(Site):
                  allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
         super().__init__("Perplexity", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
                          allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
-        
+
         self.related_user_data = {}
         self.file_data = {}
+        self._user_data_ts = {}
+        self._file_data_ts = {}
+        threading.Thread(target=self._cleanup_stale, daemon=True, name="perplexity-cleanup").start()
+
+    def _cleanup_stale(self):
+        while True:
+            time.sleep(60)
+            now = time.time()
+            for ts_dict, data_dict in [(self._user_data_ts, self.related_user_data), (self._file_data_ts, self.file_data)]:
+                stale = [k for k, ts in list(ts_dict.items()) if now - ts > SESSION_TTL]
+                for k in stale:
+                    data_dict.pop(k, None)
+                    ts_dict.pop(k, None)
     
     def on_response_handle(self, flow):
 
@@ -110,6 +127,7 @@ class Perplexity(Site):
                     ctx.log.info(f"[Debug] Extracted email: {email}, user_id: {user_id}")
 
                     self.related_user_data[user_id] = {'email': email, "pplx_session_id": pplx_session_id}
+                    self._user_data_ts[user_id] = time.time()
                     ctx.log.info(f"[Debug] Updated self.related_user_data: {self.related_user_data}")
 
                 except Exception as e:
@@ -136,6 +154,7 @@ class Perplexity(Site):
                         ctx.log.info(f"[Debug] Extracted file_uuid: {file_uuid}")
 
                         self.file_data[file_uuid] = {"pplx.session-id": pplx_session_id}
+                        self._file_data_ts[file_uuid] = time.time()
                         ctx.log.info(f"[Debug] Updated self.file_data: {self.file_data}")
                 except Exception as e:
                     ctx.log.error(f"[Error] Failed to parse JSON or extract tagging: {e}")

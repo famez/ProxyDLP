@@ -6,6 +6,10 @@ import xml.etree.ElementTree as ET
 import json
 import os
 import uuid
+import threading
+import time
+
+SESSION_TTL = 600  # 10 minutes
 
 
 class Github_Copilot(Site):
@@ -15,6 +19,17 @@ class Github_Copilot(Site):
         super().__init__("Github Copilot", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
                          allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
         self.related_user_data = {}
+        self._related_user_data_ts = {}
+        threading.Thread(target=self._cleanup_stale, daemon=True, name="gh-copilot-cleanup").start()
+
+    def _cleanup_stale(self):
+        while True:
+            time.sleep(60)
+            now = time.time()
+            stale = [k for k, ts in list(self._related_user_data_ts.items()) if now - ts > SESSION_TTL]
+            for k in stale:
+                self.related_user_data.pop(k, None)
+                self._related_user_data_ts.pop(k, None)
         
     
     def on_request_handle(self, flow):
@@ -73,6 +88,7 @@ class Github_Copilot(Site):
                             self.related_user_data[ip_address] = {
                                 "login": user_login,
                             }
+                            self._related_user_data_ts[ip_address] = time.time()
                             
                     except json.JSONDecodeError:
                         print("Failed to decode JSON.")

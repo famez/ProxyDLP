@@ -8,6 +8,10 @@ import os
 import uuid
 import re
 import magic
+import threading
+import time
+
+SESSION_TTL = 600  # 10 minutes
 
 
 class Gemini(Site):
@@ -16,9 +20,22 @@ class Gemini(Site):
                  allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
         super().__init__("Google Gemini", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
                          allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
-        
+
         self.related_user_data = {}
         self.related_file_data = {}
+        self._user_data_ts = {}
+        self._file_data_ts = {}
+        threading.Thread(target=self._cleanup_stale, daemon=True, name="gemini-cleanup").start()
+
+    def _cleanup_stale(self):
+        while True:
+            time.sleep(60)
+            now = time.time()
+            for ts_dict, data_dict in [(self._user_data_ts, self.related_user_data), (self._file_data_ts, self.related_file_data)]:
+                stale = [k for k, ts in list(ts_dict.items()) if now - ts > SESSION_TTL]
+                for k in stale:
+                    data_dict.pop(k, None)
+                    ts_dict.pop(k, None)
     
     def on_request_handle(self, flow):
             
@@ -119,6 +136,7 @@ class Gemini(Site):
                             filename = match.group(1)
                             ctx.log.info(f"filename: {filename}")
                             self.related_file_data[sid_cookie] = {'filename': filename}
+                            self._file_data_ts[sid_cookie] = time.time()
 
     def on_response_handle(self, flow):
 
@@ -142,6 +160,7 @@ class Gemini(Site):
                 ctx.log.info(f"Extracted email: {email}")
 
                 self.related_user_data[sid_cookie] = {'email': email}
+                self._user_data_ts[sid_cookie] = time.time()
                     
             else:
 

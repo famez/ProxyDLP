@@ -3,9 +3,12 @@ from mitmproxy import ctx
 from mitmproxy.http import Response
 
 import json
-
 import os
 import uuid
+import threading
+import time
+
+SESSION_TTL = 600  # 10 minutes
 
 
 class DeepSeek(Site):
@@ -15,6 +18,17 @@ class DeepSeek(Site):
         super().__init__("DeepSeek", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
                          allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
         self.users = {}
+        self._users_ts = {}
+        threading.Thread(target=self._cleanup_stale_users, daemon=True, name="deepseek-cleanup").start()
+
+    def _cleanup_stale_users(self):
+        while True:
+            time.sleep(60)
+            now = time.time()
+            stale = [k for k, ts in list(self._users_ts.items()) if now - ts > SESSION_TTL]
+            for k in stale:
+                self.users.pop(k, None)
+                self._users_ts.pop(k, None)
     
     def on_request_handle(self, flow):
 
@@ -133,6 +147,7 @@ class DeepSeek(Site):
                         #Only associate auth_header token with email if it was not before associated (during login)
                         if not auth_header in self.users:
                             self.users[auth_header] = email
+                            self._users_ts[auth_header] = time.time()
                         #ctx.log.info(f"Email added to the users dict")
 
                 except Exception as e:
@@ -169,6 +184,7 @@ class DeepSeek(Site):
 
                     #Get full email account when using the local login.
                     self.users[token] = email
+                    self._users_ts[token] = time.time()
 
             except Exception as e:
                     ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
