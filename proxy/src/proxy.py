@@ -103,16 +103,18 @@ class Site:
         return self.name
 
     def handle_request(self, flow):
-        self.source_ip = flow.client_conn.address[0]
+        # Prefer the real client IP stored by main.py from X-Forwarded-For (HAProxy injects it).
+        # Falls back to the raw TCP source when running without a load balancer.
+        self.source_ip = flow.metadata.get("_real_source_ip", flow.client_conn.address[0])
         self.on_request_handle(flow)
 
     def handle_response(self, flow):
-        self.source_ip = flow.client_conn.address[0]
+        self.source_ip = flow.metadata.get("_real_source_ip", flow.client_conn.address[0])
         self.on_response_handle(flow)
-        
+
     def handle_ws_from_client_to_server(self, flow, message):
         # This method is called when a WebSocket message is sent from the client to the server
-        self.source_ip = flow.client_conn.address[0]
+        self.source_ip = flow.metadata.get("_real_source_ip", flow.client_conn.address[0])
         self.on_ws_from_client_to_server(flow, message)
 
 

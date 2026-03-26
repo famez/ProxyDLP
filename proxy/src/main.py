@@ -318,12 +318,33 @@ def _config_poller(check_interval: int = 5):
 
 threading.Thread(target=_config_poller, name="config-poller", daemon=True).start()
 
+# Maps client_conn.id -> real source IP extracted from X-Forwarded-For (injected by HAProxy).
+# Populated in http_connect (for CONNECT tunnels) and in request (for plain HTTP).
+_real_source_ips: dict = {}
 
 channel = grpc.insecure_channel('monitor:50051')
 stub = monitor_pb2_grpc.MonitorStub(channel)
 
 
+def http_connect(flow: http.HTTPFlow) -> None:
+    """Capture the real client IP from X-Forwarded-For on CONNECT requests (injected by HAProxy)."""
+    xff = flow.request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+    if xff:
+        _real_source_ips[flow.client_conn.id] = xff
+
+
 def request(flow: http.HTTPFlow) -> None:
+    # Stamp the real source IP into flow metadata so Site handlers can read it.
+    real_ip = _real_source_ips.get(flow.client_conn.id)
+    if real_ip:
+        flow.metadata["_real_source_ip"] = real_ip
+    else:
+        # Plain HTTP (non-CONNECT) — HAProxy still injects XFF here.
+        xff = flow.request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        if xff:
+            _real_source_ips[flow.client_conn.id] = xff
+            flow.metadata["_real_source_ip"] = xff
+
     if not proxy.route_request(flow) and rejectSiteTraffic:
         flow.response = Response.make(403)
 
@@ -363,6 +384,7 @@ class Monitor:
         """Called when a TCP connection ends."""
         #ctx.log.info("tcp_end")
         self.active_flows.discard(client_conn.id)
+        _real_source_ips.pop(client_conn.id, None)
 
     def request(self, flow):
         """Called when a HTTP/HTTPS request is processed."""
