@@ -9,6 +9,8 @@ const authMiddleware = require('./middleware/authMiddleware');
 const requirePermission = require('./middleware/requirePermission');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
+const dns = require('dns').promises;
+const net = require('net');
 const multer = require('multer');
 const { connectToDB } = require('./db');
 
@@ -68,9 +70,33 @@ const proxyPackageDefinition = protoLoader.loadSync(
 const proxy_proto = grpc.loadPackageDefinition(proxyPackageDefinition).proxy;
 
 
-// Create the client
+// Create the monitor client (single instance)
 const gRPC_monitor_client = new monitor_proto.Monitor('monitor:50051', grpc.credentials.createInsecure());
-const gRPC_proxy_client = new proxy_proto.Proxy('proxy:50051', grpc.credentials.createInsecure());
+
+// Multi-instance proxy gRPC clients + addresses for terminal routing.
+// Discovered via Docker DNS: the service name "proxy" resolves to one IP per
+// replica, so we create one gRPC client per replica and keep them in sync.
+let proxyClients = [new proxy_proto.Proxy('proxy:50051', grpc.credentials.createInsecure())];
+let proxyAddresses = ['proxy'];
+
+async function discoverProxyInstances() {
+  try {
+    const addresses = await dns.resolve4('proxy');
+    if (addresses.length > 0) {
+      proxyClients = addresses.map(ip =>
+        new proxy_proto.Proxy(`${ip}:50051`, grpc.credentials.createInsecure())
+      );
+      proxyAddresses = addresses;
+      console.log(`Proxy instances: [${addresses.join(', ')}] (${addresses.length} replica(s))`);
+    }
+  } catch {
+    // DNS not ready yet or single-instance fallback — keep existing clients
+  }
+}
+
+// Discover on startup and refresh every 30 s to pick up scaling changes
+discoverProxyInstances();
+setInterval(discoverProxyInstances, 30000);
 
 
 function isValidRegex(pattern) {
@@ -121,28 +147,41 @@ app.get('/terminal', authMiddleware, requirePermission("mitmterminal"), (req, re
   res.render('terminal', { title: 'Terminal' }); // renders views/terminal.ejs
 });
 
-app.get('/terminal/stats', authMiddleware, requirePermission("mitmterminal"), (req, res) => {
+app.get('/terminal/stats', authMiddleware, requirePermission("mitmterminal"), async (_req, res) => {
+  try {
+    const results = await Promise.allSettled(
+      proxyClients.map(client => new Promise((resolve, reject) => {
+        client.GetMitmStats({}, (err, response) => {
+          if (err) reject(err); else resolve(response);
+        });
+      }))
+    );
 
-  gRPC_proxy_client.GetMitmStats({}, (err, response) => {
-    if (err) {
-      console.error("Error fetching stats:", err);
-      return;
+    const fulfilled = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+    if (fulfilled.length === 0) {
+      return res.status(503).json({ error: 'No proxy instances available' });
     }
 
-    // response is a JS object with your fields
-
     res.json({
-      active_connections: response.active_connections,
-      peak_connections: response.peak_connections,
-      rps: response.rps,
-      mem: response.mem,
-      dropped_flows: response.dropped_flows
+      active_connections: fulfilled.reduce((s, r) => s + r.active_connections, 0),
+      peak_connections:   Math.max(...fulfilled.map(r => r.peak_connections)),
+      rps:                fulfilled.reduce((s, r) => s + r.rps, 0),
+      mem:                fulfilled.reduce((s, r) => s + r.mem, 0),
+      dropped_flows:      fulfilled.reduce((s, r) => s + r.dropped_flows, 0),
     });
-
-  });
-
+  } catch (err) {
+    console.error("Error fetching stats:", err);
+    res.status(500).json({ error: 'Failed to fetch proxy stats' });
+  }
 });
 
+
+app.get('/terminal/instances', authMiddleware, requirePermission("mitmterminal"), (_req, res) => {
+  res.json({
+    count: proxyAddresses.length,
+    replicas: proxyAddresses.map((addr, i) => ({ index: i, address: addr })),
+  });
+});
 
 app.get('/explore', authMiddleware, requirePermission("events"), async (req, res) => {
   const {
@@ -1255,7 +1294,7 @@ app.post('/sites/reject-traffic', authMiddleware, requirePermission("sites"), as
       return res.status(500).send("Failed to update site settings");
     }
 
-    gRPC_proxy_client.SiteRejectEnabled({ enabled: reject_traffic }, () => {});
+    proxyClients.forEach(client => client.SiteRejectEnabled({ enabled: reject_traffic }, () => {}));
 
 
     res.sendStatus(200);
@@ -1292,7 +1331,7 @@ app.post('/sites/toggle-monitoring', authMiddleware, requirePermission("sites"),
       return res.status(404).send("Site not found or already in desired state");
     }
 
-    gRPC_proxy_client.SiteMonitoringToggled({ id: site_id, enabled }, () => {});
+    proxyClients.forEach(client => client.SiteMonitoringToggled({ id: site_id, enabled }, () => {}));
 
     res.sendStatus(200);
 
@@ -2244,6 +2283,47 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
 
 
 
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+});
+
+// WebSocket proxy for per-replica terminal access.
+// The browser connects to /ws-term/?replica=N; we forward the raw TCP
+// WebSocket handshake to that specific replica's mitm_term server (:8765).
+// Nginx routes /ws-term/ to this web-console via its existing "location /"
+// block, so no nginx changes are required.
+httpServer.on('upgrade', (req, socket, head) => {
+  const urlPath = req.url.split('?')[0].replace(/\/$/, '');
+  if (urlPath !== '/ws-term') {
+    socket.destroy();
+    return;
+  }
+
+  const params = new URLSearchParams(req.url.split('?')[1] ?? '');
+  const idx = Math.max(0, Math.min(parseInt(params.get('replica') ?? '0'), proxyAddresses.length - 1));
+  const targetHost = proxyAddresses[idx] ?? 'proxy';
+
+  const upstream = net.createConnection(8765, targetHost);
+
+  upstream.on('connect', () => {
+    // Re-emit the original HTTP upgrade request to the upstream WebSocket
+    // server, rewriting the Host header to the actual replica address.
+    const lines = [`GET / HTTP/1.1`];
+    for (const [k, v] of Object.entries(req.headers)) {
+      lines.push(k.toLowerCase() === 'host' ? `host: ${targetHost}:8765` : `${k}: ${v}`);
+    }
+    lines.push('', '');
+    upstream.write(lines.join('\r\n'));
+    if (head && head.length) upstream.write(head);
+
+    // Bidirectional pipe — from here it's raw WebSocket frames
+    socket.pipe(upstream);
+    upstream.pipe(socket);
+  });
+
+  upstream.on('error', (err) => {
+    console.error(`Terminal WS proxy error (replica ${idx} @ ${targetHost}):`, err.message);
+    socket.destroy();
+  });
+  socket.on('error', () => upstream.destroy());
 });

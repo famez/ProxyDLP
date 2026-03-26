@@ -291,6 +291,34 @@ for site in sites:
             site.disable()
 
 
+def _config_poller(check_interval: int = 5):
+    """
+    Poll MongoDB every few seconds so that all proxy replicas stay in sync
+    with site-enabled flags and the global rejectTraffic setting — without
+    needing gRPC broadcasts from the web console.
+    """
+    while True:
+        _time.sleep(check_interval)
+        try:
+            global rejectSiteTraffic
+            cfg = site_settings_collection.find_one()
+            rejectSiteTraffic = bool(cfg and cfg.get('rejectTraffic'))
+
+            site_names = [s.get_name() for s in proxy.get_sites()]
+            db_sites = sites_collection.find({"name": {"$in": site_names}})
+            enabled_map = {doc["name"]: doc.get("enabled", False) for doc in db_sites}
+            for site in proxy.get_sites():
+                if site.get_name() in enabled_map:
+                    if enabled_map[site.get_name()]:
+                        site.enable()
+                    else:
+                        site.disable()
+        except Exception as e:
+            print(f"[config-poller] Error syncing config from MongoDB: {e}")
+
+threading.Thread(target=_config_poller, name="config-poller", daemon=True).start()
+
+
 channel = grpc.insecure_channel('monitor:50051')
 stub = monitor_pb2_grpc.MonitorStub(channel)
 

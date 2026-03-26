@@ -1,20 +1,18 @@
 services:
   proxy:
-    container_name: proxy
     build:
       context: ./
       dockerfile: ./proxy/Dockerfile
     mem_limit: 512m
     memswap_limit: 512m
+    deploy:
+      replicas: 2
     depends_on:
       monitor:
         condition: service_healthy
       mongo:
         condition: service_healthy
-    ports:
-      - "8080:8080"
-      - "443:8080"
-      - "443:8080/udp"
+    # Ports are now exposed via haproxy — no host bindings here
     stdin_open: true
     tty: true
     healthcheck:
@@ -33,6 +31,20 @@ services:
       - internal-net
       - web-net
 
+  haproxy:
+    image: haproxy:2.8
+    container_name: haproxy
+    ports:
+      - "8080:8080"
+      - "443:443"
+    volumes:
+      - ./haproxy:/usr/local/etc/haproxy:ro
+    depends_on:
+      - proxy
+    restart: always
+    networks:
+      - web-net
+
   nginx-server:
     image: nginx:1.28.0
     container_name: nginx-server
@@ -47,8 +59,8 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
-      proxy:
-        condition: service_healthy
+      haproxy:
+        condition: service_started
     networks:
       - web-net
 

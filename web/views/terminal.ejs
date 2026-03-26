@@ -14,6 +14,9 @@
 </head>
 <body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 min-h-screen flex flex-col items-center justify-start p-6">
 
+  <!-- Replica selector (hidden when only one instance) -->
+  <div id="replicaBar" class="hidden w-full max-w-2xl mb-4 flex gap-2 flex-wrap"></div>
+
   <!-- Button to toggle stats -->
   <button id="toggleStats"
     class="mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow-md transition">
@@ -74,14 +77,56 @@
     setTimeout(() => { fitAddon.fit(); }, 100);
     window.addEventListener("resize", () => { fitAddon.fit(); });
 
-    const socket = new WebSocket('wss://' + window.location.hostname + ':8443/ws/');
-    socket.binaryType = 'arraybuffer';
-    socket.onopen = () => { term.write('Connected to tmux session\r\n'); };
-    socket.onmessage = (event) => { term.write(new TextDecoder().decode(new Uint8Array(event.data))); };
-    socket.onclose = () => { term.write('\r\nConnection closed'); };
-    socket.onerror = (err) => { console.error('WebSocket error:', err); term.write('\r\nWebSocket error'); };
-    term.onData(data => { socket.send(data); });
-    term.onResize(({cols, rows}) => { socket.send(JSON.stringify({type: 'resize', cols, rows})); });
+    let socket = null;
+    let activeReplica = 0;
+
+    function connectToReplica(index) {
+      if (socket) { socket.close(); socket = null; }
+      activeReplica = index;
+
+      // Update tab styles
+      document.querySelectorAll('.replica-tab').forEach((btn, i) => {
+        btn.classList.toggle('bg-indigo-600', i === index);
+        btn.classList.toggle('text-white',   i === index);
+        btn.classList.toggle('bg-white',     i !== index);
+        btn.classList.toggle('text-indigo-700', i !== index);
+      });
+
+      term.clear();
+      const wsUrl = 'wss://' + window.location.hostname + ':8443/ws-term/?replica=' + index;
+      socket = new WebSocket(wsUrl);
+      socket.binaryType = 'arraybuffer';
+      socket.onopen    = () => { term.write('Connected to proxy replica ' + index + '\r\n'); fitAddon.fit(); };
+      socket.onmessage = (event) => { term.write(new TextDecoder().decode(new Uint8Array(event.data))); };
+      socket.onclose   = () => { term.write('\r\nConnection closed'); };
+      socket.onerror   = (err) => { console.error('WebSocket error:', err); term.write('\r\nWebSocket error'); };
+    }
+
+    term.onData(data => { if (socket && socket.readyState === WebSocket.OPEN) socket.send(data); });
+    term.onResize(({cols, rows}) => {
+      if (socket && socket.readyState === WebSocket.OPEN)
+        socket.send(JSON.stringify({type: 'resize', cols, rows}));
+    });
+
+    // Fetch replica list and build tabs
+    fetch('/terminal/instances')
+      .then(r => r.json())
+      .then(({ count, replicas }) => {
+        const bar = document.getElementById('replicaBar');
+        if (count > 1) {
+          bar.classList.remove('hidden');
+          replicas.forEach(({ index }) => {
+            const btn = document.createElement('button');
+            btn.textContent = 'Replica ' + index;
+            btn.dataset.index = index;
+            btn.className = 'replica-tab px-4 py-1 rounded-lg border border-indigo-400 font-semibold text-sm transition';
+            btn.addEventListener('click', () => connectToReplica(index));
+            bar.appendChild(btn);
+          });
+        }
+        connectToReplica(0);
+      })
+      .catch(() => connectToReplica(0)); // fallback: connect to replica 0
 
     // === Stats logic ===
     const toggleBtn = document.getElementById('toggleStats');
