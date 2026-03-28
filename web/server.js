@@ -13,9 +13,15 @@ const dns = require('dns').promises;
 const net = require('net');
 const multer = require('multer');
 const { connectToDB } = require('./db');
+const rateLimit = require('express-rate-limit');
 
 // Module-level DB — initialized once at startup, shared across all routes
 let db;
+
+// Escapes special regex characters to prevent ReDoS / regex injection
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 const app = express();
 const PORT = 3000;
@@ -210,14 +216,14 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
   }
 
   // Simple filters
-  if (user) query.user = { $regex: new RegExp(user, 'i') };
-  if (site) query.site = { $regex: new RegExp(site, 'i') };
+  if (user) query.user = { $regex: new RegExp(escapeRegex(user), 'i') };
+  if (site) query.site = { $regex: new RegExp(escapeRegex(site), 'i') };
   else if (playground !== '1') query.site = { $ne: 'Playground' };
-  if (rational) query.rational = { $regex: new RegExp(rational, 'i') };
-  if (content) query.content = { $regex: new RegExp(content, 'i') };
-  if (filename) query.filename = { $regex: new RegExp(filename, 'i') };
-  if (filetype) query.content_type = { $regex: new RegExp(filetype, 'i') };
-  if (source_ip) query.source_ip = { $regex: new RegExp(source_ip, 'i') };
+  if (rational) query.rational = { $regex: new RegExp(escapeRegex(rational), 'i') };
+  if (content) query.content = { $regex: new RegExp(escapeRegex(content), 'i') };
+  if (filename) query.filename = { $regex: new RegExp(escapeRegex(filename), 'i') };
+  if (filetype) query.content_type = { $regex: new RegExp(escapeRegex(filetype), 'i') };
+  if (source_ip) query.source_ip = { $regex: new RegExp(escapeRegex(source_ip), 'i') };
   if (conversation_id) query.conversation_id = conversation_id;
 
   // Cursor parsing
@@ -260,7 +266,7 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
 
     // Leak search
     if (leak) {
-      const leakRegex = new RegExp(leak, 'i');
+      const leakRegex = new RegExp(escapeRegex(leak), 'i');
       pipeline.push(
         {
           $addFields: {
@@ -550,6 +556,10 @@ app.get('/uploads/:file', authMiddleware, requirePermission("events"), (req, res
     return res.status(400).send('Invalid file name.');
   }
 
+  if (filename && !/^[\w\-\.]+$/.test(filename)) {
+    return res.status(400).send('Invalid download name.');
+  }
+
   // Resolve absolute paths
   const uploadsDir = '/uploads';
   const filePath = path.resolve(uploadsDir, file);
@@ -616,7 +626,15 @@ app.post('/domains/add', authMiddleware, requirePermission("domains"), async (re
 
 app.get('/login', (req, res) => res.render('login', { layout: false }));
 
-app.post('/login', async (req, res) => {
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: 'Too many login attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body;
   try {
     const user = await db.collection('users').findOne({ username: username });
@@ -726,7 +744,7 @@ app.get('/api/options', authMiddleware, requirePermission("events"), async (req,
     const events_collection = db.collection('events');
 
     const pipeline = [
-      { $match: { [field]: { $regex: `^${startsWith}`, $options: '' } } },
+      { $match: { [field]: { $regex: `^${escapeRegex(startsWith)}`, $options: '' } } },
       { $group: { _id: `$${field}` } }
     ];
 
@@ -749,10 +767,17 @@ app.get('/event/:id', authMiddleware, requirePermission("events"), async (req, r
     if (!event) return res.status(404).send('Event not found');
 
     // Get the Referer URL, or fallback to '/explore'
-    let backUrl = req.get('Referer') || '/explore';
-    const expectedPrefix = `https://${req.hostname}/explore`;
-    if (!backUrl.startsWith(expectedPrefix)) {
-      backUrl = '/explore';
+    let backUrl = '/explore';
+    try {
+      const referer = req.get('Referer');
+      if (referer) {
+        const refererUrl = new URL(referer);
+        if (refererUrl.hostname === req.hostname && refererUrl.pathname.startsWith('/explore')) {
+          backUrl = refererUrl.pathname + refererUrl.search;
+        }
+      }
+    } catch {
+      // Invalid URL, keep default
     }
 
     res.render('event-detail', { title: "Event detail", event, backUrl });
@@ -1743,8 +1768,8 @@ app.post('/alerts/rules/:id/delete', authMiddleware, requirePermission("alerts")
 
 // Alert Logs
 app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 20));
   const skip = (page - 1) * limit;
 
   try {
@@ -1799,7 +1824,7 @@ app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req,
 });
 
 app.post('/alerts/logs/rotation', authMiddleware, requirePermission("alerts"), async (req, res) => {
-  const maxLogs = parseInt(req.body.maxLogs) || 500;
+  const maxLogs = Math.min(100000, Math.max(1, parseInt(req.body.maxLogs) || 500));
 
   try {
     // Update the rotation limit
@@ -1918,7 +1943,7 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
     )];
 
     const pacConditions = domains.map(domain => {
-      return `        dnsDomainIs(host, "${domain}")`;
+      return `        dnsDomainIs(host, "${domain.replace(/"/g, '\\"')}")`;
     }).join(' ||\n');
 
     const pacContent = `

@@ -4,25 +4,25 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build:css": "npx tailwindcss -i ./input.css -o ./public/css/tailwind.css --minify"    
+    "build:css": "npx tailwindcss -i ./input.css -o ./public/css/tailwind.css --minify"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "mongodb": "^5.0.0",
-    "ejs": "^3.1.10",
-    "express-ejs-layouts": "^2.5.1",
-    "bcryptjs": "^3.0.2",
-    "jsonwebtoken": "^9.0.2",
-    "cookie-parser": "^1.4.7",
-    "dotenv": "^16.5.0",
     "@grpc/grpc-js": "^1.13.4",
     "@grpc/proto-loader": "^0.7.15",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.5.0",
+    "ejs": "^3.1.10",
+    "express": "^4.18.2",
+    "express-ejs-layouts": "^2.5.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^5.0.0",
+    "express-rate-limit": "^7.5.0",
     "multer": "^2.0.1",
-    "uuid": "^11.1.0",
-    "bcrypt": "^6.0.0"
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
-  "tailwindcss": "^3.4.17"
-}
-
+    "tailwindcss": "^3.4.17"
+  }
 }
