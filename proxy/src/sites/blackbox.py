@@ -1,129 +1,133 @@
-from proxy import Site, parse_multipart
-from mitmproxy import ctx
-from mitmproxy.http import Response
+from __future__ import annotations
 
 import json
-import os
 import threading
 import time
+from typing import Any, Callable
 
-SESSION_TTL = 600  # 10 minutes
+from mitmproxy import ctx
+from mitmproxy.http import Response, HTTPFlow
+
+from proxy import Site, parse_multipart
+
+SESSION_TTL: int = 600  # 10 minutes
 
 
 class BlackBox(Site):
 
-    def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
-        super().__init__("BlackBox", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
-
-        self.sessions = {}
-        self.workspaces = {}
-        self._sessions_ts = {}
-        self._workspaces_ts = {}
+    def __init__(
+        self,
+        urls: list[str],
+        account_login_callback: Callable[..., bool],
+        account_check_callback: Callable[..., bool],
+        conversation_callback: Callable[..., None],
+        attached_file_callback: Callable[..., None],
+        allow_anonymous_access: Callable[..., bool],
+        anonymous_conversation_callback: Callable[..., None],
+        store_file_callback: Callable[..., str],
+    ) -> None:
+        super().__init__(
+            "BlackBox", urls, account_login_callback, account_check_callback,
+            conversation_callback, attached_file_callback,
+            allow_anonymous_access, anonymous_conversation_callback, store_file_callback,
+        )
+        self.sessions: dict[str, dict[str, Any]] = {}
+        self.workspaces: dict[str, list[dict[str, Any]]] = {}
+        self._sessions_ts: dict[str, float] = {}
+        self._workspaces_ts: dict[str, float] = {}
         threading.Thread(target=self._cleanup_stale, daemon=True, name="blackbox-cleanup").start()
 
-    def _cleanup_stale(self):
+    def _cleanup_stale(self) -> None:
         while True:
             time.sleep(60)
-            now = time.time()
-            for ts_dict, data_dict in [(self._sessions_ts, self.sessions), (self._workspaces_ts, self.workspaces)]:
-                stale = [k for k, ts in list(ts_dict.items()) if now - ts > SESSION_TTL]
+            now: float = time.time()
+            for ts_dict, data_dict in [
+                (self._sessions_ts, self.sessions),
+                (self._workspaces_ts, self.workspaces),
+            ]:
+                stale: list[str] = [k for k, ts in list(ts_dict.items()) if now - ts > SESSION_TTL]
                 for k in stale:
                     data_dict.pop(k, None)
                     ts_dict.pop(k, None)
-            
-    def on_request_handle(self, flow):
+
+    def on_request_handle(self, flow: HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "blackbox.ai/api/chat" in flow.request.pretty_url:
-            
-            content_type = flow.request.headers.get("Content-Type", "")
 
-            email = None
+            content_type: str = flow.request.headers.get("Content-Type", "")
+            email: str | None = None
 
             if not "application/json" in content_type.lower():
-
                 return
-            
+
             try:
+                json_body: dict[str, Any] = flow.request.json()
 
-                #Decode json from body
-                json_body = flow.request.json()
-
-                session = json_body.get('session')
+                session: Any = json_body.get('session')
                 if isinstance(session, dict):
-                    user = session.get('user')
+                    user: Any = session.get('user')
                     if isinstance(user, dict):
                         email = user.get('email')
 
-
-                #Check if anonymous chats are allowed or chats with proper account domains are allowed.
                 if not email:
                     if not self.allow_anonymous_access():
-                        flow.response = Response.make(
-                            401
-                        )
+                        flow.response = Response.make(401)
                         return
                 else:
                     if not self.account_check_callback(email):
-                        flow.response = Response.make(
-                            401
-                        )
+                        flow.response = Response.make(401)
                         return
-                    
 
                 if not "messages" in json_body:
                     return
-                
-                conversation_id = json_body.get("id", None)
-                
-                for message in reversed(json_body['messages']): 
+
+                conversation_id: str | None = json_body.get("id", None)
+
+                for message in reversed(json_body['messages']):
                     if 'role' in message and message['role'] == "user" and 'content' in message:
                         if email:
-                            session_id = json_body['id']
-
-                            results = [item for item in self.sessions if session_id in item]
+                            session_id: str = json_body['id']
+                            results: list[str] = [item for item in self.sessions if session_id in item]
 
                             if results:
                                 self.sessions[session_id]['email'] = email
                                 ctx.log.info("Added session 1")
                             else:
-                                self.sessions[session_id] = {'email': email}        #Keep track of email from conversation id.
+                                self.sessions[session_id] = {'email': email}
                                 ctx.log.info("Added session 2")
                             self._sessions_ts[session_id] = time.time()
 
-                            self.conversation_callback(json_body['session']['user']['email'], message['content'],
-                                                       conversation_id = conversation_id)
+                            self.conversation_callback(
+                                json_body['session']['user']['email'],
+                                message['content'],
+                                conversation_id=conversation_id,
+                            )
                         else:
-                            self.anonymous_conversation_callback(message['content'], conversation_id = conversation_id)
+                            self.anonymous_conversation_callback(message['content'], conversation_id=conversation_id)
                         break
-
 
             except Exception as e:
                 ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
 
         elif flow.request.method == "POST" and "blackbox.ai/api/workspace/link-to-chat" in flow.request.pretty_url:
             json_body = flow.request.json()
-
             ctx.log.info(f"json_body: {json.dumps(json_body, indent=2)}")
 
             session_id = json_body['chatId']
-            workspace_id = json_body['workspaceIds'][0]
+            workspace_id: str = json_body['workspaceIds'][0]
 
             ctx.log.info(f"session id: {session_id}, workspace_id: {workspace_id}")
 
             for session in self.sessions:
                 ctx.log.info(f"Session: {str(session)}")
-            
 
             if session_id in self.sessions:
                 self.sessions[session_id]['workspace'] = json_body['workspaceIds'][0]
                 ctx.log.info(f"Eeeeooo")
 
-                email = None
-
+                linked_email: str | None = None
                 if "email" in self.sessions[session_id]:
-                    email = self.sessions[session_id]['email']
+                    linked_email = self.sessions[session_id]['email']
 
                 if workspace_id in self.workspaces:
                     self.sessions[session_id]['files'] = self.workspaces[workspace_id]
@@ -131,28 +135,20 @@ class BlackBox(Site):
                     ctx.log.info(str(self.sessions[session_id]))
 
                     for file in self.sessions[session_id]['files']:
-
-                        self.attached_file_callback(email, file['filename'], file['filepath'], file['content_type'])    #Send file attached event 
-
+                        self.attached_file_callback(linked_email, file['filename'], file['filepath'], file['content_type'])
 
 
-    def on_response_handle(self, flow):
+    def on_response_handle(self, flow: HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "https://www.blackbox.ai/api/workspace" == flow.request.pretty_url:
 
-            workspace_id = None
-
-            response_content_type = flow.response.headers.get("Content-Type", "")
-
+            workspace_id: str | None = None
+            response_content_type: str = flow.response.headers.get("Content-Type", "")
             ctx.log.info("Eooooo one two three")
 
             if "application/json" in response_content_type.lower():
-
                 try:
-
-                    # Try to parse as JSON
-                    content = flow.response.json()
-
+                    content: dict[str, Any] = flow.response.json()
                     ctx.log.info("Hellooo")
 
                     if "id" in content:
@@ -162,25 +158,20 @@ class BlackBox(Site):
 
                 except Exception as e:
                     ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
-            
-            content_type = flow.request.headers.get("content-type", "")
 
-            if "multipart/form-data" in content_type:
+            req_content_type: str = flow.request.headers.get("content-type", "")
 
-                body = flow.request.raw_content
-
-                uploaded_files = parse_multipart(content_type, body)
+            if "multipart/form-data" in req_content_type:
+                body: bytes = flow.request.raw_content
+                uploaded_files: list[dict[str, Any]] = parse_multipart(req_content_type, body)
 
                 for file in uploaded_files:
-                    
-                    filepath = self.store_file_callback(file['content'])
-                    
+                    filepath: str = self.store_file_callback(file['content'])
                     ctx.log.info(f"Saved file: {filepath}")
 
-                    self.workspaces[workspace_id].append({"filename": file['filename'], "filepath": filepath, "content_type": 
-                                                          file['content_type']})
-
+                    self.workspaces[workspace_id].append({
+                        "filename": file['filename'],
+                        "filepath": filepath,
+                        "content_type": file['content_type'],
+                    })
                     ctx.log.info("Adding workspace!!!")
-
-                    #self.attached_file_callback(None, file['filename'], filepath, file['content_type'])
-                    

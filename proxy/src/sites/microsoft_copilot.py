@@ -1,70 +1,80 @@
-from proxy import Site, EmailNotFoundException, decode_jwt, pad_b64
-from mitmproxy import http, ctx
-from mitmproxy.http import Response
+from __future__ import annotations
 
-import json
 import base64
-import uuid
+import json
 import re
-import os
-import gzip
-import time
 import threading
+import time
 from io import BytesIO
+from typing import Any, Callable
 from urllib.parse import urlparse, parse_qs
-import magic
 
-UPLOAD_TTL = 300  # seconds before a stale upload buffer is evicted
+import magic
+from mitmproxy import ctx, http
+from mitmproxy.http import Response
+from mitmproxy import websocket
+
+from proxy import Site, EmailNotFoundException, decode_jwt, pad_b64
+
+UPLOAD_TTL: int = 300  # seconds before a stale upload buffer is evicted
 
 class Microsoft_Copilot(Site):
 
-    def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
-        super().__init__("Microsoft Copilot", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
-        self.uploaded_files = {}
-        self._upload_timestamps = {}
-        self._lock = threading.Lock()
+    def __init__(
+        self,
+        urls: list[str],
+        account_login_callback: Callable[..., bool],
+        account_check_callback: Callable[..., bool],
+        conversation_callback: Callable[..., None],
+        attached_file_callback: Callable[..., None],
+        allow_anonymous_access: Callable[..., bool],
+        anonymous_conversation_callback: Callable[..., None],
+        store_file_callback: Callable[..., str],
+    ) -> None:
+        super().__init__(
+            "Microsoft Copilot", urls, account_login_callback, account_check_callback,
+            conversation_callback, attached_file_callback,
+            allow_anonymous_access, anonymous_conversation_callback, store_file_callback,
+        )
+        self.uploaded_files: dict[str, dict[str, Any]] = {}
+        self._upload_timestamps: dict[str, float] = {}
+        self._lock: threading.Lock = threading.Lock()
         threading.Thread(target=self._cleanup_stale_uploads, daemon=True).start()
 
-    def _cleanup_stale_uploads(self):
+    def _cleanup_stale_uploads(self) -> None:
         while True:
             time.sleep(60)
-            now = time.time()
+            now: float = time.time()
             with self._lock:
-                stale = [email for email, ts in self._upload_timestamps.items() if now - ts > UPLOAD_TTL]
+                stale: list[str] = [email for email, ts in self._upload_timestamps.items() if now - ts > UPLOAD_TTL]
                 for email in stale:
                     self.uploaded_files.pop(email, None)
                     self._upload_timestamps.pop(email, None)
                     ctx.log.info(f"Evicted stale upload buffer for: {email}")
 
-    def on_request_handle(self, flow):
-        
+    def on_request_handle(self, flow: http.HTTPFlow) -> None:
+
         if flow.request.method == "PUT" and "sharepoint.com/personal" in flow.request.pretty_url and "uploadSession" in flow.request.pretty_url:
             ctx.log.info(f"Handling PUT request for SharePoint uploadSession: {flow.request.pretty_url}")
 
-            tempauth = flow.request.query.get("tempauth")
-            user_email = extract_email_from_tempauth(tempauth)
-            
+            tempauth: str | None = flow.request.query.get("tempauth")
+            user_email: str | None = extract_email_from_tempauth(tempauth)
 
             if not user_email or not self.account_check_callback(user_email):
                 ctx.log.warn(f"User email invalid or not allowed: {user_email}")
-                flow.response = Response.make(
-                    403,
-                    b"Blocked by proxy",  # Body
-                    {"Content-Type": "text/plain"}  # Headers
-                )
+                flow.response = Response.make(403, b"Blocked by proxy", {"Content-Type": "text/plain"})
                 return
 
-            content_type = flow.request.headers.get("Content-Type", "")
+            content_type: str = flow.request.headers.get("Content-Type", "")
             ctx.log.debug(f"Content-Type of request: {content_type}")
 
             if "application/octet-stream" in content_type:
-
-                content_range = flow.request.headers.get("Content-Range", "")
+                content_range: str = flow.request.headers.get("Content-Range", "")
                 ctx.log.debug(f"Content-Range of request: {content_range}")
 
-                # Parse Content-Range header
+                start: int = 0
+                end: int = 0
+                total: int = 0
                 match = re.match(r"bytes (\d+)-(\d+)/(\d+)", content_range)
                 if match:
                     start = int(match.group(1))
@@ -72,84 +82,69 @@ class Microsoft_Copilot(Site):
                     total = int(match.group(3))
 
                 with self._lock:
-                    entry = self.uploaded_files.get(user_email)
+                    entry: dict[str, Any] | None = self.uploaded_files.get(user_email)
 
                 if entry is not None:
                     ctx.log.info(f"Handling in-memory upload for user: {user_email}")
 
                     with self._lock:
-                        # Initialize or get existing bytearray buffer
-                        buf = entry.get('filecontent')
+                        buf: bytearray | None = entry.get('filecontent')
                         if start == 0 or buf is None:
                             buf = bytearray()
                             entry['filecontent'] = buf
                             ctx.log.debug(f"Initialized in-memory buffer for user {user_email}")
 
-                        # Ensure buffer length matches start (pad with zeros if needed)
                         if start > len(buf):
                             buf.extend(b'\x00' * (start - len(buf)))
 
-                        # Write/overwrite the chunk into the buffer
-                        chunk = flow.request.raw_content
+                        chunk: bytes = flow.request.raw_content
                         buf[start:start + len(chunk)] = chunk
                         ctx.log.info(f"In-memory chunk written for {user_email}: {start}-{end} (total {total}), buffer size now {len(buf)}")
 
-                    # If upload complete, detect mime type and invoke callback with in-memory content
                     if end + 1 == total:
                         with self._lock:
-                            buf_snapshot = bytes(buf)
-                            filename = entry['filename']
+                            buf_snapshot: bytes = bytes(buf)
+                            filename: str = entry['filename']
                             self.uploaded_files.pop(user_email, None)
                             self._upload_timestamps.pop(user_email, None)
 
                         try:
-                            mime = magic.Magic(mime=True)
-                            content_type_detected = mime.from_buffer(buf_snapshot)
+                            mime: magic.Magic = magic.Magic(mime=True)
+                            content_type_detected: str = mime.from_buffer(buf_snapshot)
                         except Exception as e:
                             ctx.log.warn(f"Failed to detect MIME type from buffer: {e}")
                             content_type_detected = "application/octet-stream"
 
-                        filepath = self.store_file_callback(buf_snapshot)
-
-                        # Call attached_file_callback with file content instead of a filepath
+                        filepath: str = self.store_file_callback(buf_snapshot)
                         self.attached_file_callback(user_email, filename, filepath, content_type_detected)
                         ctx.log.info(f"Completed in-memory upload and removed entry for user: {user_email}")
                 else:
                     ctx.log.warn(f"No uploaded_files entry found for user: {user_email}")
 
-    def on_response_handle(self, flow):
+    def on_response_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:" in flow.request.pretty_url:
-            
-            content_type = flow.request.headers.get("Content-Type", "")
 
-            content = flow.request.json()
-
-            filename = content.get("item", {}).get("name", None)
-
+            req_content_type: str = flow.request.headers.get("Content-Type", "")
+            req_content: dict[str, Any] = flow.request.json()
+            filename: str | None = req_content.get("item", {}).get("name", None)
             ctx.log.info(f"File name: {filename}")
-            
-            content_type = flow.response.headers.get("Content-Type", "")
 
-            if "application/json" in content_type.lower():
+            resp_content_type: str = flow.response.headers.get("Content-Type", "")
 
+            if "application/json" in resp_content_type.lower():
                 try:
+                    resp_content: dict[str, Any] = json.loads(flow.response.content.decode('utf-8'))
+                    upload_url: str | None = resp_content.get('uploadUrl')
 
-                    # Try to parse as JSON
-                    content = json.loads(flow.response.content.decode('utf-8'))
-
-                    upload_url = content.get('uploadUrl')
-
+                    tempauth: str | None = None
                     if upload_url:
                         parsed_url = urlparse(upload_url)
-                        query_params = parse_qs(parsed_url.query)
+                        query_params: dict[str, list[str]] = parse_qs(parsed_url.query)
                         tempauth = query_params.get("tempauth", [None])[0]
-                    else:
-                        tempauth = None
 
                     if tempauth:
-                        email = extract_email_from_tempauth(tempauth)
-
+                        email: str | None = extract_email_from_tempauth(tempauth)
                         ctx.log.info(f"Email: {email}")
                         with self._lock:
                             self.uploaded_files[email] = {"filename": filename}
@@ -157,41 +152,33 @@ class Microsoft_Copilot(Site):
 
                 except Exception as e:
                     ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
-          
 
-    def on_ws_from_client_to_server(self, flow, message):
+
+    def on_ws_from_client_to_server(
+        self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
+    ) -> None:
 
         if flow.request.method == "GET" and "copilot.microsoft.com/c/api/chat" in flow.request.pretty_url:
 
-            email = None
-
-            auth_query_param = flow.request.query.get("accessToken", "")
+            email: str | None = None
+            auth_query_param: str = flow.request.query.get("accessToken", "")
 
             if auth_query_param == "":
-
-                #Anonymous conversation
                 if not self.allow_anonymous_access():
-                    # Prevent the message from being sent to the server
                     message.kill()
                     return
-                
             else:
-
-                try :
-
-                    jwt_token = auth_query_param.strip()
-
-                    jwt_data = decode_jwt(jwt_token)
+                try:
+                    jwt_token: str = auth_query_param.strip()
+                    jwt_data: dict[str, Any] | None = decode_jwt(jwt_token)
 
                     if jwt_data:
-
-                        jwt_payload = jwt_data['payload']
+                        jwt_payload: dict[str, Any] = jwt_data['payload']
 
                         if "email" in jwt_payload:
                             email = jwt_payload['email']
 
                             if not self.account_check_callback(email):
-                                # Prevent the message from being sent to the server
                                 message.kill()
                                 return
 
@@ -199,137 +186,124 @@ class Microsoft_Copilot(Site):
                     ctx.log.error(f"Email not properly decoded: {e}")
 
             try:
-                json_content = json.loads(message.content.decode('utf-8'))
-                
+                json_content: dict[str, Any] = json.loads(message.content.decode('utf-8'))
+
                 if "event" in json_content and json_content['event'] == "send" and "content" in json_content:
-                    messages = json_content['content']
-                    for message in messages:
-                        if message['type'] == 'text':
+                    messages: list[dict[str, Any]] = json_content['content']
+                    for msg in messages:
+                        if msg['type'] == 'text':
                             if email:
-                                self.conversation_callback(email, message['text'])
+                                self.conversation_callback(email, msg['text'])
                             else:
-                                self.anonymous_conversation_callback(message['text'])
+                                self.anonymous_conversation_callback(msg['text'])
 
             except Exception as e:
                 ctx.log.error(f"Failed to decode JSON from message.content: {e}")
 
-            
 
         elif flow.request.method == "GET" and "substrate.office.com/m365Copilot/Chathub" in flow.request.pretty_url:
 
             auth_query_param = flow.request.query.get("access_token", "")
-            conversationId = flow.request.query.get("ConversationId", None)
+            conversationId: str | None = flow.request.query.get("ConversationId", None)
 
-            try :
-                email = get_email_from_auth_header(auth_query_param)
+            try:
+                ws_email: str = get_email_from_auth_header(auth_query_param)
 
-                if self.account_check_callback(email):
+                if self.account_check_callback(ws_email):
                     ctx.log.info(f"Email address belongs to the organization")
 
-                    message_contents = message.content.split(b'\x1e')
-
+                    message_contents: list[bytes] = message.content.split(b'\x1e')
                     message_contents = [part for part in message_contents if part]
-
-                    json_messages = [json.loads(part.decode('utf-8')) for part in message_contents]
+                    json_messages: list[dict[str, Any]] = [json.loads(part.decode('utf-8')) for part in message_contents]
 
                     for json_content in json_messages:
-                        #ctx.log.info(f"JSON Content: {json.dumps(json_content, indent=2)}")
-                    
                         if "arguments" in json_content:
                             for argument in json_content["arguments"]:
                                 if "message" in argument and "text" in argument["message"]:
-                                    conversation_text = argument["message"]["text"]
-                                    #ctx.log.info(f'Conversation: {conversation_text}')
-                                    self.conversation_callback(email, conversation_text, conversationId)
+                                    conversation_text: str = argument["message"]["text"]
+                                    self.conversation_callback(ws_email, conversation_text, conversationId)
 
                     return
-                
+
             except EmailNotFoundException as e:
                 ctx.log.error(f"Email not properly decoded: {e}")
 
             ctx.log.info("JWT token checks failed!")
-            # Prevent the message from being sent to the server
             message.kill()
 
-def get_email_from_auth_header(auth_query_param):
-    
-    if auth_query_param:
-            
-        jwt_token = auth_query_param.strip()
-        #ctx.log.info(f"JWT Token extracted: {jwt_token}")
 
-        jwt_data = decode_jwt(jwt_token)
+def get_email_from_auth_header(auth_query_param: str) -> str:
+    if auth_query_param:
+        jwt_token: str = auth_query_param.strip()
+        jwt_data: dict[str, Any] | None = decode_jwt(jwt_token)
 
         if jwt_data:
-
-            jwt_payload = jwt_data['payload']
-
-            #Let's check only the email address from the JWT token, 
-            #as the rest of fields are already validated by Copilot to 
-            #perform the request (correctly signed, not expired, etc).
+            jwt_payload: dict[str, Any] = jwt_data['payload']
 
             if "unique_name" in jwt_payload:
-
-                email = jwt_payload["unique_name"]
+                email: str = jwt_payload["unique_name"]
                 return email
 
     raise EmailNotFoundException("JWT", "Email not found on jwt token")
 
-def decode_special_microsoft_token(token: str):
-    parts = token.split(".")
+
+def decode_special_microsoft_token(token: str) -> dict[str, Any] | None:
+    parts: list[str] = token.split(".")
     if len(parts) != 3:
         return None
     try:
-        header = json.loads(base64.urlsafe_b64decode(pad_b64(parts[0])).decode())
+        header: dict[str, Any] = json.loads(base64.urlsafe_b64decode(pad_b64(parts[0])).decode())
 
-        encoded_payload = parts[1].strip().split(".")[0]
-
-        missing_padding = len(encoded_payload) % 4
+        encoded_payload: str = parts[1].strip().split(".")[0]
+        missing_padding: int = len(encoded_payload) % 4
         if missing_padding:
             encoded_payload += "=" * (4 - missing_padding)
 
-        raw_payload = base64.urlsafe_b64decode(encoded_payload)
+        raw_payload: bytes = base64.urlsafe_b64decode(encoded_payload)
+        payload_text: str = raw_payload.decode('latin1', errors='ignore')
 
-        payload_text = raw_payload.decode('latin1', errors='ignore')  # latin1 avoids decode errors
-
-        patterns = {
+        patterns: dict[str, str] = {
             "Emails": r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
             "UUIDs": r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}",
             "IP addresses": r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
             "Readable strings": r"[a-zA-Z0-9\.\-_\@\s]{4,}",
         }
 
-        payload_strings = {}
+        payload_strings: dict[str, list[str]] = {}
         for name, pattern in patterns.items():
-            matches = re.findall(pattern, payload_text)
-            payload_strings[name] = list(set(matches))  # remove duplicates
+            matches: list[str] = re.findall(pattern, payload_text)
+            payload_strings[name] = list(set(matches))
 
         return {"header": header, "payload_strings": payload_strings}
-    
+
     except Exception as e:
         ctx.log.warn(f"JWT decoding error: {str(e)}")
         return None
 
 
-def extract_email_from_tempauth(tempauth):
-
+def extract_email_from_tempauth(tempauth: str | None) -> str | None:
     ctx.log.debug(f"tempauth query param: {tempauth}")
 
     if tempauth and tempauth.startswith("v1."):
         tempauth = tempauth.removeprefix("v1.")
         ctx.log.debug(f"tempauth after removing prefix: {tempauth}")
 
-        decoded = decode_special_microsoft_token(tempauth)
+        decoded: dict[str, Any] | None = decode_special_microsoft_token(tempauth)
         ctx.log.debug(f"Decoded tempauth token: {decoded}")
 
         if not decoded:
             ctx.log.error("Failed to decode tempauth token")
-            return
+            return None
 
         if "app_displayname" in decoded['header']:
             ctx.log.debug(f"app_displayname in header: {decoded['header']['app_displayname']}")
-        if "app_displayname" in decoded['header'] and decoded['header']["app_displayname"] == "M365ChatClient" and 'Emails' in decoded['payload_strings'] and len(decoded['payload_strings']['Emails']) > 0:
-            emails = decoded['payload_strings']['Emails']
+        if (
+            "app_displayname" in decoded['header']
+            and decoded['header']["app_displayname"] == "M365ChatClient"
+            and 'Emails' in decoded['payload_strings']
+            and len(decoded['payload_strings']['Emails']) > 0
+        ):
+            emails: list[str] = decoded['payload_strings']['Emails']
             ctx.log.info(f"Emails extracted from payload: {emails}")
 
             for email in emails:

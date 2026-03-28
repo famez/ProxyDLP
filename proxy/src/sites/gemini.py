@@ -1,75 +1,84 @@
-from proxy import Site, EmailNotFoundException, decode_jwt, extract_substring_between
-from mitmproxy import http, ctx
-from mitmproxy.http import Response
-from urllib.parse import parse_qs, unquote
+from __future__ import annotations
 
 import json
-import os
-import uuid
 import re
-import magic
 import threading
 import time
+import uuid
+from typing import Any, Callable
+from urllib.parse import parse_qs, unquote
 
-SESSION_TTL = 600  # 10 minutes
+import magic
+from mitmproxy import ctx, http
+from mitmproxy.http import Response
+
+from proxy import Site, EmailNotFoundException, decode_jwt, extract_substring_between
+
+SESSION_TTL: int = 600  # 10 minutes
 
 
 class Gemini(Site):
 
-    def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
-        super().__init__("Google Gemini", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
-
-        self.related_user_data = {}
-        self.related_file_data = {}
-        self._user_data_ts = {}
-        self._file_data_ts = {}
+    def __init__(
+        self,
+        urls: list[str],
+        account_login_callback: Callable[..., bool],
+        account_check_callback: Callable[..., bool],
+        conversation_callback: Callable[..., None],
+        attached_file_callback: Callable[..., None],
+        allow_anonymous_access: Callable[..., bool],
+        anonymous_conversation_callback: Callable[..., None],
+        store_file_callback: Callable[..., str],
+    ) -> None:
+        super().__init__(
+            "Google Gemini", urls, account_login_callback, account_check_callback,
+            conversation_callback, attached_file_callback,
+            allow_anonymous_access, anonymous_conversation_callback, store_file_callback,
+        )
+        self.related_user_data: dict[str, dict[str, Any]] = {}
+        self.related_file_data: dict[str, dict[str, Any]] = {}
+        self._user_data_ts: dict[str, float] = {}
+        self._file_data_ts: dict[str, float] = {}
         threading.Thread(target=self._cleanup_stale, daemon=True, name="gemini-cleanup").start()
 
-    def _cleanup_stale(self):
+    def _cleanup_stale(self) -> None:
         while True:
             time.sleep(60)
-            now = time.time()
-            for ts_dict, data_dict in [(self._user_data_ts, self.related_user_data), (self._file_data_ts, self.related_file_data)]:
-                stale = [k for k, ts in list(ts_dict.items()) if now - ts > SESSION_TTL]
+            now: float = time.time()
+            for ts_dict, data_dict in [
+                (self._user_data_ts, self.related_user_data),
+                (self._file_data_ts, self.related_file_data),
+            ]:
+                stale: list[str] = [k for k, ts in list(ts_dict.items()) if now - ts > SESSION_TTL]
                 for k in stale:
                     data_dict.pop(k, None)
                     ts_dict.pop(k, None)
-    
-    def on_request_handle(self, flow):
-            
+
+    def on_request_handle(self, flow: http.HTTPFlow) -> None:
+
         if flow.request.method == "POST" and "gemini.google.com/_/BardChatUi/data/assistant.lamda" in flow.request.pretty_url:
             ctx.log.info("Conversation!!!")
             if "f.req=" in flow.request.text:
-                form_data = parse_qs(flow.request.text)
-                f_req_raw = form_data.get("f.req", [""])[0]
+                form_data: dict[str, list[str]] = parse_qs(flow.request.text)
+                f_req_raw: str = form_data.get("f.req", [""])[0]
                 ctx.log.info(f"f_req_raw: {f_req_raw}")
 
-                # URL decode
-                decoded = unquote(f_req_raw)
-                # Optional: attempt to parse as JSON if possible
+                decoded: str = unquote(f_req_raw)
                 try:
-
-                    parsed = json.loads(decoded)
+                    parsed: Any = json.loads(decoded)
                     parsed = parsed[1]
                     parsed = json.loads(parsed)
 
-                    conversation = parsed[0][0]
-
+                    conversation: str = parsed[0][0]
                     ctx.log.info(f'Conversation: {conversation}')
 
-                    sid_cookie = flow.request.cookies.get("SID")
-                    #ctx.log.info(f"SID cookie value: {sid_cookie}")
+                    sid_cookie: str | None = flow.request.cookies.get("SID")
 
-                    email = self.related_user_data.get(sid_cookie, {}).get("email", None)
+                    email: str | None = self.related_user_data.get(sid_cookie, {}).get("email", None)
                     ctx.log.info(f"Email: {email}")
 
-
                     if email and email != "":
-
                         if not self.account_check_callback(email):
-                            #Don't allow not permitted domains
                             flow.response = Response.make(403)
                             return
 
@@ -77,91 +86,73 @@ class Gemini(Site):
 
                     else:
                         if not self.allow_anonymous_access():
-                            #Don't allow anonymous conversations
                             flow.response = Response.make(403)
                             return
-                        
+
                         self.anonymous_conversation_callback(conversation)
 
                 except Exception as e:
                     ctx.log.error(f"Could not parse JSON: {e}\nDecoded String:\n{decoded}")
 
-        
+
         elif flow.request.method == "POST" and "push.clients6.google.com/upload/" in flow.request.pretty_url:
 
-
             sid_cookie = flow.request.cookies.get("SID")
-            content_type = flow.request.headers.get("Content-Type", "")
+            content_type: str = flow.request.headers.get("Content-Type", "")
 
             if "application/x-www-form-urlencoded" in content_type:
 
                 if flow.request.method == "POST" and "push.clients6.google.com/upload/?upload_id" in flow.request.pretty_url:
-                    
-                    filename = self.related_file_data.get(sid_cookie, {}).get("filename", None)
+
+                    filename: str | None = self.related_file_data.get(sid_cookie, {}).get("filename", None)
 
                     if not filename:
                         ctx.log.error("Something went wrong retrieving filename")
                         return
 
-                    file_content = flow.request.raw_content
+                    file_content: bytes = flow.request.raw_content
 
-                    #Need to determine ourselves the content type...
-                    # Create a Magic object with mime detection enabled
-                    mime = magic.Magic(mime=True)
+                    mime: magic.Magic = magic.Magic(mime=True)
+                    detected_type: str = mime.from_buffer(file_content)
 
-                    # Get MIME type from file content
-                    content_type = mime.from_buffer(file_content)
-        
-                    unique_id = uuid.uuid4().hex
-
-                    filepath = self.store_file_callback(file_content)
+                    unique_id: str = uuid.uuid4().hex
+                    filepath: str = self.store_file_callback(file_content)
 
                     email = self.related_user_data.get(sid_cookie, {}).get("email", None)
-
-                    self.attached_file_callback(email, filename, filepath, content_type)
-
+                    self.attached_file_callback(email, filename, filepath, detected_type)
                     ctx.log.info(f"Saved PUT upload to: {filepath}")
 
                 else:
+                    raw_content: bytes = flow.request.raw_content
+                    raw_text: str = raw_content.decode('utf-8', errors='ignore')
+                    ctx.log.info(f"raw_text: {raw_text}")
 
-                        # Get the raw content bytes and decode to string
-                        raw_content = flow.request.raw_content
-                        raw_text = raw_content.decode('utf-8', errors='ignore')
+                    match = re.search(r"File name:\s*(.*)", raw_text)
+                    if match:
+                        found_filename: str = match.group(1)
+                        ctx.log.info(f"filename: {found_filename}")
+                        self.related_file_data[sid_cookie] = {'filename': found_filename}
+                        self._file_data_ts[sid_cookie] = time.time()
 
-                        ctx.log.info(f"raw_text: {raw_text}")
-
-                        match = re.search(r"File name:\s*(.*)", raw_text)
-
-                        if match:
-                            filename = match.group(1)
-                            ctx.log.info(f"filename: {filename}")
-                            self.related_file_data[sid_cookie] = {'filename': filename}
-                            self._file_data_ts[sid_cookie] = time.time()
-
-    def on_response_handle(self, flow):
+    def on_response_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "GET" and "gemini.google.com/app" in flow.request.pretty_url:
 
-            sid_cookie = flow.request.cookies.get("SID")
-            #ctx.log.info(f"SID cookie value: {sid_cookie}")
+            sid_cookie: str | None = flow.request.cookies.get("SID")
 
-            html = flow.response.get_text()
-            #ctx.log.info(f"HTML response body:\n{html}")
+            html: str = flow.response.get_text()
 
-            # Look for the anchor tag with the specific href pattern
             match = re.search(
                 r'aria-label=\"[^\"]*?\(([^)]+)\)\"\shref=\"https:\/\/accounts\.google\.com\/SignOutOptions[^\"]*\"',
                 html,
                 re.DOTALL
             )
             if match:
-
-                email = match.group(1)
+                email: str = match.group(1)
                 ctx.log.info(f"Extracted email: {email}")
 
                 self.related_user_data[sid_cookie] = {'email': email}
                 self._user_data_ts[sid_cookie] = time.time()
-                    
-            else:
 
+            else:
                 ctx.log.info("No email found in anchor content.")

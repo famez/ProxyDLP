@@ -1,63 +1,74 @@
-from proxy import Site, EmailNotFoundException, decode_jwt, extract_substring_between
-from mitmproxy import http, ctx
-from mitmproxy.http import Response
-import xml.etree.ElementTree as ET
+from __future__ import annotations
 
 import json
-import os
-import uuid
 import threading
 import time
+from typing import Any, Callable
 
-SESSION_TTL = 600  # 10 minutes
+from mitmproxy import ctx, http
+
+from proxy import Site, EmailNotFoundException, decode_jwt, extract_substring_between
+
+SESSION_TTL: int = 600  # 10 minutes
 
 
 class Github_Copilot(Site):
 
-    def __init__(self, urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                 allow_anonymous_access, anonymous_conversation_callback, store_file_callback):
-        super().__init__("Github Copilot", urls, account_login_callback, account_check_callback, conversation_callback, attached_file_callback,
-                         allow_anonymous_access, anonymous_conversation_callback, store_file_callback)
-        self.related_user_data = {}
-        self._related_user_data_ts = {}
+    def __init__(
+        self,
+        urls: list[str],
+        account_login_callback: Callable[..., bool],
+        account_check_callback: Callable[..., bool],
+        conversation_callback: Callable[..., None],
+        attached_file_callback: Callable[..., None],
+        allow_anonymous_access: Callable[..., bool],
+        anonymous_conversation_callback: Callable[..., None],
+        store_file_callback: Callable[..., str],
+    ) -> None:
+        super().__init__(
+            "Github Copilot", urls, account_login_callback, account_check_callback,
+            conversation_callback, attached_file_callback,
+            allow_anonymous_access, anonymous_conversation_callback, store_file_callback,
+        )
+        self.related_user_data: dict[str, dict[str, Any]] = {}
+        self._related_user_data_ts: dict[str, float] = {}
         threading.Thread(target=self._cleanup_stale, daemon=True, name="gh-copilot-cleanup").start()
 
-    def _cleanup_stale(self):
+    def _cleanup_stale(self) -> None:
         while True:
             time.sleep(60)
-            now = time.time()
-            stale = [k for k, ts in list(self._related_user_data_ts.items()) if now - ts > SESSION_TTL]
+            now: float = time.time()
+            stale: list[str] = [k for k, ts in list(self._related_user_data_ts.items()) if now - ts > SESSION_TTL]
             for k in stale:
                 self.related_user_data.pop(k, None)
                 self._related_user_data_ts.pop(k, None)
-        
-    
-    def on_request_handle(self, flow):
-            
+
+    def on_request_handle(self, flow: http.HTTPFlow) -> None:
+
         if flow.request.method == "POST" and "githubcopilot.com/chat/completions" in flow.request.pretty_url:
             ctx.log.info(f"Request URL: {flow.request.pretty_url}")
 
             try:
-                json_body = flow.request.json()
+                json_body: dict[str, Any] = flow.request.json()
 
                 if 'messages' in json_body:
-                    messages = json_body['messages']
+                    messages: list[dict[str, Any]] = json_body['messages']
                     for message in reversed(messages):
                         if 'role' in message and message['role'] == 'user':
                             if 'content' in message:
-                                prompt = message['content']
+                                prompt: str = message['content']
 
                                 if prompt:
                                     ctx.log.info(f"Prompt found: {prompt}")
 
-                                    ip_address = flow.client_conn.address[0]
+                                    ip_address: str = flow.client_conn.address[0]
 
-                                    login = self.related_user_data.get(ip_address, {}).get("login", None)
+                                    login: str | None = self.related_user_data.get(ip_address, {}).get("login", None)
                                     if login:
                                         self.conversation_callback(login, prompt)
                                     else:
                                         self.anonymous_conversation_callback(prompt)
-  
+
                                 break
                             else:
                                 ctx.log.error("User message content not found.")
@@ -65,37 +76,23 @@ class Github_Copilot(Site):
                             ctx.log.error("User role not found in the message.")
 
             except json.JSONDecodeError:
-                ctx.log.info(f"Request body (raw): {body}")
-            
+                ctx.log.info(f"Request body could not be decoded as JSON")
 
-    def on_response_handle(self, flow):
+
+    def on_response_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "GET" and "api.github.com/user" in flow.request.pretty_url:
 
-            auth_header = flow.request.headers.get("Authorization")
-            #token = auth_header[len("Bearer "):].strip()
-
-            ip_address = flow.client_conn.address[0]
+            ip_address: str = flow.client_conn.address[0]
             if "application/json" in flow.response.headers.get("content-type", ""):
-                    try:
-                        # Decode the response content as JSON
-                        json_body = json.loads(flow.response.get_text())
-                        # Log or process the JSON data
-                        if 'login' in json_body:
-                            user_login = json_body['login']
-                            ctx.log.info(f"User login: {user_login}")
-                            
-                            self.related_user_data[ip_address] = {
-                                "login": user_login,
-                            }
-                            self._related_user_data_ts[ip_address] = time.time()
-                            
-                    except json.JSONDecodeError:
-                        print("Failed to decode JSON.")
+                try:
+                    json_body: dict[str, Any] = json.loads(flow.response.get_text())
+                    if 'login' in json_body:
+                        user_login: str = json_body['login']
+                        ctx.log.info(f"User login: {user_login}")
 
+                        self.related_user_data[ip_address] = {"login": user_login}
+                        self._related_user_data_ts[ip_address] = time.time()
 
-            
-
-
-                
-
+                except json.JSONDecodeError:
+                    print("Failed to decode JSON.")
