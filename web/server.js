@@ -287,8 +287,10 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
       );
     }
 
-    // Join agents, apply sort + limit
+    // Sort + limit before lookup so the join only runs on the final N documents
     pipeline.push(
+      { $sort: sort },
+      { $limit: limit },
       {
         $lookup: {
           from: "agents",
@@ -297,9 +299,7 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
           as: "agentData"
         }
       },
-      { $unwind: { path: "$agentData", preserveNullAndEmptyArrays: true } },
-      { $sort: sort },
-      { $limit: limit }
+      { $unwind: { path: "$agentData", preserveNullAndEmptyArrays: true } }
     );
 
     let events = await event_collection.aggregate(pipeline, { allowDiskUse: true }).toArray();
