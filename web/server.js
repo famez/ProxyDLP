@@ -14,6 +14,8 @@ const net = require('net');
 const multer = require('multer');
 const { connectToDB } = require('./db');
 
+// Module-level DB — initialized once at startup, shared across all routes
+let db;
 
 const app = express();
 const PORT = 3000;
@@ -114,19 +116,12 @@ function isStrongPassword(password) {
 }
 
 
-
 async function getRegexRules() {
-  const { client, db } = await connectToDB();
-  const regexRules = await db.collection('regex_rules').find().toArray();
-  await client.close();
-  return regexRules;
+  return db.collection('regex_rules').find().toArray();
 }
 
 async function getTopicMatchRules() {
-  const { client, db } = await connectToDB();
-  const topicRules = await db.collection('topic_rules').find().toArray();
-  await client.close();
-  return topicRules;
+  return db.collection('topic_rules').find().toArray();
 }
 
 app.get('/', authMiddleware, (req, res) => {
@@ -258,9 +253,7 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
     sort = { timestamp: -1 };
   }
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const event_collection = db.collection('events');
 
     const pipeline = [{ $match: query }];
@@ -324,8 +317,6 @@ app.get('/explore', authMiddleware, requirePermission("events"), async (req, res
 
   } catch (err) {
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -360,9 +351,7 @@ app.get('/rules/topic', authMiddleware, requirePermission("rules"), async (req, 
 
 app.get('/rules/yara', authMiddleware, requirePermission("rules"), async (req, res) => {
   try {
-    const { client, db } = await connectToDB();
     const yaraRules = await db.collection('yara_rules').find().toArray();
-    await client.close();
     res.render('yara-rules', { title: "YARA Rules", yaraRules });
   } catch (err) {
     console.error('Error loading YARA rules:', err);
@@ -379,17 +368,13 @@ app.post('/rules/regex/add', authMiddleware, requirePermission("rules"), async (
     return res.status(400).send('Invalid input or regex.');
   }
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const result = await db.collection('regex_rules').insertOne({ [name]: pattern });
     gRPC_monitor_client.RegexRuleAdded({ id: result.insertedId }, () => {});
     res.redirect('/rules/regex');
   } catch (err) {
     console.error('Error adding regex rule:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -399,9 +384,7 @@ app.post('/rules/topic/add', authMiddleware, requirePermission("rules"), async (
     return res.status(400).send('Name and pattern are required.');
   }
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const result = await db.collection('topic_rules').insertOne({ name, pattern });
     gRPC_monitor_client.TopicRuleAdded({ id: result.insertedId }, () => {});
     res.redirect('/rules/topic');
@@ -411,8 +394,6 @@ app.post('/rules/topic/add', authMiddleware, requirePermission("rules"), async (
     }
     console.error('Error adding topic rule:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -441,8 +422,8 @@ app.post('/rules/yara/add', authMiddleware, requirePermission("rules"), async (r
       }
 
     }
-  });  
-  
+  });
+
 });
 
 
@@ -453,10 +434,7 @@ app.post('/rules/:type/delete/:id', authMiddleware, requirePermission("rules"), 
   const validTypes = ['regex', 'topic', 'yara'];
   if (!validTypes.includes(type)) return res.status(400).send('Invalid rule type.');
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
-
     const alert_rules = db.collection('alert-rules');
     const ruleId = new ObjectId(id);
 
@@ -475,7 +453,7 @@ app.post('/rules/:type/delete/:id', authMiddleware, requirePermission("rules"), 
     if (type === 'topic') {
       // Notify gRPC service about topic rule deletion
       gRPC_monitor_client.TopicRuleRemoved({ id }, () => {});   //Monitor service will handle the deletion from the database
-    } else if (type === 'yara') { 
+    } else if (type === 'yara') {
       // Notify gRPC service about YARA rule deletion
       await db.collection(`${type}_rules`).deleteOne({ _id: new ObjectId(id) });
       gRPC_monitor_client.YaraRuleRemoved({ id }, () => {});
@@ -489,8 +467,6 @@ app.post('/rules/:type/delete/:id', authMiddleware, requirePermission("rules"), 
   } catch (err) {
     console.error(`Error deleting ${type} rule:`, err);
     res.status(500).send('Error deleting rule');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -513,17 +489,13 @@ app.get('/rules/:type/edit/:id', authMiddleware, requirePermission("rules"), asy
 
   if (!collectionMap[type]) return res.status(400).send('Invalid rule type.');
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const rule = await db.collection(collectionMap[type]).findOne({ _id: new ObjectId(id) });
     if (!rule) return res.status(404).send('Rule not found');
     res.render(pageMap[type], { title: "Edit Rule", rule });
   } catch (err) {
     console.error(`Error loading ${type} rule:`, err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -546,18 +518,13 @@ app.post('/rules/:type/edit/:id', authMiddleware, requirePermission("rules"), as
     return res.status(400).send('Invalid rule type.');
   }
 
-  let client;
-
   try {
-
-    ({ client, db } = await connectToDB());
-
     await db.collection(`${type}_rules`).replaceOne({ _id: new ObjectId(id) }, updateData);
 
     if (type === 'topic') {
       // Notify gRPC service about topic rule update
       gRPC_monitor_client.TopicRuleEdited({ id }, () => {});   //Monitor service will handle the update from the database
-    } else if (type === 'yara') { 
+    } else if (type === 'yara') {
       // Notify gRPC service about YARA rule update
       gRPC_monitor_client.YaraRuleEdited({ id: {id}, rule: updateData }, () => {});
     } else if (type === 'regex') {
@@ -569,8 +536,6 @@ app.post('/rules/:type/edit/:id', authMiddleware, requirePermission("rules"), as
   } catch (err) {
     console.error(`Error updating ${type} rule:`, err);
     res.status(500).send('Error updating rule');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -604,10 +569,7 @@ app.get('/uploads/:file', authMiddleware, requirePermission("events"), (req, res
 
 
 app.get('/domains', authMiddleware, requirePermission("domains"), async (req, res) => {
-  let client;
   try {
-    ({ client, db } = await connectToDB());
-
     const domains = await db.collection("domains").find().toArray();
 
     const settings = await db.collection("domain-settings").findOne();
@@ -618,8 +580,6 @@ app.get('/domains', authMiddleware, requirePermission("domains"), async (req, re
   } catch (err) {
     console.error('Error loading domains:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -627,16 +587,12 @@ app.get('/domains', authMiddleware, requirePermission("domains"), async (req, re
 
 app.post('/domains/delete/:id', authMiddleware, requirePermission("domains"), async (req, res) => {
   const id = req.params.id;
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     await db.collection("domains").deleteOne({ _id: new ObjectId(id) });
     res.redirect('/domains');
   } catch (err) {
     console.error('Error deleting domain:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -649,16 +605,12 @@ app.post('/domains/add', authMiddleware, requirePermission("domains"), async (re
   if (!regex.test(domain)) {
     return res.status(400).send('The value provided is not a domain');
   }
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     await db.collection('domains').insertOne({ content: domain });
     res.redirect('/domains');
   } catch (err) {
     console.error('Error adding domain:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -666,9 +618,7 @@ app.get('/login', (req, res) => res.render('login', { layout: false }));
 
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const user = await db.collection('users').findOne({ username: username });
     if (!user) return res.status(401).redirect('/login');
     const isMatch = await bcrypt.compare(password, user.password);
@@ -680,8 +630,6 @@ app.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Error in login:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 
 });
@@ -692,10 +640,8 @@ app.get('/logout', authMiddleware, (req, res) => {
 });
 
 app.get('/user-management', authMiddleware, requirePermission("user_management"), async (req, res) => {
-  let client;
   try {
-    ({ client, db } = await connectToDB());
-    const users = await db.collection('users').find().toArray();  
+    const users = await db.collection('users').find().toArray();
     res.render('user-management', {
       title: "User management",
       users
@@ -703,25 +649,21 @@ app.get('/user-management', authMiddleware, requirePermission("user_management")
   } catch (err) {
     console.error('Error loading user management:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 
 app.post('/add-user', authMiddleware, requirePermission("user_management"), async (req, res) => {
   const { username, password } = req.body;
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const user = await db.collection('users').findOne({ username: username });
     if (user) {
       return res.status(400).send("User already exists.");
     }
     if (!isStrongPassword(password)) {
-      return res.status(400).render('error', { 
-        title: 'Invalid Password', 
-        message: 'Password must be at least 12 characters long and include uppercase, lowercase, number, and special character.' 
+      return res.status(400).render('error', {
+        title: 'Invalid Password',
+        message: 'Password must be at least 12 characters long and include uppercase, lowercase, number, and special character.'
       });
     }
     await db.collection('users').insertOne({ username: username, password: await bcrypt.hash(password, 10) });
@@ -729,17 +671,13 @@ app.post('/add-user', authMiddleware, requirePermission("user_management"), asyn
   } catch (err) {
     console.error('Error adding user:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 app.post('/update-password', authMiddleware, requirePermission("user_management"), async (req, res) => {
   const { username, newPassword } = req.body;
-  let client;
   try {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    ({ client, db } = await connectToDB());
     const user = await db.collection('users').findOne({ username: username });
     if (!user) {
       return res.status(400).send("User does not exist.");
@@ -755,8 +693,6 @@ app.post('/update-password', authMiddleware, requirePermission("user_management"
   } catch (err) {
     console.error('Error updating password:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -767,9 +703,7 @@ app.post('/delete-user', authMiddleware, requirePermission("user_management"), a
   if (username === res.locals.username) {
     return res.status(400).send("You cannot delete your own account.");
   }
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const result = await db.collection('users').deleteOne({ username: username });
     if (result.deletedCount === 0) {
       return res.status(404).send("User not found.");
@@ -778,8 +712,6 @@ app.post('/delete-user', authMiddleware, requirePermission("user_management"), a
   } catch (err) {
     console.error('Error deleting user:', err);
     res.status(500).send("Internal Server Error");
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -790,9 +722,7 @@ app.get('/api/options', authMiddleware, requirePermission("events"), async (req,
   const allowedFields = ['user', 'site', 'rational', 'filename', 'content_type', 'source_ip'];
   if (!allowedFields.includes(field)) return res.status(400).json({ error: 'Invalid field' });
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const events_collection = db.collection('events');
 
     const pipeline = [
@@ -803,22 +733,17 @@ app.get('/api/options', authMiddleware, requirePermission("events"), async (req,
     const results = await events_collection.aggregate(pipeline).toArray();
     const values = results.map(r => r._id).filter(Boolean);
 
-    await client.close();
     res.json(values);
   } catch (err) {
     console.error('Error fetching options:', err);
     res.status(500).json({ error: 'Internal Server Error' });
-  } finally {
-    if (client) await client.close();
   }
 });
 
 
 app.get('/event/:id', authMiddleware, requirePermission("events"), async (req, res) => {
   const { id } = req.params;
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const events_collection = db.collection('events');
     const event = await events_collection.findOne({ _id: new ObjectId(id) });
     if (!event) return res.status(404).send('Event not found');
@@ -835,24 +760,18 @@ app.get('/event/:id', authMiddleware, requirePermission("events"), async (req, r
   } catch (err) {
     console.error('Error fetching event:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, res) => {
 
-  let client;
-
   try {
-
-    ({ client, db } = await connectToDB());
 
     const riskyEvents = await db.collection('events').aggregate([
       // Step 1: Extract max score from leak.topic array
       {
         $addFields: {
-          maxScore: { 
+          maxScore: {
             $max: {
               $map: {
                 input: { $ifNull: ["$leak.topic", []] }, // safely get leak.topic
@@ -908,8 +827,8 @@ app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, r
     ]).toArray();
 
     const topicStats = await db.collection('events').aggregate([
-      { $unwind: '$leak.topic' },                                
-      { $group: { _id: '$leak.topic.name', count: { $sum: 1 } } }, 
+      { $unwind: '$leak.topic' },
+      { $group: { _id: '$leak.topic.name', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 5 }
     ]).toArray();
@@ -988,7 +907,7 @@ app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, r
             regexCount: { $size: { $objectToArray: "$leak.regex" } }
           }
         },
-    
+
         {
           $sort: { regexCount: -1 }
         },
@@ -1093,10 +1012,9 @@ app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, r
         }
       ]).toArray();
 
-    console.log("File extensions stats:", fileExtensionsStats);    
-    await client.close();
+    console.log("File extensions stats:", fileExtensionsStats);
 
-    res.render('stats', {title: "Statistics", 
+    res.render('stats', {title: "Statistics",
       riskyEvents,
       topicStats,
       toolUsage,
@@ -1112,17 +1030,12 @@ app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, r
     console.error('Error fetching stats:', err);
     res.status(500).send('Internal Server Error');
   }
-  finally {
-    if (client) await client.close();
-  }
 
 });
 
 app.get('/ai-usage', authMiddleware, requirePermission("statistics"), async (req, res) => {
-  let client;
 
   try {
-    ({ client, db } = await connectToDB());
 
     // Parse query params
     const { user, start, end, site } = req.query;
@@ -1165,8 +1078,6 @@ app.get('/ai-usage', authMiddleware, requirePermission("statistics"), async (req
         }]
       : [];
 
-    await client.close();
-
     res.render('ai-usage', {
       title: "AI Tool Usage",
       perUserUsage,
@@ -1180,8 +1091,6 @@ app.get('/ai-usage', authMiddleware, requirePermission("statistics"), async (req
   } catch (err) {
     console.error('Error fetching AI usage stats:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -1202,14 +1111,12 @@ app.post('/playground', authMiddleware, requirePermission("playground"), upload.
   console.log('Username:', username);
   console.log('Text Content:', textContent);
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const result = await db.collection('events').insertOne({
-      "timestamp": new Date(), 
-      "user": username, 
-      "rational": "Conversation", 
-      "content": textContent, 
+      "timestamp": new Date(),
+      "user": username,
+      "rational": "Conversation",
+      "content": textContent,
       "site": "Playground",
       "source_ip": req.ip,
     });
@@ -1220,12 +1127,12 @@ app.post('/playground', authMiddleware, requirePermission("playground"), upload.
       console.log('Uploaded file:', file.originalname);
       console.log('Stored at:', file.path);
       const result = await db.collection('events').insertOne({
-        "timestamp": new Date(), 
-        "user": username, 
-        "rational": "Attached file", 
+        "timestamp": new Date(),
+        "user": username,
+        "rational": "Attached file",
         "filename" : file.originalname,
-        "filepath" : file.path, 
-        "content_type": file.mimetype, 
+        "filepath" : file.path,
+        "content_type": file.mimetype,
         "site": "Playground"
       });
       gRPC_monitor_client.EventAdded({ id: result.insertedId }, () => {});
@@ -1236,18 +1143,14 @@ app.post('/playground', authMiddleware, requirePermission("playground"), upload.
   } catch (err) {
     console.error('Error adding regex rule:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 
-  
+
 });
 
 app.get('/sites', authMiddleware, requirePermission("sites"), async (req, res) => {
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const site_docs = await db.collection('sites').find().toArray();
 
     const site_settings = await db.collection("site-settings").findOne();
@@ -1261,9 +1164,7 @@ app.get('/sites', authMiddleware, requirePermission("sites"), async (req, res) =
   } catch (err) {
     console.error('Error showing sites:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
-  }  
+  }
 
 });
 
@@ -1271,10 +1172,7 @@ app.get('/sites', authMiddleware, requirePermission("sites"), async (req, res) =
 app.post('/sites/reject-traffic', authMiddleware, requirePermission("sites"), async (req, res) => {
 
 
-  let client;
   try {
-
-    ({ client, db } = await connectToDB());
 
     const site_settings = await db.collection('site-settings').find().toArray();
 
@@ -1302,17 +1200,13 @@ app.post('/sites/reject-traffic', authMiddleware, requirePermission("sites"), as
   } catch (err) {
     console.error('Error setting sites config:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
-  }  
+  }
 
 });
 
 app.post('/sites/toggle-monitoring', authMiddleware, requirePermission("sites"), async (req, res) => {
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
 
     const { site_id, enabled } = req.body;
 
@@ -1338,8 +1232,6 @@ app.post('/sites/toggle-monitoring', authMiddleware, requirePermission("sites"),
   } catch (err) {
     console.error('Error toggling site monitoring:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -1351,10 +1243,7 @@ const allPermissions = [
 
 // GET /manage-permissions
 app.get('/manage-permissions', authMiddleware, requirePermission("user_management"), async (req, res) => {
-  let client;
   try {
-    ({ client, db } = await connectToDB());
-
     const { username } = req.query;
     const user = await db.collection('users').findOne({ username: username });
     if (!user) return res.status(404).send('User not found');
@@ -1363,16 +1252,12 @@ app.get('/manage-permissions', authMiddleware, requirePermission("user_managemen
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
-  } finally {
-    if (client) await client.close();
-  }  
+  }
 });
 
 // POST /update-permissions
 app.post('/manage-permissions', authMiddleware, requirePermission("user_management"), async (req, res) => {
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const users = db.collection('users');
 
     const { username, permissions } = req.body;
@@ -1388,16 +1273,14 @@ app.post('/manage-permissions', authMiddleware, requirePermission("user_manageme
     }
 
 
-    return res.render('success', { 
-        title: 'Permissions changed', 
-        message: 'Permissions have been properly changed' 
+    return res.render('success', {
+        title: 'Permissions changed',
+        message: 'Permissions have been properly changed'
       });
 
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
-  } finally {
-    if (client) await client.close();
   }
 
 });
@@ -1408,10 +1291,7 @@ app.post('/add-event-to-topic-rules', authMiddleware, requirePermission("events"
   if (!eventId) {
     return res.status(400).send('Event ID is required');
   }
-  let client;
   try {
-    ({ client, db } = await connectToDB());
-
     const event = await db.collection('events').findOne({ _id: new ObjectId(eventId) });
 
     if (!event) {
@@ -1429,10 +1309,6 @@ app.post('/add-event-to-topic-rules', authMiddleware, requirePermission("events"
     console.error('Error adding event to topic rules:', err);
     res.status(500).send('Internal Server Error');
 
-  } finally {
-
-    if (client) await client.close();
-    
   }
 
 });
@@ -1448,11 +1324,8 @@ app.get('/alerts', authMiddleware, requirePermission("alerts"), async (req, res)
 
 // Alert Destinations
 app.get('/alerts/destinations', authMiddleware, requirePermission("alerts"), async (req, res) => {
-  
-  let client;
 
   try {
-    ({ client, db } = await connectToDB());
     const alert_destinations = db.collection('alert-destinations');
     const destinations = await alert_destinations.find().toArray();
 
@@ -1470,8 +1343,6 @@ app.get('/alerts/destinations', authMiddleware, requirePermission("alerts"), asy
   } catch (err) {
     console.error('Error rendering alert destinations:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -1489,7 +1360,7 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
     syslogPort,
     recipientEmail,
   } = req.body;
-  
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const ipOrHostnameRegex = /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$/;
 
@@ -1551,10 +1422,7 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
     }
   }
 
-  let client;
-
   try {
-    ({ client, db } = await connectToDB());
     const alert_destinations = db.collection('alert-destinations');
     const alert_rules = db.collection('alert-rules');
 
@@ -1630,22 +1498,17 @@ app.post('/alerts/destinations', authMiddleware, requirePermission("alerts"), as
   } catch (err) {
     console.error('Error saving alert destinations:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 
 // Alert Rules
 app.get('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req, res) => {
-  
-  let client;
+
   try {
-    
+
     //Get all the yara, regex and topic rules + available destinations.
 
-    
-    ({ client, db } = await connectToDB());
 
     const rules = await db.collection('alert-rules').aggregate([
       // Lookup regex rule details
@@ -1684,7 +1547,7 @@ app.get('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req
           as: 'destinationResolved'
         }
       },
-      
+
       // Optional: remap result shape
       {
         $project: {
@@ -1707,7 +1570,7 @@ app.get('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req
       }
     ]).toArray();
 
-    
+
     const yara_rules = await db.collection('yara_rules').find().toArray();
     const regex_rules = await db.collection('regex_rules').find().toArray();
     const topic_rules = await db.collection('topic_rules').find().toArray();
@@ -1721,12 +1584,10 @@ app.get('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req
     };
 
     res.render('alert-rules', { title: 'Alert Rules', rules, options });
-    
+
   } catch (err) {
     console.error('Error rendering alert rules:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 
 });
@@ -1734,7 +1595,6 @@ app.get('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req
 
 app.post('/alerts/rules', authMiddleware, requirePermission("alerts"), async (req, res) => {
 
-  let client;
   try {
     const {
       name,
@@ -1776,8 +1636,6 @@ app.post('/alerts/rules', authMiddleware, requirePermission("alerts"), async (re
       destinations: parsedDestinations.map(id => new ObjectId(id))
     };
 
-    ({ client, db } = await connectToDB());
-
     await db.collection('alert-rules').insertOne(doc);
 
     res.redirect('/alerts/rules/');
@@ -1785,17 +1643,13 @@ app.post('/alerts/rules', authMiddleware, requirePermission("alerts"), async (re
   } catch (err) {
     console.error('Error inserting alert rule:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 
 });
 
 app.get('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    ({ client, db } = await connectToDB());
 
     const rule = await db.collection('alert-rules').findOne({ _id: new ObjectId(id) });
     if (!rule) return res.status(404).send('Rule not found');
@@ -1816,13 +1670,10 @@ app.get('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), a
   } catch (err) {
     console.error('Error rendering edit page:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
     const {
@@ -1860,7 +1711,6 @@ app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), 
       destinations: parseField(destinations).map(r => new ObjectId(r))
     };
 
-    ({ client, db } = await connectToDB());
     await db.collection('alert-rules').updateOne(
       { _id: new ObjectId(id) },
       { $set: updateDoc }
@@ -1871,17 +1721,13 @@ app.post('/alerts/rules/:id/edit', authMiddleware, requirePermission("alerts"), 
   } catch (err) {
     console.error('Error updating rule:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 
 app.post('/alerts/rules/:id/delete', authMiddleware, requirePermission("alerts"), async (req, res) => {
-  let client;
   try {
     const { id } = req.params;
-    ({ client, db } = await connectToDB());
 
     await db.collection('alert-rules').deleteOne({ _id: new ObjectId(id) });
 
@@ -1890,8 +1736,6 @@ app.post('/alerts/rules/:id/delete', authMiddleware, requirePermission("alerts")
   } catch (err) {
     console.error('Error deleting rule:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
@@ -1903,10 +1747,7 @@ app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req,
   const limit = parseInt(req.query.limit) || 20;
   const skip = (page - 1) * limit;
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
-
     const totalLogs = await db.collection('alert-logs').countDocuments();
     const logs = await db.collection('alert-logs').aggregate([
       { $sort: { timestamp: -1 } },
@@ -1954,18 +1795,13 @@ app.get('/alerts/logs', authMiddleware, requirePermission("alerts"), async (req,
   } catch (err) {
     console.error('Error rendering alert logs:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 app.post('/alerts/logs/rotation', authMiddleware, requirePermission("alerts"), async (req, res) => {
   const maxLogs = parseInt(req.body.maxLogs) || 500;
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
-
     // Update the rotation limit
     await db.collection('alert-destinations').updateOne(
       { type: 'local_logs' },
@@ -1976,16 +1812,11 @@ app.post('/alerts/logs/rotation', authMiddleware, requirePermission("alerts"), a
   } catch (err) {
     console.error('Error updating rotation limit:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 app.post('/domains/check-domain', authMiddleware, requirePermission("domains"), async (req, res) => {
-  let client;
   try {
-    ({ client, db } = await connectToDB());
-
     const { check_domain } = req.body;
     if (typeof check_domain !== 'boolean') {
       return res.status(400).json({ error: 'Invalid check_domain value' });
@@ -1997,17 +1828,11 @@ app.post('/domains/check-domain', authMiddleware, requirePermission("domains"), 
   } catch (err) {
     console.error('Error updating check_domain:', err);
     res.status(500).json({ error: 'Internal Server Error' });
-  } finally {
-    if (client) await client.close();
   }
 });
 
 app.post('/domains/allow-anonymous', authMiddleware, requirePermission("domains"), async (req, res) => {
-  let client;
   try {
-    const { client: dbClient, db } = await connectToDB();
-    client = dbClient;
-
     const { allow_anonymous } = req.body;
     if (typeof allow_anonymous !== 'boolean') {
       return res.status(400).json({ error: 'Invalid allow_anonymous value' });
@@ -2022,18 +1847,13 @@ app.post('/domains/allow-anonymous', authMiddleware, requirePermission("domains"
   } catch (err) {
     console.error('Error updating allow_anonymous:', err);
     res.status(500).json({ error: 'Internal Server Error' });
-  } finally {
-    if (client) await client.close();
   }
 });
 
 
 app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req, res) => {
 
-  let client;
-
   try {
-    ({ client, db } = await connectToDB());
     const site_docs = await db.collection('sites').find().toArray();
 
     // Flatten all URL entries
@@ -2051,9 +1871,9 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
     const match = proxyInput.match(proxyPattern);
 
     if (!match) {
-      return res.status(400).render('error', { 
-        title: 'Invalid Proxy', 
-        message: 'Invalid proxy format. Use host:port (e.g., 192.168.0.1:8080 or proxy.example.com:3128).' 
+      return res.status(400).render('error', {
+        title: 'Invalid Proxy',
+        message: 'Invalid proxy format. Use host:port (e.g., 192.168.0.1:8080 or proxy.example.com:3128).'
       });
     }
 
@@ -2061,9 +1881,9 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
     const port = parseInt(match[2], 10);
 
     if (port < 1 || port > 65535) {
-      return res.status(400).render('error', { 
-        title: 'Invalid Proxy', 
-        message: 'Invalid port number. Must be between 1 and 65535.' 
+      return res.status(400).render('error', {
+        title: 'Invalid Proxy',
+        message: 'Invalid port number. Must be between 1 and 65535.'
       });
     }
 
@@ -2080,9 +1900,9 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
     }
 
     if (!validHost) {
-      return res.status(400).render('error', { 
-        title: 'Invalid Proxy', 
-        message: 'Invalid host. Must be a valid IPv4 address or DNS name.' 
+      return res.status(400).render('error', {
+        title: 'Invalid Proxy',
+        message: 'Invalid host. Must be a valid IPv4 address or DNS name.'
       });
     }
 
@@ -2091,7 +1911,7 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
 
     // Generate PAC file content
     // Build PAC rules using host-based matching
-    
+
     // Extract unique domains only (drop any path after slash)
     const domains = [...new Set(
       cleanedUrls.map(url => url.split('/')[0].toLowerCase())
@@ -2122,17 +1942,12 @@ app.post('/generate-pac', authMiddleware, requirePermission("sites"), async (req
   } catch (err) {
     console.error('Error generating PAC file:', err);
     res.status(500).send('Failed to generate PAC file.');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 app.get('/agents', authMiddleware, requirePermission("agents"), async (req, res) => {
-    
-    let client;
 
   try {
-    ({ client, db } = await connectToDB());
     const agents = await db.collection('agents').find().toArray();
 
     res.render('agents', { title: 'Installed Agents', agents });
@@ -2140,16 +1955,14 @@ app.get('/agents', authMiddleware, requirePermission("agents"), async (req, res)
   } catch (err) {
     console.error('Error retrieving agents:', err);
     res.status(500).send('Internal server error.');
-  } finally {
-    if (client) await client.close();
   }
 
 });
 
 
-app.get('/downloads/ProxyDLPAgentSetup.exe', authMiddleware, requirePermission("agents"), (req, res) => {
+app.get('/downloads/ProxyDLPAgentSetup.exe', authMiddleware, requirePermission("agents"), (_req, res) => {
   const filePath = path.join('/', 'agentInstaller', 'ProxyDLPAgentSetup.exe');
-  
+
   res.download(filePath, (err) => {
     if (err) {
       console.error('File download error:', err);
@@ -2174,9 +1987,7 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
     page: pageQuery
   } = req.query;
 
-  let client;
   try {
-    ({ client, db } = await connectToDB());
     const event_collection = db.collection('events');
 
     // --- Base match filters ---
@@ -2275,55 +2086,58 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
   } catch (err) {
     console.error('Error in /files:', err);
     res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
   }
 });
 
 
+async function startServer() {
+  ({ db } = await connectToDB());
+  console.log('Connected to MongoDB');
 
+  const httpServer = app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
 
-const httpServer = app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
-
-// WebSocket proxy for per-replica terminal access.
-// The browser connects to /ws-term/?replica=N; we forward the raw TCP
-// WebSocket handshake to that specific replica's mitm_term server (:8765).
-// Nginx routes /ws-term/ to this web-console via its existing "location /"
-// block, so no nginx changes are required.
-httpServer.on('upgrade', (req, socket, head) => {
-  const urlPath = req.url.split('?')[0].replace(/\/$/, '');
-  if (urlPath !== '/ws-term') {
-    socket.destroy();
-    return;
-  }
-
-  const params = new URLSearchParams(req.url.split('?')[1] ?? '');
-  const idx = Math.max(0, Math.min(parseInt(params.get('replica') ?? '0'), proxyAddresses.length - 1));
-  const targetHost = proxyAddresses[idx] ?? 'proxy';
-
-  const upstream = net.createConnection(8765, targetHost);
-
-  upstream.on('connect', () => {
-    // Re-emit the original HTTP upgrade request to the upstream WebSocket
-    // server, rewriting the Host header to the actual replica address.
-    const lines = [`GET / HTTP/1.1`];
-    for (const [k, v] of Object.entries(req.headers)) {
-      lines.push(k.toLowerCase() === 'host' ? `host: ${targetHost}:8765` : `${k}: ${v}`);
+  // WebSocket proxy for per-replica terminal access.
+  // The browser connects to /ws-term/?replica=N; we forward the raw TCP
+  // WebSocket handshake to that specific replica's mitm_term server (:8765).
+  // Nginx routes /ws-term/ to this web-console via its existing "location /"
+  // block, so no nginx changes are required.
+  httpServer.on('upgrade', (req, socket, head) => {
+    const urlPath = req.url.split('?')[0].replace(/\/$/, '');
+    if (urlPath !== '/ws-term') {
+      socket.destroy();
+      return;
     }
-    lines.push('', '');
-    upstream.write(lines.join('\r\n'));
-    if (head && head.length) upstream.write(head);
 
-    // Bidirectional pipe — from here it's raw WebSocket frames
-    socket.pipe(upstream);
-    upstream.pipe(socket);
-  });
+    const params = new URLSearchParams(req.url.split('?')[1] ?? '');
+    const idx = Math.max(0, Math.min(parseInt(params.get('replica') ?? '0'), proxyAddresses.length - 1));
+    const targetHost = proxyAddresses[idx] ?? 'proxy';
 
-  upstream.on('error', (err) => {
-    console.error(`Terminal WS proxy error (replica ${idx} @ ${targetHost}):`, err.message);
-    socket.destroy();
+    const upstream = net.createConnection(8765, targetHost);
+
+    upstream.on('connect', () => {
+      // Re-emit the original HTTP upgrade request to the upstream WebSocket
+      // server, rewriting the Host header to the actual replica address.
+      const lines = [`GET / HTTP/1.1`];
+      for (const [k, v] of Object.entries(req.headers)) {
+        lines.push(k.toLowerCase() === 'host' ? `host: ${targetHost}:8765` : `${k}: ${v}`);
+      }
+      lines.push('', '');
+      upstream.write(lines.join('\r\n'));
+      if (head && head.length) upstream.write(head);
+
+      // Bidirectional pipe — from here it's raw WebSocket frames
+      socket.pipe(upstream);
+      upstream.pipe(socket);
+    });
+
+    upstream.on('error', (err) => {
+      console.error(`Terminal WS proxy error (replica ${idx} @ ${targetHost}):`, err.message);
+      socket.destroy();
+    });
+    socket.on('error', () => upstream.destroy());
   });
-  socket.on('error', () => upstream.destroy());
-});
+}
+
+startServer();
