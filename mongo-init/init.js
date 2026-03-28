@@ -25,6 +25,7 @@ db.createCollection('alert-logs');
 db.createCollection('domain-settings');
 db.createCollection('site-settings');
 db.createCollection('agents');
+db.createCollection('retention-settings');
 
 
 
@@ -57,3 +58,8 @@ db.users.insertOne({username: "admin", password: "$2a$10$3lKl1v9l8Fe8PtAOCAEiaeX
 }) //Hashed password for "admin" password
 
 db.regex_rules.insertMany(regex_rules);
+
+db["retention-settings"].insertOne({
+  retentionDays: 30,
+  createdAt: new Date()
+});

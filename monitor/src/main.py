@@ -21,7 +21,7 @@ import faiss
 import yara
 from readerwriterlock import rwlock
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import logging
 import logging.handlers
 import json
@@ -57,6 +57,7 @@ yara_rules_collection = db_client["ProxyDLP"]["yara_rules"]
 alert_destinations_collection = db_client["ProxyDLP"]["alert-destinations"]
 alert_rules_collection = db_client["ProxyDLP"]["alert-rules"]
 alert_locallogs_collection = db_client["ProxyDLP"]["alert-logs"]
+retention_settings_collection = db_client["ProxyDLP"]["retention-settings"]
 
 nltk.download('stopwords')
 
@@ -884,6 +885,27 @@ def run_tf_idf_periodically():
         time.sleep(2 * 60 * 60)  # Sleep for 2 hours
 
 
+RETENTION_DEFAULT_DAYS = 30
+
+def purge_old_data():
+    settings = retention_settings_collection.find_one()
+    retention_days = settings.get("retentionDays", RETENTION_DEFAULT_DAYS) if settings else RETENTION_DEFAULT_DAYS
+    cutoff = datetime.now(timezone.utc) - timedelta(days=int(retention_days))
+    events_result = events_collection.delete_many({"timestamp": {"$lt": cutoff}})
+    logs_result = alert_locallogs_collection.delete_many({"timestamp": {"$lt": cutoff}})
+    retention_settings_collection.update_one({}, {"$set": {"lastPurge": datetime.now(timezone.utc)}}, upsert=True)
+    print(f"[Retention] Purged {events_result.deleted_count} events and {logs_result.deleted_count} alert-logs older than {retention_days} day(s) (cutoff: {cutoff.isoformat()})")
+
+def run_retention_purge_periodically():
+    """Run purge immediately at startup and then every 24 hours."""
+    while True:
+        try:
+            purge_old_data()
+        except Exception as e:
+            print(f"[Retention] Scheduled purge failed: {e}")
+        time.sleep(24 * 60 * 60)  # Sleep for 24 hours
+
+
 
 def main():
 
@@ -891,6 +913,9 @@ def main():
 
     # Start TF-IDF background thread
     threading.Thread(target=run_tf_idf_periodically, daemon=True).start()
+
+    # Start retention purge background thread
+    threading.Thread(target=run_retention_purge_periodically, daemon=True).start()
 
 
     # Initialize gRPC server

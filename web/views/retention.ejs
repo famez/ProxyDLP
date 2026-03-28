@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Data Retention</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-8">
+  <div class="max-w-2xl mx-auto">
+    <h1 class="text-3xl font-bold text-center mb-2">Data Retention Policy</h1>
+    <p class="text-center text-gray-500 text-sm mb-8">
+      Configure how long intercepted events and alert logs are kept before being automatically deleted.
+    </p>
+
+    <!-- Settings Card -->
+    <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
+      <h2 class="text-xl font-semibold mb-4">Retention Period</h2>
+
+      <form action="/retention" method="POST" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Retention period (days)
+          </label>
+          <input
+            type="number"
+            name="retentionDays"
+            value="<%= retentionDays %>"
+            min="<%= minDays %>"
+            max="<%= maxDays %>"
+            required
+            class="w-full border rounded p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            Allowed range: <%= minDays %> – <%= maxDays %> days &nbsp;&bull;&nbsp; Default: <%= defaultDays %> days
+          </p>
+        </div>
+
+        <button type="submit"
+          class="bg-indigo-600 text-white px-5 py-2 rounded hover:bg-indigo-700 transition">
+          Save settings
+        </button>
+      </form>
+
+      <% if (lastPurge) { %>
+      <p class="text-xs text-gray-400 mt-4">
+        Last scheduled purge: <%= new Date(lastPurge).toUTCString() %>
+      </p>
+      <% } else { %>
+      <p class="text-xs text-gray-400 mt-4">No scheduled purge has run yet.</p>
+      <% } %>
+    </div>
+
+    <!-- Immediate Purge Card -->
+    <div class="bg-white shadow-lg rounded-xl p-6 border border-red-200">
+      <h2 class="text-xl font-semibold mb-2 text-red-700">Immediate Purge</h2>
+
+      <div class="bg-red-50 border border-red-300 rounded-lg p-4 mb-4 flex items-start gap-3">
+        <svg class="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+        <div>
+          <p class="text-sm font-semibold text-red-700">Warning — this action cannot be undone</p>
+          <p class="text-sm text-red-600 mt-1">
+            All events and alert logs older than the current retention period
+            (<strong><%= retentionDays %> day(s)</strong>) will be permanently deleted from the database right now.
+          </p>
+        </div>
+      </div>
+
+      <button id="purgeBtn"
+        class="bg-red-600 text-white px-5 py-2 rounded hover:bg-red-700 transition">
+        Purge now
+      </button>
+
+      <div id="purgeResult" class="mt-4 hidden"></div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('purgeBtn').addEventListener('click', () => {
+      const confirmed = window.confirm(
+        'WARNING: This will permanently delete all events and alert logs older than <%= retentionDays %> day(s).\n\n' +
+        'This action CANNOT be undone.\n\nAre you sure you want to proceed?'
+      );
+      if (!confirmed) return;
+
+      const btn = document.getElementById('purgeBtn');
+      btn.disabled = true;
+      btn.textContent = 'Purging...';
+
+      fetch('/retention/purge-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      })
+        .then(r => r.json())
+        .then(data => {
+          const resultDiv = document.getElementById('purgeResult');
+          resultDiv.classList.remove('hidden');
+          if (data.success) {
+            resultDiv.innerHTML =
+              '<div class="bg-green-50 border border-green-300 rounded-lg p-3 text-sm text-green-800">' +
+              '<strong>Purge completed.</strong> ' +
+              data.deletedEvents + ' event(s) and ' + data.deletedLogs + ' alert log(s) deleted' +
+              ' (cutoff: ' + new Date(data.cutoff).toUTCString() + ').' +
+              '</div>';
+          } else {
+            resultDiv.innerHTML =
+              '<div class="bg-red-50 border border-red-300 rounded-lg p-3 text-sm text-red-700">' +
+              'Purge failed: ' + (data.error || 'Unknown error') +
+              '</div>';
+          }
+          btn.disabled = false;
+          btn.textContent = 'Purge now';
+        })
+        .catch(() => {
+          document.getElementById('purgeResult').classList.remove('hidden');
+          document.getElementById('purgeResult').innerHTML =
+            '<div class="bg-red-50 border border-red-300 rounded-lg p-3 text-sm text-red-700">Request failed. Please try again.</div>';
+          btn.disabled = false;
+          btn.textContent = 'Purge now';
+        });
+    });
+  </script>
+</body>
+</html>

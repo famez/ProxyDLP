@@ -1238,7 +1238,7 @@ app.post('/sites/toggle-monitoring', authMiddleware, requirePermission("sites"),
 
 const allPermissions = [
   "playground", "mitmterminal", "user_management", "rules",
-  "events", "domains", "sites", "statistics", "alerts", "conversations", "agents"
+  "events", "domains", "sites", "statistics", "alerts", "conversations", "agents", "retention"
 ];
 
 // GET /manage-permissions
@@ -2090,9 +2090,81 @@ app.get('/files', authMiddleware, requirePermission("events"), async (req, res) 
 });
 
 
+// ─── Data Retention ──────────────────────────────────────────────────────────
+
+const RETENTION_MIN_DAYS = 1;
+const RETENTION_MAX_DAYS = 365;
+const RETENTION_DEFAULT_DAYS = 30;
+
+async function getRetentionSettings() {
+  let settings = await db.collection('retention-settings').findOne();
+  if (!settings) {
+    settings = { retentionDays: RETENTION_DEFAULT_DAYS };
+    await db.collection('retention-settings').insertOne(settings);
+  }
+  return settings;
+}
+
+async function purgeOldData(retentionDays) {
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  const eventsResult = await db.collection('events').deleteMany({ timestamp: { $lt: cutoff } });
+  const logsResult = await db.collection('alert-logs').deleteMany({ timestamp: { $lt: cutoff } });
+  console.log(`[Retention] Purged ${eventsResult.deletedCount} events and ${logsResult.deletedCount} alert-logs older than ${retentionDays} day(s) (cutoff: ${cutoff.toISOString()})`);
+  return { deletedEvents: eventsResult.deletedCount, deletedLogs: logsResult.deletedCount, cutoff };
+}
+
+app.get('/retention', authMiddleware, requirePermission('retention'), async (_req, res) => {
+  try {
+    const settings = await getRetentionSettings();
+    res.render('retention', {
+      title: 'Data Retention',
+      retentionDays: settings.retentionDays,
+      minDays: RETENTION_MIN_DAYS,
+      maxDays: RETENTION_MAX_DAYS,
+      defaultDays: RETENTION_DEFAULT_DAYS,
+      lastPurge: settings.lastPurge || null
+    });
+  } catch (err) {
+    console.error('Error loading retention settings:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/retention', authMiddleware, requirePermission('retention'), async (req, res) => {
+  try {
+    const days = parseInt(req.body.retentionDays, 10);
+    if (isNaN(days) || days < RETENTION_MIN_DAYS || days > RETENTION_MAX_DAYS) {
+      return res.status(400).render('error', {
+        title: 'Invalid Retention Period',
+        message: `Retention period must be between ${RETENTION_MIN_DAYS} and ${RETENTION_MAX_DAYS} days.`
+      });
+    }
+    await db.collection('retention-settings').updateOne({}, { $set: { retentionDays: days } }, { upsert: true });
+    res.redirect('/retention');
+  } catch (err) {
+    console.error('Error saving retention settings:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/retention/purge-now', authMiddleware, requirePermission('retention'), async (_req, res) => {
+  try {
+    const settings = await getRetentionSettings();
+    const result = await purgeOldData(settings.retentionDays);
+    await db.collection('retention-settings').updateOne({}, { $set: { lastPurge: new Date() } }, { upsert: true });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Error during immediate purge:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function startServer() {
   ({ db } = await connectToDB());
   console.log('Connected to MongoDB');
+
 
   const httpServer = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

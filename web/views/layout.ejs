@@ -25,6 +25,9 @@
     <a href="/terminal" class="block px-4 py-2 rounded hover:bg-indigo-100">MITMPROXY Terminal</a>
     <a href="/agents" class="block px-4 py-2 rounded hover:bg-indigo-100">Agents</a>
     <a href="/user-management" class="block px-4 py-2 rounded hover:bg-indigo-100">User management</a>
+    <% if (permissions.includes('retention')) { %>
+    <a href="/retention" class="block px-4 py-2 rounded hover:bg-indigo-100">Data Retention</a>
+    <% } %>
   </nav>
 
   <a href="/logout" class="block mt-6 px-4 py-2 rounded bg-red-500 text-white text-center hover:bg-red-600 transition">
