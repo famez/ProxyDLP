@@ -111,6 +111,12 @@ async def pty_session(websocket: Any) -> None:
 
 
 def run_ws_server(host: str = '0.0.0.0', port: int = 8765) -> None:
+    import logging
+    # Health-check TCP probes connect and immediately close, producing a noisy
+    # "opening handshake failed / EOFError: stream ends after 0 bytes" log entry.
+    # Suppress those at ERROR level; genuine issues will still appear at CRITICAL.
+    logging.getLogger("websockets.server").setLevel(logging.CRITICAL)
+
     async def start_server() -> None:
         async with websockets.serve(pty_session, host, port):
             print(f"WebSocket server running at ws://{host}:{port}")
