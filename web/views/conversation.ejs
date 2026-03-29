@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Conversation Thread</title>
+  <link rel="stylesheet" href="/css/tailwind.css" />
+  <style>
+    .bubble-user {
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 1rem 1rem 0.25rem 1rem;
+    }
+    .bubble-assistant {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 1rem 1rem 1rem 0.25rem;
+    }
+    .bubble-no-response {
+      background: #fafafa;
+      border: 1px dashed #d1d5db;
+      border-radius: 1rem 1rem 1rem 0.25rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 p-6">
+  <div class="max-w-3xl mx-auto">
+
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-indigo-700">Conversation Thread</h1>
+      <p class="text-xs text-gray-400 mt-1 font-mono"><%= conversation_id %></p>
+    </div>
+
+    <% if (!events || events.length === 0) { %>
+      <div class="text-gray-500 bg-white rounded-lg p-6 shadow-sm border text-center">
+        No conversation events found for this thread.
+      </div>
+    <% } else { %>
+
+      <% events.forEach((event, i) => { %>
+        <div class="mb-8">
+          <!-- Turn number + metadata -->
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Turn <%= i + 1 %></span>
+            <time class="text-xs text-gray-400" data-utc="<%= event.timestamp %>"><%= event.timestamp %></time>
+          </div>
+
+          <!-- User prompt -->
+          <div class="flex items-start gap-3 mb-3">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+              <%= event.user ? event.user[0].toUpperCase() : '?' %>
+            </div>
+            <div class="flex-1">
+              <div class="text-xs text-gray-500 mb-1">
+                <% if (event.user) { %><span class="font-medium text-gray-700"><%= event.user %></span> · <% } %>
+                <span class="text-gray-400"><%= event.site %></span>
+                <% if (event.source_ip) { %> · <span class="font-mono"><%= event.source_ip %></span><% } %>
+              </div>
+              <% if (permissions.includes('conversations')) { %>
+                <div class="bubble-user p-4 text-sm text-gray-800 whitespace-pre-wrap">
+                  <%= event.content || '(no content)' %>
+                </div>
+              <% } else { %>
+                <div class="bubble-user p-4 text-sm text-gray-400 italic">
+                  (content hidden — requires conversations permission)
+                </div>
+              <% } %>
+            </div>
+          </div>
+
+          <!-- Assistant response -->
+          <div class="flex items-start gap-3 pl-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-lg">
+              🤖
+            </div>
+            <div class="flex-1">
+              <div class="text-xs text-gray-500 mb-1">
+                <span class="font-medium text-gray-700"><%= event.site %></span> (assistant)
+              </div>
+              <% if (event.response && permissions.includes('conversations')) { %>
+                <div class="bubble-assistant p-4 text-sm text-gray-800 whitespace-pre-wrap">
+                  <%= event.response %>
+                </div>
+              <% } else if (!event.response) { %>
+                <div class="bubble-no-response p-3 text-xs text-gray-400 italic">
+                  Response not captured
+                </div>
+              <% } else { %>
+                <div class="bubble-no-response p-3 text-xs text-gray-400 italic">
+                  (response hidden — requires conversations permission)
+                </div>
+              <% } %>
+            </div>
+          </div>
+
+          <!-- Leak tags -->
+          <% if (event.leak) { %>
+            <div class="mt-3 pl-11 flex flex-wrap gap-2">
+              <% Object.entries(event.leak.regex || {}).forEach(([k, v]) => { %>
+                <span class="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-700"><%= k %>: <%= v %></span>
+              <% }) %>
+              <% (event.leak.topic || []).forEach(t => { %>
+                <span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700"><%= t.name %></span>
+              <% }) %>
+              <% (event.leak.yara || []).forEach(y => { %>
+                <span class="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700"><%= y.name %></span>
+              <% }) %>
+            </div>
+          <% } %>
+
+          <!-- Divider (except last) -->
+          <% if (i < events.length - 1) { %>
+            <hr class="mt-6 border-gray-200" />
+          <% } %>
+        </div>
+      <% }) %>
+
+    <% } %>
+
+    <div class="mt-8">
+      <a href="/explore?conversation_id=<%= conversation_id %>"
+         class="text-sm text-indigo-600 underline hover:text-indigo-800">
+        ← Back to activity log for this conversation
+      </a>
+    </div>
+
+  </div>
+
+  <script>
+    document.querySelectorAll('time[data-utc]').forEach(el => {
+      const date = new Date(el.dataset.utc);
+      el.textContent = date.toLocaleString(undefined, {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      });
+      el.title = `UTC: ${el.dataset.utc}`;
+    });
+  </script>
+</body>
+</html>

@@ -788,6 +788,21 @@ app.get('/event/:id', authMiddleware, requirePermission("events"), async (req, r
   }
 });
 
+app.get('/conversation/:id', authMiddleware, requirePermission("events"), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const events = await db.collection('events')
+      .find({ conversation_id: id, rational: 'Conversation' })
+      .sort({ timestamp: 1 })
+      .toArray();
+
+    res.render('conversation', { title: 'Conversation', conversation_id: id, events });
+  } catch (err) {
+    console.error('Error fetching conversation:', err);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 app.get('/stats', authMiddleware, requirePermission("statistics"), async (req, res) => {
 
   try {

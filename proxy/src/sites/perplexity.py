@@ -26,11 +26,12 @@ class Perplexity(Site):
         allow_anonymous_access: Callable[..., Any],
         anonymous_conversation_callback: Callable[..., Any],
         store_file_callback: Callable[..., Any],
+        update_response_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "Perplexity", urls, account_login_callback, account_check_callback,
             conversation_callback, attached_file_callback,
-            allow_anonymous_access, anonymous_conversation_callback, store_file_callback,
+            allow_anonymous_access, anonymous_conversation_callback, store_file_callback, update_response_callback,
         )
         self.related_user_data: dict[str, dict[str, Any]] = {}
         self.file_data: dict[str, dict[str, Any]] = {}

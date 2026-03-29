@@ -17,6 +17,7 @@ class Proxy:
         allow_anonymous_access: Callable[..., Awaitable[bool]],
         anonymous_conversation_callback: Callable[..., Awaitable[None]],
         store_file_callback: Callable[..., Awaitable[str]],
+        update_response_callback: Callable[..., Awaitable[None]],
     ) -> None:
         self.sites: list[Site] = []
         self.account_login_callback = account_login_callback
@@ -26,6 +27,7 @@ class Proxy:
         self.allow_anonymous_access = allow_anonymous_access
         self.anonymous_conversation_callback = anonymous_conversation_callback
         self.store_file_callback = store_file_callback
+        self.update_response_callback = update_response_callback
 
     def register_site(self, cls: type[Site], urls: list[str]) -> None:
         site = cls(
@@ -37,6 +39,7 @@ class Proxy:
             self.allow_anonymous_access,
             self.anonymous_conversation_callback,
             self.store_file_callback,
+            self.update_response_callback,
         )
         self.sites.append(site)
 
@@ -100,6 +103,7 @@ class Site:
         allow_anonymous_access: Callable[..., Awaitable[bool]],
         anonymous_conversation_callback: Callable[..., Awaitable[None]],
         store_file_callback: Callable[..., Awaitable[str]],
+        update_response_callback: Callable[..., Awaitable[None]],
     ) -> None:
         self.name: str = name
         self.urls: list[str] = urls
@@ -111,6 +115,7 @@ class Site:
         self.on_allow_anonymous_access = allow_anonymous_access
         self.on_anonymous_conversation_callback = anonymous_conversation_callback
         self.on_store_file_callback = store_file_callback
+        self.on_update_response_callback = update_response_callback
 
         self.enabled: bool = False
 
@@ -183,6 +188,13 @@ class Site:
 
     async def store_file_callback(self, file_content: bytes) -> str:
         return await self.on_store_file_callback(self, file_content)
+
+    async def update_response_callback(
+        self, conversation_id: str, assistant_uuid: str, response_text: str
+    ) -> None:
+        return await self.on_update_response_callback(
+            self, conversation_id, assistant_uuid, response_text
+        )
 
     async def start_background_tasks(self) -> None:
         pass  # Override in subclasses to schedule cleanup coroutines

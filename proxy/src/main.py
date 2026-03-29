@@ -217,6 +217,17 @@ def _write_file(filepath: str, content: bytes) -> None:
         f.write(content)
 
 
+async def update_response_callback(
+    site: Any, conversation_id: str, assistant_uuid: str, response_text: str
+) -> None:
+    """Attach the LLM response text to the most recent conversation event for this conversation."""
+    await events_collection.find_one_and_update(
+        {"conversation_id": conversation_id, "rational": "Conversation"},
+        {"$set": {"response": response_text, "response_uuid": assistant_uuid}},
+        sort=[("timestamp", -1)],
+    )
+
+
 async def store_file_callback(site: Any, file_content: bytes) -> str:
     # Compute SHA-256 hash of the file content
     file_hash: str = hashlib.sha256(file_content).hexdigest()
@@ -295,6 +306,7 @@ proxy: Proxy = Proxy(
     allow_anonymous_access,
     anonymous_conversation_callback,
     store_file_callback,
+    update_response_callback,
 )
 
 

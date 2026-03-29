@@ -58,10 +58,31 @@
     </div>
     <% if (event.content && permissions.includes('conversations')) { %>
       <div class="mb-4">
-        <h2 class="text-sm font-semibold text-gray-600 mb-1">Content</h2>
-        <p class="text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded border"><%= event.content %></p>
+        <h2 class="text-sm font-semibold text-gray-600 mb-1">Prompt</h2>
+        <div class="flex items-start gap-2">
+          <span class="mt-1 text-indigo-500 text-lg">🧑</span>
+          <p class="flex-1 text-gray-700 whitespace-pre-wrap bg-indigo-50 p-3 rounded-lg border border-indigo-100"><%= event.content %></p>
+        </div>
       </div>
+    <% } %>
 
+    <% if (event.response && permissions.includes('conversations')) { %>
+      <div class="mb-4">
+        <h2 class="text-sm font-semibold text-gray-600 mb-1">Response</h2>
+        <div class="flex items-start gap-2">
+          <span class="mt-1 text-green-500 text-lg">🤖</span>
+          <p class="flex-1 text-gray-700 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-100"><%= event.response %></p>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (event.conversation_id) { %>
+      <div class="mb-4">
+        <a href="/conversation/<%= event.conversation_id %>"
+           class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 underline">
+          💬 View full conversation thread
+        </a>
+      </div>
     <% } %>
 
     <% if (event.rational === "Attached file" && event.filename) { %>

@@ -12,6 +12,7 @@ from mitmproxy.http import Response, HTTPFlow
 from proxy import Site
 
 SESSION_TTL: int = 3600  # 1 hour
+PENDING_TTL: int = 120   # 2 minutes — max wait for the tree GET after a completion POST
 
 
 class Claude(Site):
@@ -26,15 +27,20 @@ class Claude(Site):
         allow_anonymous_access: Callable[..., Any],
         anonymous_conversation_callback: Callable[..., Any],
         store_file_callback: Callable[..., Any],
+        update_response_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "Claude", urls, account_login_callback, account_check_callback,
             conversation_callback, attached_file_callback,
-            allow_anonymous_access, anonymous_conversation_callback, store_file_callback,
+            allow_anonymous_access, anonymous_conversation_callback,
+            store_file_callback, update_response_callback,
         )
         # Maps session cookie value → email
         self.sessions: dict[str, str] = {}
         self._sessions_ts: dict[str, float] = {}
+        # Maps conversation_id → assistant_message_uuid (populated on POST, consumed on GET)
+        self._pending_responses: dict[str, str] = {}
+        self._pending_responses_ts: dict[str, float] = {}
 
     async def start_background_tasks(self) -> None:
         asyncio.create_task(self._cleanup_stale_sessions(), name="claude-cleanup")
@@ -43,10 +49,19 @@ class Claude(Site):
         while True:
             await asyncio.sleep(60)
             now: float = time.time()
-            stale: list[str] = [k for k, ts in list(self._sessions_ts.items()) if now - ts > SESSION_TTL]
-            for k in stale:
+            stale_sessions: list[str] = [
+                k for k, ts in list(self._sessions_ts.items()) if now - ts > SESSION_TTL
+            ]
+            for k in stale_sessions:
                 self.sessions.pop(k, None)
                 self._sessions_ts.pop(k, None)
+
+            stale_pending: list[str] = [
+                k for k, ts in list(self._pending_responses_ts.items()) if now - ts > PENDING_TTL
+            ]
+            for k in stale_pending:
+                self._pending_responses.pop(k, None)
+                self._pending_responses_ts.pop(k, None)
 
     def _get_session_key(self, flow: HTTPFlow) -> str | None:
         """Extract the sessionKey cookie value from the request."""
@@ -86,6 +101,13 @@ class Claude(Site):
 
             conversation_id: str | None = self._extract_conversation_id(url)
             session_key: str | None = self._get_session_key(flow)
+
+            # Store the expected assistant message UUID so we can fetch the response later
+            turn_uuids: dict[str, Any] = req_body.get("turn_message_uuids", {})
+            assistant_uuid: str | None = turn_uuids.get("assistant_message_uuid")
+            if conversation_id and assistant_uuid:
+                self._pending_responses[conversation_id] = assistant_uuid
+                self._pending_responses_ts[conversation_id] = time.time()
 
             if session_key and session_key in self.sessions:
                 email: str = self.sessions[session_key]
@@ -140,3 +162,46 @@ class Claude(Site):
                         self._sessions_ts[session_key] = time.time()
             except Exception as e:
                 ctx.log.error(f"[Claude] Failed to parse account response: {e}")
+            return
+
+        # Intercept the conversation tree GET to capture the LLM response text
+        if (
+            flow.request.method == "GET"
+            and "claude.ai/api/organizations/" in url
+            and "/chat_conversations/" in url
+            and "tree=True" in url
+        ):
+            conversation_id: str | None = self._extract_conversation_id(url)
+            if not conversation_id:
+                return
+
+            assistant_uuid: str | None = self._pending_responses.pop(conversation_id, None)
+            self._pending_responses_ts.pop(conversation_id, None)
+            if not assistant_uuid:
+                return
+
+            if not flow.response:
+                return
+            content_type = flow.response.headers.get("Content-Type", "")
+            if "application/json" not in content_type.lower():
+                return
+
+            try:
+                resp_body: dict[str, Any] = json.loads(flow.response.content.decode("utf-8"))
+            except Exception as e:
+                ctx.log.error(f"[Claude] Failed to parse tree response: {e}")
+                return
+
+            for msg in resp_body.get("chat_messages", []):
+                if msg.get("uuid") == assistant_uuid and msg.get("sender") == "assistant":
+                    response_text: str = "".join(
+                        c.get("text", "")
+                        for c in msg.get("content", [])
+                        if c.get("type") == "text"
+                    ).strip()
+                    if response_text:
+                        ctx.log.info(f"[Claude] Captured response for conversation {conversation_id}")
+                        await self.update_response_callback(
+                            conversation_id, assistant_uuid, response_text
+                        )
+                    break
