@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import threading
 import time
 import xml.etree.ElementTree as ET
 from typing import Any, Callable
@@ -19,13 +19,13 @@ class Perplexity(Site):
     def __init__(
         self,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Any],
+        account_check_callback: Callable[..., Any],
+        conversation_callback: Callable[..., Any],
+        attached_file_callback: Callable[..., Any],
+        allow_anonymous_access: Callable[..., Any],
+        anonymous_conversation_callback: Callable[..., Any],
+        store_file_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "Perplexity", urls, account_login_callback, account_check_callback,
@@ -36,11 +36,13 @@ class Perplexity(Site):
         self.file_data: dict[str, dict[str, Any]] = {}
         self._user_data_ts: dict[str, float] = {}
         self._file_data_ts: dict[str, float] = {}
-        threading.Thread(target=self._cleanup_stale, daemon=True, name="perplexity-cleanup").start()
 
-    def _cleanup_stale(self) -> None:
+    async def start_background_tasks(self) -> None:
+        asyncio.create_task(self._cleanup_stale(), name="perplexity-cleanup")
+
+    async def _cleanup_stale(self) -> None:
         while True:
-            time.sleep(60)
+            await asyncio.sleep(60)
             now: float = time.time()
             for ts_dict, data_dict in [
                 (self._user_data_ts, self.related_user_data),
@@ -51,7 +53,7 @@ class Perplexity(Site):
                     data_dict.pop(k, None)
                     ts_dict.pop(k, None)
 
-    def on_response_handle(self, flow: HTTPFlow) -> None:
+    async def on_response_handle(self, flow: HTTPFlow) -> None:
 
         conversation_id: str | None = None
 
@@ -94,20 +96,20 @@ class Perplexity(Site):
             if isinstance(conversation, str):
                 if email:
                     ctx.log.info(f"[Debug] Email found, checking account...")
-                    if not self.account_check_callback(email):
+                    if not await self.account_check_callback(email):
                         ctx.log.warn(f"[Warn] Account check failed for email: {email}")
                         flow.response = Response.make(401)
                         return
                     ctx.log.info(f"[Debug] Account check passed, invoking conversation_callback")
-                    self.conversation_callback(email, conversation, conversation_id)
+                    await self.conversation_callback(email, conversation, conversation_id)
                 else:
                     ctx.log.info(f"[Debug] No email found, checking anonymous access...")
-                    if not self.allow_anonymous_access():
+                    if not await self.allow_anonymous_access():
                         ctx.log.warn(f"[Warn] Anonymous access not allowed")
                         flow.response = Response.make(401)
                         return
                     ctx.log.info(f"[Debug] Anonymous access allowed, invoking anonymous_conversation_callback")
-                    self.anonymous_conversation_callback(conversation, conversation_id)
+                    await self.anonymous_conversation_callback(conversation, conversation_id)
             else:
                 ctx.log.warn(f"[Warn] Conversation is not a string: {conversation}")
 
@@ -198,8 +200,8 @@ class Perplexity(Site):
                         break
 
                 for file in uploaded_files:
-                    filepath: str = self.store_file_callback(file['content'])
-                    self.attached_file_callback(s3_email, file['filename'], filepath, file['content_type'])
+                    filepath: str = await self.store_file_callback(file['content'])
+                    await self.attached_file_callback(s3_email, file['filename'], filepath, file['content_type'])
 
 
 def get_file_uuid_from_tagging(tagging: str | None) -> str | None:

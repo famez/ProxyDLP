@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import re
-import threading
 import time as _time
 import uuid
 from concurrent import futures
@@ -11,12 +11,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 import grpc
+import grpc.aio
 import psutil
 from bson.objectid import ObjectId
 from mitmproxy import ctx, http, websocket
 from mitmproxy.http import Response
-from pymongo import MongoClient
-from pymongo.collection import Collection
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
 
 import monitor_pb2
 import monitor_pb2_grpc
@@ -44,29 +44,37 @@ last_check: float = _time.time()
 last_request_count: int = 0
 
 
-db_client: MongoClient = MongoClient(os.getenv("MONGO_URI"))
-events_collection: Collection[dict[str, Any]] = db_client["ProxyDLP"]["events"]
-domains_collection: Collection[dict[str, Any]] = db_client["ProxyDLP"]["domains"]
-sites_collection: Collection[dict[str, Any]] = db_client["ProxyDLP"]["sites"]
-domain_settings_collection: Collection[dict[str, Any]] = db_client["ProxyDLP"]["domain-settings"]
-site_settings_collection: Collection[dict[str, Any]] = db_client["ProxyDLP"]["site-settings"]
-agents_collection: Collection[dict[str, Any]] = db_client["ProxyDLP"]["agents"]
+db_client: AsyncIOMotorClient = AsyncIOMotorClient(os.getenv("MONGO_URI"))
+events_collection: AsyncIOMotorCollection = db_client["ProxyDLP"]["events"]
+domains_collection: AsyncIOMotorCollection = db_client["ProxyDLP"]["domains"]
+sites_collection: AsyncIOMotorCollection = db_client["ProxyDLP"]["sites"]
+domain_settings_collection: AsyncIOMotorCollection = db_client["ProxyDLP"]["domain-settings"]
+site_settings_collection: AsyncIOMotorCollection = db_client["ProxyDLP"]["site-settings"]
+agents_collection: AsyncIOMotorCollection = db_client["ProxyDLP"]["agents"]
+
+rejectSiteTraffic: bool = False
+
+# gRPC channel and stub — initialized in Lifecycle.running()
+channel: grpc.aio.Channel | None = None
+stub: monitor_pb2_grpc.MonitorStub | None = None
+server: grpc.aio.Server | None = None
 
 
-site_settings: dict[str, Any] | None = site_settings_collection.find_one()
-rejectSiteTraffic: bool = bool(site_settings and "rejectTraffic" in site_settings and site_settings['rejectTraffic'])
-
-def sha256_hash_file(filename: str) -> str:
+def _sha256_hash_file_sync(filename: str) -> str:
     sha256_hash = hashlib.sha256()
     with open(filename, "rb") as f:
-        # Read and update hash in chunks (good for large files)
         for chunk in iter(lambda: f.read(4096), b""):
             sha256_hash.update(chunk)
     return sha256_hash.hexdigest()
 
-def find_agent_by_source_ip(ip: str) -> str | None:
+
+async def sha256_hash_file(filename: str) -> str:
+    return await asyncio.to_thread(_sha256_hash_file_sync, filename)
+
+
+async def find_agent_by_source_ip(ip: str) -> str | None:
     # Search for the document with the given IP
-    agent: dict[str, Any] | None = agents_collection.find_one({'ip': ip})
+    agent: dict[str, Any] | None = await agents_collection.find_one({'ip': ip})
 
     # Return the GUID if document exists
     if agent:
@@ -74,47 +82,48 @@ def find_agent_by_source_ip(ip: str) -> str | None:
     return None
 
 #Anonymous access is allowed if no account check is enabled to authorize several account domains
-def allow_anonymous_access(site: Any) -> bool:
+async def allow_anonymous_access(site: Any) -> bool:
     #Check domain check skip
-    domain_settings: dict[str, Any] | None = domain_settings_collection.find_one()
+    domain_settings: dict[str, Any] | None = await domain_settings_collection.find_one()
     if domain_settings and "allow_anonymous" in domain_settings and domain_settings['allow_anonymous']:
         return True
 
     return False
 
 #Anonymous conversations
-def anonymous_conversation_callback(
+async def anonymous_conversation_callback(
     site: Any, content: str, source_ip: str, conversation_id: str | None
 ) -> None:
     #Workaround for DeepL to avoid receiving several successive events in few seconds
     if site.get_name() == "DeepL":
 
-        latest_event: dict[str, Any] | None = events_collection.find_one(
+        latest_event: dict[str, Any] | None = await events_collection.find_one(
             {"site": "DeepL"},
             sort=[("timestamp", -1)]
         )
 
-        latest_timestamp: datetime | str | None = latest_event.get("timestamp")
+        if latest_event:
+            latest_timestamp: datetime | str | None = latest_event.get("timestamp")
 
-        if latest_timestamp:
-            if isinstance(latest_timestamp, str):
-                latest_timestamp = datetime.fromisoformat(latest_timestamp)
+            if latest_timestamp:
+                if isinstance(latest_timestamp, str):
+                    latest_timestamp = datetime.fromisoformat(latest_timestamp)
 
-            # Ensure latest_timestamp is timezone-aware (UTC)
-            if latest_timestamp.tzinfo is None:
-                latest_timestamp = latest_timestamp.replace(tzinfo=timezone.utc)
-            now: datetime = datetime.now(timezone.utc)
+                # Ensure latest_timestamp is timezone-aware (UTC)
+                if latest_timestamp.tzinfo is None:
+                    latest_timestamp = latest_timestamp.replace(tzinfo=timezone.utc)
+                now: datetime = datetime.now(timezone.utc)
 
-            #If the event was sent less than 10 seconds ago and the new event content contains the latest one, update the last event content to the current one.
-            if (now - latest_timestamp).total_seconds() < 10 and latest_event.get("content") in content:
-                events_collection.update_one({"_id": latest_event["_id"]}, {"$set": {"content": content, "timestamp": now}})
+                #If the event was sent less than 10 seconds ago and the new event content contains the latest one, update the last event content to the current one.
+                if (now - latest_timestamp).total_seconds() < 10 and latest_event.get("content") in content:
+                    await events_collection.update_one({"_id": latest_event["_id"]}, {"$set": {"content": content, "timestamp": now}})
 
-                #Retrigger monitor analysis
-                mon_message = monitor_pb2.EventID(id=str(latest_event["_id"]))
-                ctx.log.info("Sent event to monitor...")
-                response = stub.EventAdded(mon_message)
-                ctx.log.info(f"Response: {response}")
-                return
+                    #Retrigger monitor analysis
+                    mon_message = monitor_pb2.EventID(id=str(latest_event["_id"]))
+                    ctx.log.info("Sent event to monitor...")
+                    response = await stub.EventAdded(mon_message)
+                    ctx.log.info(f"Response: {response}")
+                    return
 
 
     event: dict[str, Any] = {
@@ -128,23 +137,23 @@ def anonymous_conversation_callback(
     if conversation_id:
         event['conversation_id'] = conversation_id
 
-    agent_id: str | None = find_agent_by_source_ip(source_ip)
+    agent_id: str | None = await find_agent_by_source_ip(source_ip)
     if agent_id:
         event['agent_id'] = agent_id
 
-    result = events_collection.insert_one(event)
+    result = await events_collection.insert_one(event)
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
     ctx.log.info("Sent event to monitor...")
-    response = stub.EventAdded(mon_message)
+    response = await stub.EventAdded(mon_message)
     ctx.log.info(f"Response: {response}")
 
-def account_login_callback(site: Any, email: str, source_ip: str) -> bool:
+async def account_login_callback(site: Any, email: str, source_ip: str) -> bool:
     #Check domain check skip
-    domain_settings: dict[str, Any] | None = domain_settings_collection.find_one()
-    if not domain_settings or not "check_domain" in domain_settings or not domain_settings['check_domain']:
+    domain_settings: dict[str, Any] | None = await domain_settings_collection.find_one()
+    if not domain_settings or "check_domain" not in domain_settings or not domain_settings['check_domain']:
         return True
 
-    for domain in domains_collection.find():
+    async for domain in domains_collection.find():
         email_regex: str = r'^[a-zA-Z0-9._%+-]+@' + domain['content'] + '$'
 
         if re.match(email_regex, email):
@@ -157,27 +166,27 @@ def account_login_callback(site: Any, email: str, source_ip: str) -> bool:
                 "site": site.get_name(),
                 "source_ip": source_ip,
             }
-            events_collection.insert_one(event)
+            await events_collection.insert_one(event)
             return True
 
     ctx.log.info(f"Email address does not belong to an organization")
     return False
 
 
-def account_check_callback(site: Any, email: str, source_ip: str) -> bool:
+async def account_check_callback(site: Any, email: str, source_ip: str) -> bool:
     #Check domain check skip
-    domain_settings: dict[str, Any] | None = domain_settings_collection.find_one()
-    if not domain_settings or not "check_domain" in domain_settings or not domain_settings['check_domain']:
+    domain_settings: dict[str, Any] | None = await domain_settings_collection.find_one()
+    if not domain_settings or "check_domain" not in domain_settings or not domain_settings['check_domain']:
         return True
 
-    for domain in domains_collection.find():
+    async for domain in domains_collection.find():
         email_regex: str = r'^[a-zA-Z0-9._%+\-*]+@' + domain['content'] + r'$'
         if re.match(email_regex, email):
             return True
     return False
 
 
-def conversation_callback(
+async def conversation_callback(
     site: Any, email: str, content: str, source_ip: str, conversation_id: str | None
 ) -> None:
     event: dict[str, Any] = {
@@ -192,39 +201,43 @@ def conversation_callback(
     if conversation_id:
         event['conversation_id'] = conversation_id
 
-    agent_id: str | None = find_agent_by_source_ip(source_ip)
+    agent_id: str | None = await find_agent_by_source_ip(source_ip)
     if agent_id:
         event['agent_id'] = agent_id
 
-    result = events_collection.insert_one(event)
+    result = await events_collection.insert_one(event)
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
     ctx.log.info("Sent event to monitor...")
-    response = stub.EventAdded(mon_message)
+    response = await stub.EventAdded(mon_message)
     ctx.log.info(f"Response: {response}")
 
-def store_file_callback(site: Any, file_content: bytes) -> str:
+
+def _write_file(filepath: str, content: bytes) -> None:
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+
+async def store_file_callback(site: Any, file_content: bytes) -> str:
     # Compute SHA-256 hash of the file content
     file_hash: str = hashlib.sha256(file_content).hexdigest()
 
     # Check if a document with the same hash exists
-    existing_doc: dict[str, Any] | None = events_collection.find_one({"hash": file_hash, "rational": "Attached file"})
+    existing_doc: dict[str, Any] | None = await events_collection.find_one({"hash": file_hash, "rational": "Attached file"})
 
     #If it is the same file, just reuse the path of an already uploaded file.
     if existing_doc:
         return existing_doc["filepath"]
 
     unique_id: str = uuid.uuid4().hex
-    safe_filename: str = f"{unique_id}"
-    filepath: str = os.path.join("/uploads", safe_filename)
+    filepath: str = os.path.join("/uploads", unique_id)
 
     ctx.log.info(f"Saving uploaded file to {filepath}")
-    with open(filepath, "wb") as f:
-        f.write(file_content)
+    await asyncio.to_thread(_write_file, filepath, file_content)
 
     return filepath
 
 
-def attached_file_callback(
+async def attached_file_callback(
     site: Any,
     email: str | None,
     filename: str,
@@ -232,7 +245,7 @@ def attached_file_callback(
     content_type: str,
     source_ip: str,
 ) -> None:
-    file_hash: str = sha256_hash_file(filepath)
+    file_hash: str = await sha256_hash_file(filepath)
 
     event: dict[str, Any]
     if email:
@@ -259,17 +272,17 @@ def attached_file_callback(
             "hash": file_hash,
         }
 
-    agent_id: str | None = find_agent_by_source_ip(source_ip)
+    agent_id: str | None = await find_agent_by_source_ip(source_ip)
     if agent_id:
         event['agent_id'] = agent_id
 
-    result = events_collection.insert_one(event)
+    result = await events_collection.insert_one(event)
 
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
 
     ctx.log.info("Sent event to monitor...")
 
-    response = stub.EventAdded(mon_message)
+    response = await stub.EventAdded(mon_message)
 
     ctx.log.info(f"Response: {response}")
 
@@ -298,55 +311,32 @@ proxy.register_site(Grok, ["grok.com"])
 proxy.register_site(Claude, ["claude.ai"])
 
 
-#Add sites to the database for being checked later on the web interface.
-for site in proxy.get_sites():
-    try:
-        result = sites_collection.insert_one({
-            "name": site.get_name(),        #Name is unique ID, so once it is added the first time, this will "fail"
-            "urls": site.get_urls(),
-            "enabled": False                #Let's default to disable all the sites.
-        })
-    except Exception as e:
-        pass
+# Soft memory limit: exit cleanly before the container OOM-kills us.
+# Docker's restart: always will respawn a fresh replica automatically.
+_MEMORY_SOFT_LIMIT_MB: int = 400  # ~78% of the 512 MB container limit
+
+# Maps client_conn.id -> real source IP extracted from X-Forwarded-For (injected by HAProxy).
+# Populated in http_connect (for CONNECT tunnels) and in request (for plain HTTP).
+_real_source_ips: dict[str, str] = {}
 
 
-#When initializing, let's check which sites are enabled and which are disabled.
-sites = proxy.get_sites()
-
-# Get the list of site names
-site_names: list[str] = [site.get_name() for site in sites]
-
-# Query the DB for matching names
-db_sites = sites_collection.find({"name": {"$in": site_names}})
-
-# Create a mapping { name: enabled }
-enabled_map: dict[str, bool] = {doc["name"]: doc.get("enabled", False) for doc in db_sites}
-
-# Update Site objects
-for site in sites:
-    if site.get_name() in enabled_map:
-        if enabled_map[site.get_name()]:
-            site.enable()
-        else:
-            site.disable()
-
-
-def _config_poller(check_interval: int = 5) -> None:
+async def _config_poller(check_interval: int = 5) -> None:
     """
     Poll MongoDB every few seconds so that all proxy replicas stay in sync
     with site-enabled flags and the global rejectTraffic setting — without
     needing gRPC broadcasts from the web console.
     """
     while True:
-        _time.sleep(check_interval)
+        await asyncio.sleep(check_interval)
         try:
             global rejectSiteTraffic
-            cfg: dict[str, Any] | None = site_settings_collection.find_one()
+            cfg: dict[str, Any] | None = await site_settings_collection.find_one()
             rejectSiteTraffic = bool(cfg and cfg.get('rejectTraffic'))
 
             _site_names: list[str] = [s.get_name() for s in proxy.get_sites()]
-            _db_sites = sites_collection.find({"name": {"$in": _site_names}})
-            _enabled_map: dict[str, bool] = {doc["name"]: doc.get("enabled", False) for doc in _db_sites}
+            _enabled_map: dict[str, bool] = {}
+            async for doc in sites_collection.find({"name": {"$in": _site_names}}):
+                _enabled_map[doc["name"]] = doc.get("enabled", False)
             for s in proxy.get_sites():
                 if s.get_name() in _enabled_map:
                     if _enabled_map[s.get_name()]:
@@ -356,39 +346,39 @@ def _config_poller(check_interval: int = 5) -> None:
         except Exception as e:
             print(f"[config-poller] Error syncing config from MongoDB: {e}")
 
-threading.Thread(target=_config_poller, name="config-poller", daemon=True).start()
 
-# Soft memory limit: exit cleanly before the container OOM-kills us.
-# Docker's restart: always will respawn a fresh replica automatically.
-_MEMORY_SOFT_LIMIT_MB: int = 400  # ~78% of the 512 MB container limit
-
-def _memory_watchdog(check_interval: int = 30) -> None:
+async def _memory_watchdog(check_interval: int = 30) -> None:
     process: psutil.Process = psutil.Process(os.getpid())
     while True:
-        _time.sleep(check_interval)
+        await asyncio.sleep(check_interval)
         mem_mb: float = process.memory_info().rss / (1024 * 1024)
         if mem_mb > _MEMORY_SOFT_LIMIT_MB:
             print(f"[memory-watchdog] RSS {mem_mb:.1f} MB exceeds soft limit {_MEMORY_SOFT_LIMIT_MB} MB — exiting for clean restart.")
             os._exit(0)
 
-threading.Thread(target=_memory_watchdog, name="memory-watchdog", daemon=True).start()
 
-# Maps client_conn.id -> real source IP extracted from X-Forwarded-For (injected by HAProxy).
-# Populated in http_connect (for CONNECT tunnels) and in request (for plain HTTP).
-_real_source_ips: dict[str, str] = {}
+async def _midnight_watcher(check_interval: int = 10) -> None:
+    """
+    Check local time periodically and force flows cleanup every 24 hours.
+    """
+    while True:
+        now: datetime = datetime.now()
+        ctx.log.info(f"Checking time: Hour: {now.hour}, minute: {now.minute}.")
+        if now.hour == 14 and now.minute == 3:
+            ctx.log.info("Midnight reached (local time). Forcing process exit to allow restart.")
+            # small grace period for logs to flush
+            ctx.master.view.clear()
+        await asyncio.sleep(check_interval)
 
-channel: grpc.Channel = grpc.insecure_channel('monitor:50051')
-stub: monitor_pb2_grpc.MonitorStub = monitor_pb2_grpc.MonitorStub(channel)
 
-
-def http_connect(flow: http.HTTPFlow) -> None:
+async def http_connect(flow: http.HTTPFlow) -> None:
     """Capture the real client IP from X-Forwarded-For on CONNECT requests (injected by HAProxy)."""
     xff: str = flow.request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
     if xff:
         _real_source_ips[flow.client_conn.id] = xff
 
 
-def request(flow: http.HTTPFlow) -> None:
+async def request(flow: http.HTTPFlow) -> None:
     # Stamp the real source IP into flow metadata so Site handlers can read it.
     real_ip: str | None = _real_source_ips.get(flow.client_conn.id)
     if real_ip:
@@ -400,21 +390,21 @@ def request(flow: http.HTTPFlow) -> None:
             _real_source_ips[flow.client_conn.id] = xff
             flow.metadata["_real_source_ip"] = xff
 
-    if not proxy.route_request(flow) and rejectSiteTraffic:
+    if not await proxy.route_request(flow) and rejectSiteTraffic:
         flow.response = Response.make(403)
 
 
-def response(flow: http.HTTPFlow) -> None:
-    if not proxy.route_response(flow) and rejectSiteTraffic:
+async def response(flow: http.HTTPFlow) -> None:
+    if not await proxy.route_response(flow) and rejectSiteTraffic:
         flow.response = Response.make(403)
 
 
 class WSHandler:
-    def websocket_message(self, flow: http.HTTPFlow) -> None:
+    async def websocket_message(self, flow: http.HTTPFlow) -> None:
         # This is called when a WebSocket message is received or sent.
         message: websocket.WebSocketMessage = flow.websocket.messages[-1]
         if message.from_client:
-            if not proxy.route_ws_from_client_to_server(flow, message) and rejectSiteTraffic:
+            if not await proxy.route_ws_from_client_to_server(flow, message) and rejectSiteTraffic:
                 # Prevent the message from being sent to the server
                 message.kill()
 
@@ -448,22 +438,19 @@ class Monitor:
 monitor: Monitor = Monitor()
 
 
-addons = [WSHandler(), monitor]
-
-
 class ProxyServicer(proxy_pb2_grpc.ProxyServicer):
 
-    def SiteRejectEnabled(self, request: Any, context: grpc.ServicerContext) -> Any:
+    async def SiteRejectEnabled(self, request: Any, context: grpc.aio.ServicerContext) -> Any:
         global rejectSiteTraffic
         ctx.log.info(f"Received SiteRejectedEnabled: {request.enabled}")
         rejectSiteTraffic = request.enabled
 
         return proxy_pb2.ProxyReply(result=0)       #Everything ok :)
 
-    def SiteMonitoringToggled(self, request: Any, context: grpc.ServicerContext) -> Any:
+    async def SiteMonitoringToggled(self, request: Any, context: grpc.aio.ServicerContext) -> Any:
         ctx.log.info(f"Received SiteMonitoringToggled: {request.id}, {request.enabled}")
 
-        db_site: dict[str, Any] | None = sites_collection.find_one({"_id": ObjectId(request.id)})
+        db_site: dict[str, Any] | None = await sites_collection.find_one({"_id": ObjectId(request.id)})
 
         site = proxy.get_site(db_site['name'])
 
@@ -475,7 +462,7 @@ class ProxyServicer(proxy_pb2_grpc.ProxyServicer):
         return proxy_pb2.ProxyReply(result=0)       #Everything ok :)
 
 
-    def GetMitmStats(self, request: Any, context: grpc.ServicerContext) -> Any:
+    async def GetMitmStats(self, request: Any, context: grpc.aio.ServicerContext) -> Any:
         """Called every second by mitmproxy."""
         global last_check, last_request_count
         now: float = _time.time()
@@ -497,34 +484,71 @@ class ProxyServicer(proxy_pb2_grpc.ProxyServicer):
         )
 
 
-# Initialize gRPC server
-server: grpc.Server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-proxy_pb2_grpc.add_ProxyServicer_to_server(ProxyServicer(), server)
+async def _init_db() -> None:
+    """Async DB initialization — runs once the event loop is live."""
+    global rejectSiteTraffic
+    site_settings: dict[str, Any] | None = await site_settings_collection.find_one()
+    rejectSiteTraffic = bool(site_settings and "rejectTraffic" in site_settings and site_settings['rejectTraffic'])
 
-#For health check to ensure proper start up of the containers
-# Add health service
-health_servicer: health.HealthServicer = health.HealthServicer()
-health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
-health_servicer.set('', health_pb2.HealthCheckResponse.SERVING)
+    #Add sites to the database for being checked later on the web interface.
+    for site in proxy.get_sites():
+        try:
+            await sites_collection.insert_one({
+                "name": site.get_name(),        #Name is unique ID, so once it is added the first time, this will "fail"
+                "urls": site.get_urls(),
+                "enabled": False                #Let's default to disable all the sites.
+            })
+        except Exception:
+            pass
 
-server.add_insecure_port("[::]:50051")
-server.start()
-print("Server running on port 50051...")
+    #When initializing, let's check which sites are enabled and which are disabled.
+    sites = proxy.get_sites()
+    site_names: list[str] = [site.get_name() for site in sites]
+    enabled_map: dict[str, bool] = {}
+    async for doc in sites_collection.find({"name": {"$in": site_names}}):
+        enabled_map[doc["name"]] = doc.get("enabled", False)
+    for site in sites:
+        if site.get_name() in enabled_map:
+            if enabled_map[site.get_name()]:
+                site.enable()
+            else:
+                site.disable()
 
 
-def _midnight_watcher(check_interval: int = 10) -> None:
-    """
-    Check local time periodically and force flows cleanup every 24 hours.
-    """
-    while True:
-        now: datetime = datetime.now()
-        ctx.log.info(f"Checking time: Hour: {now.hour}, minute: {now.minute}.")
-        if now.hour == 14 and now.minute == 3:
-            ctx.log.info("Midnight reached (local time). Forcing process exit to allow restart.")
-            # small grace period for logs to flush
-            ctx.master.view.clear()
-        _time.sleep(check_interval)
+class Lifecycle:
+    async def running(self) -> None:
+        global channel, stub, server
 
-# Start the watcher as a daemon thread
-_thread: threading.Thread = threading.Thread(target=_midnight_watcher, name="midnight-watcher", daemon=True)
-_thread.start()
+        # Initialize async gRPC channel and stub to monitor service
+        channel = grpc.aio.insecure_channel('monitor:50051')
+        stub = monitor_pb2_grpc.MonitorStub(channel)
+
+        # Initialize gRPC server — migration_thread_pool lets the sync HealthServicer run
+        server = grpc.aio.server(
+            migration_thread_pool=futures.ThreadPoolExecutor(max_workers=2)
+        )
+        proxy_pb2_grpc.add_ProxyServicer_to_server(ProxyServicer(), server)
+
+        #For health check to ensure proper start up of the containers
+        health_servicer: health.HealthServicer = health.HealthServicer()
+        health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+        health_servicer.set('', health_pb2.HealthCheckResponse.SERVING)
+
+        server.add_insecure_port("[::]:50051")
+        await server.start()
+        print("Server running on port 50051...")
+
+        # Initialize DB state
+        await _init_db()
+
+        # Start background async tasks — replaces the three daemon threads
+        asyncio.create_task(_config_poller(), name="config-poller")
+        asyncio.create_task(_memory_watchdog(), name="memory-watchdog")
+        asyncio.create_task(_midnight_watcher(), name="midnight-watcher")
+
+        # Start per-site cleanup tasks — replaces one daemon thread per site
+        for site in proxy.get_sites():
+            await site.start_background_tasks()
+
+
+addons = [WSHandler(), monitor, Lifecycle()]

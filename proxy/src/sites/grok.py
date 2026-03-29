@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import threading
 import time
 from typing import Any, Callable
 
@@ -18,13 +18,13 @@ class Grok(Site):
     def __init__(
         self,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Any],
+        account_check_callback: Callable[..., Any],
+        conversation_callback: Callable[..., Any],
+        attached_file_callback: Callable[..., Any],
+        allow_anonymous_access: Callable[..., Any],
+        anonymous_conversation_callback: Callable[..., Any],
+        store_file_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "Grok", urls, account_login_callback, account_check_callback,
@@ -33,18 +33,20 @@ class Grok(Site):
         )
         self.users: dict[str, dict[str, str]] = {}
         self._users_ts: dict[str, float] = {}
-        threading.Thread(target=self._cleanup_stale_users, daemon=True, name="grok-cleanup").start()
 
-    def _cleanup_stale_users(self) -> None:
+    async def start_background_tasks(self) -> None:
+        asyncio.create_task(self._cleanup_stale_users(), name="grok-cleanup")
+
+    async def _cleanup_stale_users(self) -> None:
         while True:
-            time.sleep(60)
+            await asyncio.sleep(60)
             now: float = time.time()
             stale: list[str] = [k for k, ts in list(self._users_ts.items()) if now - ts > SESSION_TTL]
             for k in stale:
                 self.users.pop(k, None)
                 self._users_ts.pop(k, None)
 
-    def on_request_handle(self, flow: HTTPFlow) -> None:
+    async def on_request_handle(self, flow: HTTPFlow) -> None:
         ctx.log.info(f"[Info] Handling request: {flow.request.method} {flow.request.pretty_url}")
 
         sso_cookie: str | None = flow.request.cookies.get("sso")
@@ -119,16 +121,16 @@ class Grok(Site):
                 ctx.log.info(f"[Info] Extracted conversation: {conversation}")
 
                 if conv_email:
-                    if not self.account_check_callback(conv_email):
+                    if not await self.account_check_callback(conv_email):
                         ctx.log.warn(f"[Warn] Account check failed for email: {conv_email}")
                         flow.response = Response.make(401)
                         return
                     ctx.log.info(f"[Info] Account check passed for email: {conv_email}")
-                    self.conversation_callback(conv_email, conversation)
+                    await self.conversation_callback(conv_email, conversation)
                 else:
-                    if not self.allow_anonymous_access():
+                    if not await self.allow_anonymous_access():
                         ctx.log.warn(f"[Warn] Anonymous access not allowed")
                         flow.response = Response.make(401)
                         return
                     ctx.log.info("[Info] Anonymous access allowed")
-                    self.anonymous_conversation_callback(conversation)
+                    await self.anonymous_conversation_callback(conversation)

@@ -13,13 +13,13 @@ class DeepL(Site):
     def __init__(
         self,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Any],
+        account_check_callback: Callable[..., Any],
+        conversation_callback: Callable[..., Any],
+        attached_file_callback: Callable[..., Any],
+        allow_anonymous_access: Callable[..., Any],
+        anonymous_conversation_callback: Callable[..., Any],
+        store_file_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "DeepL", urls, account_login_callback, account_check_callback,
@@ -27,11 +27,11 @@ class DeepL(Site):
             allow_anonymous_access, anonymous_conversation_callback, store_file_callback,
         )
 
-    def on_request_handle(self, flow: http.HTTPFlow) -> None:
+    async def on_request_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "dict.deepl.com" in flow.request.pretty_url:
             content: str = flow.request.get_text()
             parsed: dict[str, list[str]] = parse_qs(content)
             conversation: str | None = parsed.get("query", [None])[0]
 
-            self.anonymous_conversation_callback(conversation)
+            await self.anonymous_conversation_callback(conversation)

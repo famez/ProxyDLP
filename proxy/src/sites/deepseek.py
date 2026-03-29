@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import threading
 import time
 from typing import Any, Callable
 
@@ -18,13 +18,13 @@ class DeepSeek(Site):
     def __init__(
         self,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Any],
+        account_check_callback: Callable[..., Any],
+        conversation_callback: Callable[..., Any],
+        attached_file_callback: Callable[..., Any],
+        allow_anonymous_access: Callable[..., Any],
+        anonymous_conversation_callback: Callable[..., Any],
+        store_file_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "DeepSeek", urls, account_login_callback, account_check_callback,
@@ -33,18 +33,20 @@ class DeepSeek(Site):
         )
         self.users: dict[str, str] = {}
         self._users_ts: dict[str, float] = {}
-        threading.Thread(target=self._cleanup_stale_users, daemon=True, name="deepseek-cleanup").start()
 
-    def _cleanup_stale_users(self) -> None:
+    async def start_background_tasks(self) -> None:
+        asyncio.create_task(self._cleanup_stale_users(), name="deepseek-cleanup")
+
+    async def _cleanup_stale_users(self) -> None:
         while True:
-            time.sleep(60)
+            await asyncio.sleep(60)
             now: float = time.time()
             stale: list[str] = [k for k, ts in list(self._users_ts.items()) if now - ts > SESSION_TTL]
             for k in stale:
                 self.users.pop(k, None)
                 self._users_ts.pop(k, None)
 
-    def on_request_handle(self, flow: HTTPFlow) -> None:
+    async def on_request_handle(self, flow: HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "deepseek.com/api/v0/chat/completion" in flow.request.pretty_url:
 
@@ -58,12 +60,12 @@ class DeepSeek(Site):
                 conversation: str = json_body['prompt']
 
                 if auth_header in self.users:
-                    if not self.account_check_callback(self.users[auth_header]):
+                    if not await self.account_check_callback(self.users[auth_header]):
                         flow.response = Response.make(401)
                         return
 
                     chat_session_id: str | None = json_body.get("chat_session_id")
-                    self.conversation_callback(self.users[auth_header], conversation, conversation_id=chat_session_id)
+                    await self.conversation_callback(self.users[auth_header], conversation, conversation_id=chat_session_id)
 
 
         elif flow.request.method == "POST" and "deepseek.com/api/v0/file/upload_file" in flow.request.pretty_url:
@@ -79,10 +81,10 @@ class DeepSeek(Site):
                 uploaded_files: list[dict[str, Any]] = parse_multipart(content_type, body)
 
                 for file in uploaded_files:
-                    filepath: str = self.store_file_callback(file['content'])
+                    filepath: str = await self.store_file_callback(file['content'])
 
                     if auth_header in self.users:
-                        self.attached_file_callback(self.users[auth_header], file['filename'], filepath, file['content_type'])
+                        await self.attached_file_callback(self.users[auth_header], file['filename'], filepath, file['content_type'])
 
         elif flow.request.method == "POST" and "chat.deepseek.com/api/v0/users/login" in flow.request.pretty_url:
 
@@ -99,7 +101,7 @@ class DeepSeek(Site):
 
                 email: str = json_body['email']
 
-                if not self.account_login_callback(email):
+                if not await self.account_login_callback(email):
                     flow.response = Response.make(401)
                     return
 
@@ -107,7 +109,7 @@ class DeepSeek(Site):
                 ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
 
 
-    def on_response_handle(self, flow: HTTPFlow) -> None:
+    async def on_response_handle(self, flow: HTTPFlow) -> None:
 
         if flow.request.method == "GET" and "deepseek.com/api/v0/users/current" in flow.request.pretty_url:
 

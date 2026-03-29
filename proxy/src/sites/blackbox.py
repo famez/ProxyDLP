@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import threading
 import time
 from typing import Any, Callable
 
@@ -18,13 +18,13 @@ class BlackBox(Site):
     def __init__(
         self,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Any],
+        account_check_callback: Callable[..., Any],
+        conversation_callback: Callable[..., Any],
+        attached_file_callback: Callable[..., Any],
+        allow_anonymous_access: Callable[..., Any],
+        anonymous_conversation_callback: Callable[..., Any],
+        store_file_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "BlackBox", urls, account_login_callback, account_check_callback,
@@ -35,11 +35,13 @@ class BlackBox(Site):
         self.workspaces: dict[str, list[dict[str, Any]]] = {}
         self._sessions_ts: dict[str, float] = {}
         self._workspaces_ts: dict[str, float] = {}
-        threading.Thread(target=self._cleanup_stale, daemon=True, name="blackbox-cleanup").start()
 
-    def _cleanup_stale(self) -> None:
+    async def start_background_tasks(self) -> None:
+        asyncio.create_task(self._cleanup_stale(), name="blackbox-cleanup")
+
+    async def _cleanup_stale(self) -> None:
         while True:
-            time.sleep(60)
+            await asyncio.sleep(60)
             now: float = time.time()
             for ts_dict, data_dict in [
                 (self._sessions_ts, self.sessions),
@@ -50,7 +52,7 @@ class BlackBox(Site):
                     data_dict.pop(k, None)
                     ts_dict.pop(k, None)
 
-    def on_request_handle(self, flow: HTTPFlow) -> None:
+    async def on_request_handle(self, flow: HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "blackbox.ai/api/chat" in flow.request.pretty_url:
 
@@ -70,11 +72,11 @@ class BlackBox(Site):
                         email = user.get('email')
 
                 if not email:
-                    if not self.allow_anonymous_access():
+                    if not await self.allow_anonymous_access():
                         flow.response = Response.make(401)
                         return
                 else:
-                    if not self.account_check_callback(email):
+                    if not await self.account_check_callback(email):
                         flow.response = Response.make(401)
                         return
 
@@ -97,13 +99,13 @@ class BlackBox(Site):
                                 ctx.log.info("Added session 2")
                             self._sessions_ts[session_id] = time.time()
 
-                            self.conversation_callback(
+                            await self.conversation_callback(
                                 json_body['session']['user']['email'],
                                 message['content'],
                                 conversation_id=conversation_id,
                             )
                         else:
-                            self.anonymous_conversation_callback(message['content'], conversation_id=conversation_id)
+                            await self.anonymous_conversation_callback(message['content'], conversation_id=conversation_id)
                         break
 
             except Exception as e:
@@ -135,10 +137,10 @@ class BlackBox(Site):
                     ctx.log.info(str(self.sessions[session_id]))
 
                     for file in self.sessions[session_id]['files']:
-                        self.attached_file_callback(linked_email, file['filename'], file['filepath'], file['content_type'])
+                        await self.attached_file_callback(linked_email, file['filename'], file['filepath'], file['content_type'])
 
 
-    def on_response_handle(self, flow: HTTPFlow) -> None:
+    async def on_response_handle(self, flow: HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "https://www.blackbox.ai/api/workspace" == flow.request.pretty_url:
 
@@ -166,7 +168,7 @@ class BlackBox(Site):
                 uploaded_files: list[dict[str, Any]] = parse_multipart(req_content_type, body)
 
                 for file in uploaded_files:
-                    filepath: str = self.store_file_callback(file['content'])
+                    filepath: str = await self.store_file_callback(file['content'])
                     ctx.log.info(f"Saved file: {filepath}")
 
                     self.workspaces[workspace_id].append({

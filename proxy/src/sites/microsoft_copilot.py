@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import re
-import threading
 import time
 from io import BytesIO
 from typing import Any, Callable
@@ -23,13 +23,13 @@ class Microsoft_Copilot(Site):
     def __init__(
         self,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Any],
+        account_check_callback: Callable[..., Any],
+        conversation_callback: Callable[..., Any],
+        attached_file_callback: Callable[..., Any],
+        allow_anonymous_access: Callable[..., Any],
+        anonymous_conversation_callback: Callable[..., Any],
+        store_file_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "Microsoft Copilot", urls, account_login_callback, account_check_callback,
@@ -38,21 +38,23 @@ class Microsoft_Copilot(Site):
         )
         self.uploaded_files: dict[str, dict[str, Any]] = {}
         self._upload_timestamps: dict[str, float] = {}
-        self._lock: threading.Lock = threading.Lock()
-        threading.Thread(target=self._cleanup_stale_uploads, daemon=True).start()
+        self._lock: asyncio.Lock = asyncio.Lock()
 
-    def _cleanup_stale_uploads(self) -> None:
+    async def start_background_tasks(self) -> None:
+        asyncio.create_task(self._cleanup_stale_uploads(), name="ms-copilot-cleanup")
+
+    async def _cleanup_stale_uploads(self) -> None:
         while True:
-            time.sleep(60)
+            await asyncio.sleep(60)
             now: float = time.time()
-            with self._lock:
+            async with self._lock:
                 stale: list[str] = [email for email, ts in self._upload_timestamps.items() if now - ts > UPLOAD_TTL]
                 for email in stale:
                     self.uploaded_files.pop(email, None)
                     self._upload_timestamps.pop(email, None)
                     ctx.log.info(f"Evicted stale upload buffer for: {email}")
 
-    def on_request_handle(self, flow: http.HTTPFlow) -> None:
+    async def on_request_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "PUT" and "sharepoint.com/personal" in flow.request.pretty_url and "uploadSession" in flow.request.pretty_url:
             ctx.log.info(f"Handling PUT request for SharePoint uploadSession: {flow.request.pretty_url}")
@@ -60,7 +62,7 @@ class Microsoft_Copilot(Site):
             tempauth: str | None = flow.request.query.get("tempauth")
             user_email: str | None = extract_email_from_tempauth(tempauth)
 
-            if not user_email or not self.account_check_callback(user_email):
+            if not user_email or not await self.account_check_callback(user_email):
                 ctx.log.warn(f"User email invalid or not allowed: {user_email}")
                 flow.response = Response.make(403, b"Blocked by proxy", {"Content-Type": "text/plain"})
                 return
@@ -81,13 +83,13 @@ class Microsoft_Copilot(Site):
                     end = int(match.group(2))
                     total = int(match.group(3))
 
-                with self._lock:
+                async with self._lock:
                     entry: dict[str, Any] | None = self.uploaded_files.get(user_email)
 
                 if entry is not None:
                     ctx.log.info(f"Handling in-memory upload for user: {user_email}")
 
-                    with self._lock:
+                    async with self._lock:
                         buf: bytearray | None = entry.get('filecontent')
                         if start == 0 or buf is None:
                             buf = bytearray()
@@ -102,7 +104,7 @@ class Microsoft_Copilot(Site):
                         ctx.log.info(f"In-memory chunk written for {user_email}: {start}-{end} (total {total}), buffer size now {len(buf)}")
 
                     if end + 1 == total:
-                        with self._lock:
+                        async with self._lock:
                             buf_snapshot: bytes = bytes(buf)
                             filename: str = entry['filename']
                             self.uploaded_files.pop(user_email, None)
@@ -115,13 +117,13 @@ class Microsoft_Copilot(Site):
                             ctx.log.warn(f"Failed to detect MIME type from buffer: {e}")
                             content_type_detected = "application/octet-stream"
 
-                        filepath: str = self.store_file_callback(buf_snapshot)
-                        self.attached_file_callback(user_email, filename, filepath, content_type_detected)
+                        filepath: str = await self.store_file_callback(buf_snapshot)
+                        await self.attached_file_callback(user_email, filename, filepath, content_type_detected)
                         ctx.log.info(f"Completed in-memory upload and removed entry for user: {user_email}")
                 else:
                     ctx.log.warn(f"No uploaded_files entry found for user: {user_email}")
 
-    def on_response_handle(self, flow: http.HTTPFlow) -> None:
+    async def on_response_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "graph.microsoft.com/v1.0/me/drive/special/copilotuploads:" in flow.request.pretty_url:
 
@@ -146,7 +148,7 @@ class Microsoft_Copilot(Site):
                     if tempauth:
                         email: str | None = extract_email_from_tempauth(tempauth)
                         ctx.log.info(f"Email: {email}")
-                        with self._lock:
+                        async with self._lock:
                             self.uploaded_files[email] = {"filename": filename}
                             self._upload_timestamps[email] = time.time()
 
@@ -154,7 +156,7 @@ class Microsoft_Copilot(Site):
                     ctx.log.error(f"[Error] Failed to decompress or parse JSON: {e}")
 
 
-    def on_ws_from_client_to_server(
+    async def on_ws_from_client_to_server(
         self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
     ) -> None:
 
@@ -164,7 +166,7 @@ class Microsoft_Copilot(Site):
             auth_query_param: str = flow.request.query.get("accessToken", "")
 
             if auth_query_param == "":
-                if not self.allow_anonymous_access():
+                if not await self.allow_anonymous_access():
                     message.kill()
                     return
             else:
@@ -178,7 +180,7 @@ class Microsoft_Copilot(Site):
                         if "email" in jwt_payload:
                             email = jwt_payload['email']
 
-                            if not self.account_check_callback(email):
+                            if not await self.account_check_callback(email):
                                 message.kill()
                                 return
 
@@ -193,9 +195,9 @@ class Microsoft_Copilot(Site):
                     for msg in messages:
                         if msg['type'] == 'text':
                             if email:
-                                self.conversation_callback(email, msg['text'])
+                                await self.conversation_callback(email, msg['text'])
                             else:
-                                self.anonymous_conversation_callback(msg['text'])
+                                await self.anonymous_conversation_callback(msg['text'])
 
             except Exception as e:
                 ctx.log.error(f"Failed to decode JSON from message.content: {e}")
@@ -209,7 +211,7 @@ class Microsoft_Copilot(Site):
             try:
                 ws_email: str = get_email_from_auth_header(auth_query_param)
 
-                if self.account_check_callback(ws_email):
+                if await self.account_check_callback(ws_email):
                     ctx.log.info(f"Email address belongs to the organization")
 
                     message_contents: list[bytes] = message.content.split(b'\x1e')
@@ -221,7 +223,7 @@ class Microsoft_Copilot(Site):
                             for argument in json_content["arguments"]:
                                 if "message" in argument and "text" in argument["message"]:
                                     conversation_text: str = argument["message"]["text"]
-                                    self.conversation_callback(ws_email, conversation_text, conversationId)
+                                    await self.conversation_callback(ws_email, conversation_text, conversationId)
 
                     return
 

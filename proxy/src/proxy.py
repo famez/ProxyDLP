@@ -3,20 +3,20 @@ from __future__ import annotations
 import json
 import base64
 import re
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 from mitmproxy import ctx, http, websocket
 
 
 class Proxy:
     def __init__(
         self,
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Awaitable[bool]],
+        account_check_callback: Callable[..., Awaitable[bool]],
+        conversation_callback: Callable[..., Awaitable[None]],
+        attached_file_callback: Callable[..., Awaitable[None]],
+        allow_anonymous_access: Callable[..., Awaitable[bool]],
+        anonymous_conversation_callback: Callable[..., Awaitable[None]],
+        store_file_callback: Callable[..., Awaitable[str]],
     ) -> None:
         self.sites: list[Site] = []
         self.account_login_callback = account_login_callback
@@ -40,29 +40,29 @@ class Proxy:
         )
         self.sites.append(site)
 
-    def route_request(self, flow: http.HTTPFlow) -> bool:
+    async def route_request(self, flow: http.HTTPFlow) -> bool:
         routed: bool = False
         url: str = flow.request.pretty_url
         for site in self.sites:
             if site.isEnabled():
                 for site_url in site.get_urls():
                     if site_url in url:
-                        site.handle_request(flow)
+                        await site.handle_request(flow)
                         routed = True
         return routed
 
-    def route_response(self, flow: http.HTTPFlow) -> bool:
+    async def route_response(self, flow: http.HTTPFlow) -> bool:
         routed: bool = False
         url: str = flow.request.pretty_url
         for site in self.sites:
             if site.isEnabled():
                 for site_url in site.get_urls():
                     if site_url in url:
-                        site.handle_response(flow)
+                        await site.handle_response(flow)
                         routed = True
         return routed
 
-    def route_ws_from_client_to_server(
+    async def route_ws_from_client_to_server(
         self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
     ) -> bool:
         url: str = flow.request.pretty_url
@@ -70,7 +70,7 @@ class Proxy:
             if site.isEnabled():
                 for site_url in site.get_urls():
                     if site_url in url:
-                        site.handle_ws_from_client_to_server(flow, message)
+                        await site.handle_ws_from_client_to_server(flow, message)
                         return True
         return False
 
@@ -93,13 +93,13 @@ class Site:
         self,
         name: str,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Awaitable[bool]],
+        account_check_callback: Callable[..., Awaitable[bool]],
+        conversation_callback: Callable[..., Awaitable[None]],
+        attached_file_callback: Callable[..., Awaitable[None]],
+        allow_anonymous_access: Callable[..., Awaitable[bool]],
+        anonymous_conversation_callback: Callable[..., Awaitable[None]],
+        store_file_callback: Callable[..., Awaitable[str]],
     ) -> None:
         self.name: str = name
         self.urls: list[str] = urls
@@ -129,60 +129,63 @@ class Site:
     def get_name(self) -> str:
         return self.name
 
-    def handle_request(self, flow: http.HTTPFlow) -> None:
+    async def handle_request(self, flow: http.HTTPFlow) -> None:
         # Prefer the real client IP stored by main.py from X-Forwarded-For (HAProxy injects it).
         # Falls back to the raw TCP source when running without a load balancer.
         self.source_ip = flow.metadata.get("_real_source_ip", flow.client_conn.address[0])
-        self.on_request_handle(flow)
+        await self.on_request_handle(flow)
 
-    def handle_response(self, flow: http.HTTPFlow) -> None:
+    async def handle_response(self, flow: http.HTTPFlow) -> None:
         self.source_ip = flow.metadata.get("_real_source_ip", flow.client_conn.address[0])
-        self.on_response_handle(flow)
+        await self.on_response_handle(flow)
 
-    def handle_ws_from_client_to_server(
+    async def handle_ws_from_client_to_server(
         self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
     ) -> None:
         # This method is called when a WebSocket message is sent from the client to the server
         self.source_ip = flow.metadata.get("_real_source_ip", flow.client_conn.address[0])
-        self.on_ws_from_client_to_server(flow, message)
+        await self.on_ws_from_client_to_server(flow, message)
 
-    def on_request_handle(self, flow: http.HTTPFlow) -> None:
+    async def on_request_handle(self, flow: http.HTTPFlow) -> None:
         pass        #To be implement by child
 
-    def on_response_handle(self, flow: http.HTTPFlow) -> None:
+    async def on_response_handle(self, flow: http.HTTPFlow) -> None:
         pass        #To be implement by child
 
-    def on_ws_from_client_to_server(
+    async def on_ws_from_client_to_server(
         self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
     ) -> None:
         pass        #To be implement by child
 
-    def account_login_callback(self, email: str) -> bool:
-        return self.on_account_login_callback(self, email, self.source_ip)
+    async def account_login_callback(self, email: str) -> bool:
+        return await self.on_account_login_callback(self, email, self.source_ip)
 
-    def account_check_callback(self, email: str) -> bool:
-        return self.on_account_check_callback(self, email, self.source_ip)
+    async def account_check_callback(self, email: str) -> bool:
+        return await self.on_account_check_callback(self, email, self.source_ip)
 
-    def conversation_callback(
+    async def conversation_callback(
         self, email: str, conversation_text: str, conversation_id: str | None = None
     ) -> None:
-        return self.on_conversation_callback(self, email, conversation_text, self.source_ip, conversation_id)
+        return await self.on_conversation_callback(self, email, conversation_text, self.source_ip, conversation_id)
 
-    def attached_file_callback(
+    async def attached_file_callback(
         self, email: str | None, file_name: str, filepath: str, content_type: str
     ) -> None:
-        return self.on_attached_file_callback(self, email, file_name, filepath, content_type, self.source_ip)
+        return await self.on_attached_file_callback(self, email, file_name, filepath, content_type, self.source_ip)
 
-    def allow_anonymous_access(self) -> bool:
-        return self.on_allow_anonymous_access(self)
+    async def allow_anonymous_access(self) -> bool:
+        return await self.on_allow_anonymous_access(self)
 
-    def anonymous_conversation_callback(
+    async def anonymous_conversation_callback(
         self, conversation_text: str, conversation_id: str | None = None
     ) -> None:
-        return self.on_anonymous_conversation_callback(self, conversation_text, self.source_ip, conversation_id)
+        return await self.on_anonymous_conversation_callback(self, conversation_text, self.source_ip, conversation_id)
 
-    def store_file_callback(self, file_content: bytes) -> str:
-        return self.on_store_file_callback(self, file_content)
+    async def store_file_callback(self, file_content: bytes) -> str:
+        return await self.on_store_file_callback(self, file_content)
+
+    async def start_background_tasks(self) -> None:
+        pass  # Override in subclasses to schedule cleanup coroutines
 
 
 # Helper functions

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import threading
 import time
 from typing import Any, Callable
 
@@ -17,13 +17,13 @@ class Github_Copilot(Site):
     def __init__(
         self,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Any],
+        account_check_callback: Callable[..., Any],
+        conversation_callback: Callable[..., Any],
+        attached_file_callback: Callable[..., Any],
+        allow_anonymous_access: Callable[..., Any],
+        anonymous_conversation_callback: Callable[..., Any],
+        store_file_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "Github Copilot", urls, account_login_callback, account_check_callback,
@@ -32,18 +32,20 @@ class Github_Copilot(Site):
         )
         self.related_user_data: dict[str, dict[str, Any]] = {}
         self._related_user_data_ts: dict[str, float] = {}
-        threading.Thread(target=self._cleanup_stale, daemon=True, name="gh-copilot-cleanup").start()
 
-    def _cleanup_stale(self) -> None:
+    async def start_background_tasks(self) -> None:
+        asyncio.create_task(self._cleanup_stale(), name="gh-copilot-cleanup")
+
+    async def _cleanup_stale(self) -> None:
         while True:
-            time.sleep(60)
+            await asyncio.sleep(60)
             now: float = time.time()
             stale: list[str] = [k for k, ts in list(self._related_user_data_ts.items()) if now - ts > SESSION_TTL]
             for k in stale:
                 self.related_user_data.pop(k, None)
                 self._related_user_data_ts.pop(k, None)
 
-    def on_request_handle(self, flow: http.HTTPFlow) -> None:
+    async def on_request_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "githubcopilot.com/chat/completions" in flow.request.pretty_url:
             ctx.log.info(f"Request URL: {flow.request.pretty_url}")
@@ -65,9 +67,9 @@ class Github_Copilot(Site):
 
                                     login: str | None = self.related_user_data.get(ip_address, {}).get("login", None)
                                     if login:
-                                        self.conversation_callback(login, prompt)
+                                        await self.conversation_callback(login, prompt)
                                     else:
-                                        self.anonymous_conversation_callback(prompt)
+                                        await self.anonymous_conversation_callback(prompt)
 
                                 break
                             else:
@@ -79,7 +81,7 @@ class Github_Copilot(Site):
                 ctx.log.info(f"Request body could not be decoded as JSON")
 
 
-    def on_response_handle(self, flow: http.HTTPFlow) -> None:
+    async def on_response_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "GET" and "api.github.com/user" in flow.request.pretty_url:
 

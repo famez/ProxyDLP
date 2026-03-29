@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
-import threading
 import time
 from typing import Any, Callable
 
@@ -19,13 +19,13 @@ class Claude(Site):
     def __init__(
         self,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Any],
+        account_check_callback: Callable[..., Any],
+        conversation_callback: Callable[..., Any],
+        attached_file_callback: Callable[..., Any],
+        allow_anonymous_access: Callable[..., Any],
+        anonymous_conversation_callback: Callable[..., Any],
+        store_file_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "Claude", urls, account_login_callback, account_check_callback,
@@ -35,11 +35,13 @@ class Claude(Site):
         # Maps session cookie value → email
         self.sessions: dict[str, str] = {}
         self._sessions_ts: dict[str, float] = {}
-        threading.Thread(target=self._cleanup_stale_sessions, daemon=True, name="claude-cleanup").start()
 
-    def _cleanup_stale_sessions(self) -> None:
+    async def start_background_tasks(self) -> None:
+        asyncio.create_task(self._cleanup_stale_sessions(), name="claude-cleanup")
+
+    async def _cleanup_stale_sessions(self) -> None:
         while True:
-            time.sleep(60)
+            await asyncio.sleep(60)
             now: float = time.time()
             stale: list[str] = [k for k, ts in list(self._sessions_ts.items()) if now - ts > SESSION_TTL]
             for k in stale:
@@ -62,7 +64,7 @@ class Claude(Site):
             return match.group(1)
         return None
 
-    def on_request_handle(self, flow: HTTPFlow) -> None:
+    async def on_request_handle(self, flow: HTTPFlow) -> None:
         url: str = flow.request.pretty_url
 
         # Intercept POST completion to capture the user prompt and enforce access control
@@ -89,7 +91,7 @@ class Claude(Site):
                 email: str = self.sessions[session_key]
                 self._sessions_ts[session_key] = time.time()  # refresh TTL
 
-                if not self.account_check_callback(email):
+                if not await self.account_check_callback(email):
                     ctx.log.info(f"[Claude] Blocking unauthorized user: {email}")
                     flow.response = Response.make(
                         403,
@@ -99,11 +101,11 @@ class Claude(Site):
                     return
 
                 ctx.log.info(f"[Claude] Logging conversation for {email}")
-                self.conversation_callback(email, prompt, conversation_id)
+                await self.conversation_callback(email, prompt, conversation_id)
 
-            elif self.allow_anonymous_access():
+            elif await self.allow_anonymous_access():
                 ctx.log.info("[Claude] Logging anonymous conversation")
-                self.anonymous_conversation_callback(prompt, conversation_id)
+                await self.anonymous_conversation_callback(prompt, conversation_id)
 
             else:
                 ctx.log.info("[Claude] No session found and anonymous access disabled — blocking")
@@ -113,7 +115,7 @@ class Claude(Site):
                     {"Content-Type": "text/plain"},
                 )
 
-    def on_response_handle(self, flow: HTTPFlow) -> None:
+    async def on_response_handle(self, flow: HTTPFlow) -> None:
         url: str = flow.request.pretty_url
 
         # Capture the user's email when the account profile endpoint is loaded
@@ -131,7 +133,7 @@ class Claude(Site):
                     if session_key:
                         if session_key not in self.sessions:
                             ctx.log.info(f"[Claude] Mapped session to {email}")
-                            if not self.account_login_callback(email):
+                            if not await self.account_login_callback(email):
                                 # User not allowed — let the login proceed but session won't be trusted
                                 return
                         self.sessions[session_key] = email

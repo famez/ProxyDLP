@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
-import threading
 import time
 import uuid
 from typing import Any, Callable
@@ -22,13 +22,13 @@ class Gemini(Site):
     def __init__(
         self,
         urls: list[str],
-        account_login_callback: Callable[..., bool],
-        account_check_callback: Callable[..., bool],
-        conversation_callback: Callable[..., None],
-        attached_file_callback: Callable[..., None],
-        allow_anonymous_access: Callable[..., bool],
-        anonymous_conversation_callback: Callable[..., None],
-        store_file_callback: Callable[..., str],
+        account_login_callback: Callable[..., Any],
+        account_check_callback: Callable[..., Any],
+        conversation_callback: Callable[..., Any],
+        attached_file_callback: Callable[..., Any],
+        allow_anonymous_access: Callable[..., Any],
+        anonymous_conversation_callback: Callable[..., Any],
+        store_file_callback: Callable[..., Any],
     ) -> None:
         super().__init__(
             "Google Gemini", urls, account_login_callback, account_check_callback,
@@ -39,11 +39,13 @@ class Gemini(Site):
         self.related_file_data: dict[str, dict[str, Any]] = {}
         self._user_data_ts: dict[str, float] = {}
         self._file_data_ts: dict[str, float] = {}
-        threading.Thread(target=self._cleanup_stale, daemon=True, name="gemini-cleanup").start()
 
-    def _cleanup_stale(self) -> None:
+    async def start_background_tasks(self) -> None:
+        asyncio.create_task(self._cleanup_stale(), name="gemini-cleanup")
+
+    async def _cleanup_stale(self) -> None:
         while True:
-            time.sleep(60)
+            await asyncio.sleep(60)
             now: float = time.time()
             for ts_dict, data_dict in [
                 (self._user_data_ts, self.related_user_data),
@@ -54,7 +56,7 @@ class Gemini(Site):
                     data_dict.pop(k, None)
                     ts_dict.pop(k, None)
 
-    def on_request_handle(self, flow: http.HTTPFlow) -> None:
+    async def on_request_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "POST" and "gemini.google.com/_/BardChatUi/data/assistant.lamda" in flow.request.pretty_url:
             ctx.log.info("Conversation!!!")
@@ -78,18 +80,18 @@ class Gemini(Site):
                     ctx.log.info(f"Email: {email}")
 
                     if email and email != "":
-                        if not self.account_check_callback(email):
+                        if not await self.account_check_callback(email):
                             flow.response = Response.make(403)
                             return
 
-                        self.conversation_callback(email, conversation)
+                        await self.conversation_callback(email, conversation)
 
                     else:
-                        if not self.allow_anonymous_access():
+                        if not await self.allow_anonymous_access():
                             flow.response = Response.make(403)
                             return
 
-                        self.anonymous_conversation_callback(conversation)
+                        await self.anonymous_conversation_callback(conversation)
 
                 except Exception as e:
                     ctx.log.error(f"Could not parse JSON: {e}\nDecoded String:\n{decoded}")
@@ -116,10 +118,10 @@ class Gemini(Site):
                     detected_type: str = mime.from_buffer(file_content)
 
                     unique_id: str = uuid.uuid4().hex
-                    filepath: str = self.store_file_callback(file_content)
+                    filepath: str = await self.store_file_callback(file_content)
 
                     email = self.related_user_data.get(sid_cookie, {}).get("email", None)
-                    self.attached_file_callback(email, filename, filepath, detected_type)
+                    await self.attached_file_callback(email, filename, filepath, detected_type)
                     ctx.log.info(f"Saved PUT upload to: {filepath}")
 
                 else:
@@ -134,7 +136,7 @@ class Gemini(Site):
                         self.related_file_data[sid_cookie] = {'filename': found_filename}
                         self._file_data_ts[sid_cookie] = time.time()
 
-    def on_response_handle(self, flow: http.HTTPFlow) -> None:
+    async def on_response_handle(self, flow: http.HTTPFlow) -> None:
 
         if flow.request.method == "GET" and "gemini.google.com/app" in flow.request.pretty_url:
 
