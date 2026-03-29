@@ -34,6 +34,7 @@ from sites.gemini import Gemini
 from sites.deepl import DeepL
 from sites.perplexity import Perplexity
 from sites.grok import Grok
+from sites.claude import Claude
 
 from mitm_term import launch_ws_term
 
@@ -294,6 +295,7 @@ proxy.register_site(Gemini, ["gemini.google.com", "push.clients6.google.com"])
 proxy.register_site(DeepL, ["deepl.com"])
 proxy.register_site(Perplexity, ["perplexity.ai", "ppl-ai-file-upload.s3.amazonaws.com"])
 proxy.register_site(Grok, ["grok.com"])
+proxy.register_site(Claude, ["claude.ai"])
 
 
 #Add sites to the database for being checked later on the web interface.
