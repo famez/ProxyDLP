@@ -136,9 +136,10 @@ class Site:
         return await self.callbacks.account_check(self, email, self.source_ip)
 
     async def conversation_callback(
-        self, email: str, conversation_text: str, conversation_id: str | None = None
+        self, email: str, conversation_text: str, conversation_id: str | None = None,
+        metadata: dict | None = None
     ) -> None:
-        return await self.callbacks.conversation(self, email, conversation_text, self.source_ip, conversation_id)
+        return await self.callbacks.conversation(self, email, conversation_text, self.source_ip, conversation_id, metadata)
 
     async def attached_file_callback(
         self, email: str | None, file_name: str, filepath: str, content_type: str
@@ -149,9 +150,10 @@ class Site:
         return await self.callbacks.allow_anonymous_access(self)
 
     async def anonymous_conversation_callback(
-        self, conversation_text: str, conversation_id: str | None = None
+        self, conversation_text: str, conversation_id: str | None = None,
+        metadata: dict | None = None
     ) -> None:
-        return await self.callbacks.anonymous_conversation(self, conversation_text, self.source_ip, conversation_id)
+        return await self.callbacks.anonymous_conversation(self, conversation_text, self.source_ip, conversation_id, metadata)
 
     async def store_file_callback(self, file_content: bytes) -> str:
         return await self.callbacks.store_file(self, file_content)

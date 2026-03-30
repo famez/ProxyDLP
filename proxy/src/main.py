@@ -92,7 +92,8 @@ async def allow_anonymous_access(site: Any) -> bool:
 
 #Anonymous conversations
 async def anonymous_conversation_callback(
-    site: Any, content: str, source_ip: str, conversation_id: str | None
+    site: Any, content: str, source_ip: str, conversation_id: str | None,
+    metadata: dict | None = None
 ) -> None:
     #Workaround for DeepL to avoid receiving several successive events in few seconds
     if site.get_name() == "DeepL":
@@ -136,6 +137,9 @@ async def anonymous_conversation_callback(
 
     if conversation_id:
         event['conversation_id'] = conversation_id
+
+    if metadata:
+        event.update(metadata)
 
     agent_id: str | None = await find_agent_by_source_ip(source_ip)
     if agent_id:
@@ -187,7 +191,8 @@ async def account_check_callback(site: Any, email: str, source_ip: str) -> bool:
 
 
 async def conversation_callback(
-    site: Any, email: str, content: str, source_ip: str, conversation_id: str | None
+    site: Any, email: str, content: str, source_ip: str, conversation_id: str | None,
+    metadata: dict | None = None
 ) -> None:
     event: dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc),
@@ -200,6 +205,9 @@ async def conversation_callback(
 
     if conversation_id:
         event['conversation_id'] = conversation_id
+
+    if metadata:
+        event.update(metadata)
 
     agent_id: str | None = await find_agent_by_source_ip(source_ip)
     if agent_id:

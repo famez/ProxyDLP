@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <title>Conversation Thread</title>
   <link rel="stylesheet" href="/css/tailwind.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <style>
     .bubble-user {
       background: #eef2ff;
@@ -19,6 +21,61 @@
       background: #fafafa;
       border: 1px dashed #d1d5db;
       border-radius: 1rem 1rem 1rem 0.25rem;
+    }
+    .copilot-toggle {
+      font-size: 0.7rem;
+      color: #6366f1;
+      cursor: pointer;
+      user-select: none;
+      margin-top: 0.5rem;
+      display: inline-block;
+    }
+    .copilot-context-panel {
+      margin-top: 0.75rem;
+      border-left: 3px solid #c7d2fe;
+      padding-left: 0.75rem;
+    }
+    .copilot-section-title {
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0.6rem 0 0.25rem;
+    }
+    .copilot-file-path {
+      font-size: 0.65rem;
+      font-family: monospace;
+      color: #4f46e5;
+      background: #eef2ff;
+      padding: 0.15rem 0.5rem;
+      border-radius: 0.25rem 0.25rem 0 0;
+      border: 1px solid #c7d2fe;
+      border-bottom: none;
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .copilot-code-block {
+      margin: 0;
+      border-radius: 0 0.375rem 0.375rem 0.375rem;
+      border: 1px solid #e5e7eb;
+      overflow-x: auto;
+      font-size: 0.7rem;
+    }
+    .copilot-code-block code {
+      border-radius: 0 0.375rem 0.375rem 0.375rem;
+    }
+    .copilot-diff pre {
+      background: #1f2937;
+      color: #f9fafb;
+      border-radius: 0.375rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.7rem;
+      overflow-x: auto;
+      white-space: pre;
     }
   </style>
 </head>
@@ -59,6 +116,40 @@
                 <div class="bubble-user p-4 text-sm text-gray-800 whitespace-pre-wrap">
                   <%= event.content || '(no content)' %>
                 </div>
+                <% if (event.copilot_context) { %>
+                  <span class="copilot-toggle" onclick="this.nextElementSibling.classList.toggle('hidden')">
+                    ▶ Copilot context
+                  </span>
+                  <div class="copilot-context-panel hidden">
+                    <% if (event.copilot_context.user_question) { %>
+                      <div class="copilot-section-title">User question</div>
+                      <p class="text-xs text-gray-700 bg-indigo-50 border border-indigo-100 rounded p-2 whitespace-pre-wrap"><%= event.copilot_context.user_question %></p>
+                    <% } %>
+                    <% if (event.copilot_context.current_file) { %>
+                      <div class="copilot-section-title">Current file</div>
+                      <div class="copilot-file-path"><%= event.copilot_context.current_file.file_path %></div>
+                      <pre class="copilot-code-block"><code class="language-<%= event.copilot_context.current_file.language %>"><%= event.copilot_context.current_file.code %></code></pre>
+                    <% } %>
+                    <% if (event.copilot_context.code_to_edit) { %>
+                      <div class="copilot-section-title">Code to edit</div>
+                      <% var editLang = event.copilot_context.current_file ? event.copilot_context.current_file.language : 'plaintext'; %>
+                      <pre class="copilot-code-block"><code class="language-<%= editLang %>"><%= event.copilot_context.code_to_edit %></code></pre>
+                    <% } %>
+                    <% if (event.copilot_context.edit_diff_history) { %>
+                      <div class="copilot-section-title">Recent edits (diff)</div>
+                      <div class="copilot-diff"><pre><%= event.copilot_context.edit_diff_history %></pre></div>
+                    <% } %>
+                    <% if (event.copilot_context.recently_viewed_snippets && event.copilot_context.recently_viewed_snippets.length > 0) { %>
+                      <div class="copilot-section-title">Recently viewed snippets (<%= event.copilot_context.recently_viewed_snippets.length %>)</div>
+                      <% event.copilot_context.recently_viewed_snippets.forEach(function(snippet) { %>
+                        <div class="mb-2">
+                          <div class="copilot-file-path"><%= snippet.file_path %></div>
+                          <pre class="copilot-code-block"><code class="language-<%= snippet.language %>"><%= snippet.code %></code></pre>
+                        </div>
+                      <% }) %>
+                    <% } %>
+                  </div>
+                <% } %>
               <% } else { %>
                 <div class="bubble-user p-4 text-sm text-gray-400 italic">
                   (content hidden — requires conversations permission)
@@ -133,6 +224,18 @@
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
       });
       el.title = `UTC: ${el.dataset.utc}`;
+    });
+
+    hljs.highlightAll();
+
+    // Re-highlight when a collapsed panel is opened
+    document.querySelectorAll('.copilot-toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const panel = toggle.nextElementSibling;
+        if (!panel.classList.contains('hidden')) {
+          panel.querySelectorAll('code:not(.hljs)').forEach(block => hljs.highlightElement(block));
+        }
+      });
     });
   </script>
 </body>
