@@ -111,6 +111,63 @@ function enrichEventWithCopilotContext(event) {
   return event;
 }
 
+// Parses prompts from AI coding assistants (e.g. Continue.dev) that follow the pattern:
+// "A software developer is using an AI chatbot in a code editor in file <path>..."
+function parseCodingAssistantPrompt(content) {
+  if (!content || !content.startsWith('A software developer is using')) return null;
+
+  const result = {};
+
+  // Active file path
+  const fileMatch = content.match(/in a code editor in file\s+(\S+)\./);
+  if (fileMatch) {
+    result.active_file = fileMatch[1];
+    result.language = _extToLanguage(fileMatch[1]);
+  }
+
+  // Code excerpt (fenced markdown block)
+  const codeMatch = content.match(/```(\w*)\n([\s\S]*?)```/);
+  if (codeMatch) {
+    result.language = codeMatch[1] || result.language || 'plaintext';
+    result.code_excerpt = codeMatch[2].trimEnd();
+  }
+
+  // Developer request
+  const reqMatch = content.match(/^Request:\s*(.+)$/m);
+  if (reqMatch) result.developer_request = reqMatch[1].trim();
+
+  // Suggested function
+  const suggMatch = content.match(/The developer probably wants Function Id '([^']+)'/);
+  if (suggMatch) result.suggested_function = suggMatch[1];
+
+  // Available functions
+  const funcSection = content.match(/Available functions:\n([\s\S]*?)(?:\n\n|Here are some examples|$)/);
+  if (funcSection) {
+    const functions = [];
+    const funcRe = /Function Id:\s*(\S+)\nFunction Description:\s*(.+)/g;
+    let m;
+    while ((m = funcRe.exec(funcSection[1])) !== null) {
+      functions.push({ id: m[1], description: m[2].trim() });
+    }
+    if (functions.length) result.available_functions = functions;
+  }
+
+  return Object.keys(result).length > 1 ? result : null;
+}
+
+function enrichEvent(event) {
+  if (!event || !event.content) return event;
+  if (!event.copilot_context) {
+    const copilot = parseCopilotPrompt(event.content);
+    if (copilot) event.copilot_context = copilot;
+  }
+  if (!event.coding_assistant_context) {
+    const ca = parseCodingAssistantPrompt(event.content);
+    if (ca) event.coding_assistant_context = ca;
+  }
+  return event;
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -854,7 +911,7 @@ app.get('/event/:id', authMiddleware, requirePermission("events"), async (req, r
     const event = await events_collection.findOne({ _id: new ObjectId(id) });
     if (!event) return res.status(404).send('Event not found');
 
-    enrichEventWithCopilotContext(event);
+    enrichEvent(event);
 
     // Get the Referer URL, or fallback to '/explore'
     let backUrl = '/explore';
@@ -886,7 +943,7 @@ app.get('/conversation/:id', authMiddleware, requirePermission("events"), async 
       .sort({ timestamp: 1 })
       .toArray();
 
-    events.forEach(enrichEventWithCopilotContext);
+    events.forEach(enrichEvent);
 
     res.render('conversation', { title: 'Conversation', conversation_id: id, events });
   } catch (err) {
