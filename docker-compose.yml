@@ -3,8 +3,8 @@ services:
     build:
       context: ./
       dockerfile: ./proxy/Dockerfile
-    mem_limit: 512m
-    memswap_limit: 512m
+    mem_limit: 1024m
+    memswap_limit: 1024m
     deploy:
       replicas: 2
     depends_on:

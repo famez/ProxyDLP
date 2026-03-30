@@ -325,7 +325,7 @@ proxy.register_site(Claude, ["claude.ai"])
 
 # Soft memory limit: exit cleanly before the container OOM-kills us.
 # Docker's restart: always will respawn a fresh replica automatically.
-_MEMORY_SOFT_LIMIT_MB: int = 400  # ~78% of the 512 MB container limit
+_MEMORY_SOFT_LIMIT_MB: int = 970  # ~95% of the 1024 MB container limit
 
 # Maximum number of flows kept in mitmproxy's in-memory View.
 _MAX_FLOWS_IN_VIEW: int = 200
