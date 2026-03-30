@@ -3,44 +3,31 @@ from __future__ import annotations
 import json
 import base64
 import re
+from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 from mitmproxy import ctx, http, websocket
 
 
+@dataclass
+class ProxyCallbacks:
+    """All callbacks the proxy exposes to sites. Add new callbacks here — no other file needs changing."""
+    account_login: Callable[..., Awaitable[bool]]
+    account_check: Callable[..., Awaitable[bool]]
+    conversation: Callable[..., Awaitable[None]]
+    attached_file: Callable[..., Awaitable[None]]
+    allow_anonymous_access: Callable[..., Awaitable[bool]]
+    anonymous_conversation: Callable[..., Awaitable[None]]
+    store_file: Callable[..., Awaitable[str]]
+    update_response: Callable[..., Awaitable[None]]
+
+
 class Proxy:
-    def __init__(
-        self,
-        account_login_callback: Callable[..., Awaitable[bool]],
-        account_check_callback: Callable[..., Awaitable[bool]],
-        conversation_callback: Callable[..., Awaitable[None]],
-        attached_file_callback: Callable[..., Awaitable[None]],
-        allow_anonymous_access: Callable[..., Awaitable[bool]],
-        anonymous_conversation_callback: Callable[..., Awaitable[None]],
-        store_file_callback: Callable[..., Awaitable[str]],
-        update_response_callback: Callable[..., Awaitable[None]],
-    ) -> None:
+    def __init__(self, callbacks: ProxyCallbacks) -> None:
         self.sites: list[Site] = []
-        self.account_login_callback = account_login_callback
-        self.account_check_callback = account_check_callback
-        self.conversation_callback = conversation_callback
-        self.attached_file_callback = attached_file_callback
-        self.allow_anonymous_access = allow_anonymous_access
-        self.anonymous_conversation_callback = anonymous_conversation_callback
-        self.store_file_callback = store_file_callback
-        self.update_response_callback = update_response_callback
+        self.callbacks = callbacks
 
     def register_site(self, cls: type[Site], urls: list[str]) -> None:
-        site = cls(
-            urls,
-            self.account_login_callback,
-            self.account_check_callback,
-            self.conversation_callback,
-            self.attached_file_callback,
-            self.allow_anonymous_access,
-            self.anonymous_conversation_callback,
-            self.store_file_callback,
-            self.update_response_callback,
-        )
+        site = cls(urls, self.callbacks)
         self.sites.append(site)
 
     async def route_request(self, flow: http.HTTPFlow) -> bool:
@@ -92,31 +79,11 @@ class EmailNotFoundException(Exception):
 
 
 class Site:
-    def __init__(
-        self,
-        name: str,
-        urls: list[str],
-        account_login_callback: Callable[..., Awaitable[bool]],
-        account_check_callback: Callable[..., Awaitable[bool]],
-        conversation_callback: Callable[..., Awaitable[None]],
-        attached_file_callback: Callable[..., Awaitable[None]],
-        allow_anonymous_access: Callable[..., Awaitable[bool]],
-        anonymous_conversation_callback: Callable[..., Awaitable[None]],
-        store_file_callback: Callable[..., Awaitable[str]],
-        update_response_callback: Callable[..., Awaitable[None]],
-    ) -> None:
+    def __init__(self, name: str, urls: list[str], callbacks: ProxyCallbacks) -> None:
         self.name: str = name
         self.urls: list[str] = urls
         self.source_ip: str = ""     #To keep track of the source IP address.
-        self.on_account_login_callback = account_login_callback
-        self.on_account_check_callback = account_check_callback
-        self.on_conversation_callback = conversation_callback
-        self.on_attached_file_callback = attached_file_callback
-        self.on_allow_anonymous_access = allow_anonymous_access
-        self.on_anonymous_conversation_callback = anonymous_conversation_callback
-        self.on_store_file_callback = store_file_callback
-        self.on_update_response_callback = update_response_callback
-
+        self.callbacks = callbacks
         self.enabled: bool = False
 
     def enable(self) -> None:
@@ -163,38 +130,36 @@ class Site:
         pass        #To be implement by child
 
     async def account_login_callback(self, email: str) -> bool:
-        return await self.on_account_login_callback(self, email, self.source_ip)
+        return await self.callbacks.account_login(self, email, self.source_ip)
 
     async def account_check_callback(self, email: str) -> bool:
-        return await self.on_account_check_callback(self, email, self.source_ip)
+        return await self.callbacks.account_check(self, email, self.source_ip)
 
     async def conversation_callback(
         self, email: str, conversation_text: str, conversation_id: str | None = None
     ) -> None:
-        return await self.on_conversation_callback(self, email, conversation_text, self.source_ip, conversation_id)
+        return await self.callbacks.conversation(self, email, conversation_text, self.source_ip, conversation_id)
 
     async def attached_file_callback(
         self, email: str | None, file_name: str, filepath: str, content_type: str
     ) -> None:
-        return await self.on_attached_file_callback(self, email, file_name, filepath, content_type, self.source_ip)
+        return await self.callbacks.attached_file(self, email, file_name, filepath, content_type, self.source_ip)
 
     async def allow_anonymous_access(self) -> bool:
-        return await self.on_allow_anonymous_access(self)
+        return await self.callbacks.allow_anonymous_access(self)
 
     async def anonymous_conversation_callback(
         self, conversation_text: str, conversation_id: str | None = None
     ) -> None:
-        return await self.on_anonymous_conversation_callback(self, conversation_text, self.source_ip, conversation_id)
+        return await self.callbacks.anonymous_conversation(self, conversation_text, self.source_ip, conversation_id)
 
     async def store_file_callback(self, file_content: bytes) -> str:
-        return await self.on_store_file_callback(self, file_content)
+        return await self.callbacks.store_file(self, file_content)
 
     async def update_response_callback(
         self, conversation_id: str, assistant_uuid: str, response_text: str
     ) -> None:
-        return await self.on_update_response_callback(
-            self, conversation_id, assistant_uuid, response_text
-        )
+        return await self.callbacks.update_response(self, conversation_id, assistant_uuid, response_text)
 
     async def start_background_tasks(self) -> None:
         pass  # Override in subclasses to schedule cleanup coroutines

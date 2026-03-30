@@ -6,7 +6,7 @@ import json
 import re
 import time
 from io import BytesIO
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import urlparse, parse_qs
 
 import magic
@@ -14,29 +14,14 @@ from mitmproxy import ctx, http
 from mitmproxy.http import Response
 from mitmproxy import websocket
 
-from proxy import Site, EmailNotFoundException, decode_jwt, pad_b64
+from proxy import Site, ProxyCallbacks, EmailNotFoundException, decode_jwt, pad_b64
 
 UPLOAD_TTL: int = 300  # seconds before a stale upload buffer is evicted
 
 class Microsoft_Copilot(Site):
 
-    def __init__(
-        self,
-        urls: list[str],
-        account_login_callback: Callable[..., Any],
-        account_check_callback: Callable[..., Any],
-        conversation_callback: Callable[..., Any],
-        attached_file_callback: Callable[..., Any],
-        allow_anonymous_access: Callable[..., Any],
-        anonymous_conversation_callback: Callable[..., Any],
-        store_file_callback: Callable[..., Any],
-        update_response_callback: Callable[..., Any],
-    ) -> None:
-        super().__init__(
-            "Microsoft Copilot", urls, account_login_callback, account_check_callback,
-            conversation_callback, attached_file_callback,
-            allow_anonymous_access, anonymous_conversation_callback, store_file_callback, update_response_callback,
-        )
+    def __init__(self, urls: list[str], callbacks: ProxyCallbacks) -> None:
+        super().__init__("Microsoft Copilot", urls, callbacks)
         self.uploaded_files: dict[str, dict[str, Any]] = {}
         self._upload_timestamps: dict[str, float] = {}
         self._lock: asyncio.Lock = asyncio.Lock()

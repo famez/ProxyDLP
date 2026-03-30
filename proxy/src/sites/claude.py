@@ -4,12 +4,12 @@ import asyncio
 import json
 import re
 import time
-from typing import Any, Callable
+from typing import Any
 
 from mitmproxy import ctx
 from mitmproxy.http import Response, HTTPFlow
 
-from proxy import Site
+from proxy import Site, ProxyCallbacks
 
 SESSION_TTL: int = 3600  # 1 hour
 PENDING_TTL: int = 120   # 2 minutes — max wait for the tree GET after a completion POST
@@ -17,24 +17,8 @@ PENDING_TTL: int = 120   # 2 minutes — max wait for the tree GET after a compl
 
 class Claude(Site):
 
-    def __init__(
-        self,
-        urls: list[str],
-        account_login_callback: Callable[..., Any],
-        account_check_callback: Callable[..., Any],
-        conversation_callback: Callable[..., Any],
-        attached_file_callback: Callable[..., Any],
-        allow_anonymous_access: Callable[..., Any],
-        anonymous_conversation_callback: Callable[..., Any],
-        store_file_callback: Callable[..., Any],
-        update_response_callback: Callable[..., Any],
-    ) -> None:
-        super().__init__(
-            "Claude", urls, account_login_callback, account_check_callback,
-            conversation_callback, attached_file_callback,
-            allow_anonymous_access, anonymous_conversation_callback,
-            store_file_callback, update_response_callback,
-        )
+    def __init__(self, urls: list[str], callbacks: ProxyCallbacks) -> None:
+        super().__init__("Claude", urls, callbacks)
         # Maps session cookie value → email
         self.sessions: dict[str, str] = {}
         self._sessions_ts: dict[str, float] = {}

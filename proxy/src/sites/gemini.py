@@ -5,37 +5,22 @@ import json
 import re
 import time
 import uuid
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import parse_qs, unquote
 
 import magic
 from mitmproxy import ctx, http
 from mitmproxy.http import Response
 
-from proxy import Site, EmailNotFoundException, decode_jwt, extract_substring_between
+from proxy import Site, ProxyCallbacks, EmailNotFoundException, decode_jwt, extract_substring_between
 
 SESSION_TTL: int = 600  # 10 minutes
 
 
 class Gemini(Site):
 
-    def __init__(
-        self,
-        urls: list[str],
-        account_login_callback: Callable[..., Any],
-        account_check_callback: Callable[..., Any],
-        conversation_callback: Callable[..., Any],
-        attached_file_callback: Callable[..., Any],
-        allow_anonymous_access: Callable[..., Any],
-        anonymous_conversation_callback: Callable[..., Any],
-        store_file_callback: Callable[..., Any],
-        update_response_callback: Callable[..., Any],
-    ) -> None:
-        super().__init__(
-            "Google Gemini", urls, account_login_callback, account_check_callback,
-            conversation_callback, attached_file_callback,
-            allow_anonymous_access, anonymous_conversation_callback, store_file_callback, update_response_callback,
-        )
+    def __init__(self, urls: list[str], callbacks: ProxyCallbacks) -> None:
+        super().__init__("Google Gemini", urls, callbacks)
         self.related_user_data: dict[str, dict[str, Any]] = {}
         self.related_file_data: dict[str, dict[str, Any]] = {}
         self._user_data_ts: dict[str, float] = {}

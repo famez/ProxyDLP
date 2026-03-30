@@ -3,35 +3,20 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any, Callable
+from typing import Any
 
 from mitmproxy import ctx
 from mitmproxy.http import Response, HTTPFlow
 
-from proxy import Site, parse_multipart, decode_jwt
+from proxy import Site, ProxyCallbacks, parse_multipart, decode_jwt
 
 SESSION_TTL: int = 600  # 10 minutes
 
 
 class Grok(Site):
 
-    def __init__(
-        self,
-        urls: list[str],
-        account_login_callback: Callable[..., Any],
-        account_check_callback: Callable[..., Any],
-        conversation_callback: Callable[..., Any],
-        attached_file_callback: Callable[..., Any],
-        allow_anonymous_access: Callable[..., Any],
-        anonymous_conversation_callback: Callable[..., Any],
-        store_file_callback: Callable[..., Any],
-        update_response_callback: Callable[..., Any],
-    ) -> None:
-        super().__init__(
-            "Grok", urls, account_login_callback, account_check_callback,
-            conversation_callback, attached_file_callback,
-            allow_anonymous_access, anonymous_conversation_callback, store_file_callback, update_response_callback,
-        )
+    def __init__(self, urls: list[str], callbacks: ProxyCallbacks) -> None:
+        super().__init__("Grok", urls, callbacks)
         self.users: dict[str, dict[str, str]] = {}
         self._users_ts: dict[str, float] = {}
 

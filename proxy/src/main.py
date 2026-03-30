@@ -24,7 +24,7 @@ import proxy_pb2
 import proxy_pb2_grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
-from proxy import Proxy
+from proxy import Proxy, ProxyCallbacks
 from sites.chatgpt import ChatGPT
 from sites.github_copilot import Github_Copilot
 from sites.microsoft_copilot import Microsoft_Copilot
@@ -298,16 +298,16 @@ async def attached_file_callback(
     ctx.log.info(f"Response: {response}")
 
 
-proxy: Proxy = Proxy(
-    account_login_callback,
-    account_check_callback,
-    conversation_callback,
-    attached_file_callback,
-    allow_anonymous_access,
-    anonymous_conversation_callback,
-    store_file_callback,
-    update_response_callback,
-)
+proxy: Proxy = Proxy(ProxyCallbacks(
+    account_login=account_login_callback,
+    account_check=account_check_callback,
+    conversation=conversation_callback,
+    attached_file=attached_file_callback,
+    allow_anonymous_access=allow_anonymous_access,
+    anonymous_conversation=anonymous_conversation_callback,
+    store_file=store_file_callback,
+    update_response=update_response_callback,
+))
 
 
 proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"])
