@@ -64,6 +64,18 @@ class Proxy:
                         return True
         return False
 
+    async def route_ws_from_server_to_client(
+        self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
+    ) -> bool:
+        url: str = flow.request.pretty_url
+        for site in self.sites:
+            if site.isEnabled():
+                for site_url in site.get_urls():
+                    if site_url in url:
+                        await site.handle_ws_from_server_to_client(flow, message)
+                        return True
+        return False
+
     def get_sites(self) -> list[Site]:
         return self.sites
 
@@ -118,6 +130,13 @@ class Site:
         self.source_ip = flow.metadata.get("_real_source_ip", flow.client_conn.address[0])
         await self.on_ws_from_client_to_server(flow, message)
 
+    async def handle_ws_from_server_to_client(
+        self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
+    ) -> None:
+        # This method is called when a WebSocket message is sent from the server to the client
+        self.source_ip = flow.metadata.get("_real_source_ip", flow.client_conn.address[0])
+        await self.on_ws_from_server_to_client(flow, message)
+
     async def on_request_handle(self, flow: http.HTTPFlow) -> None:
         pass        #To be implement by child
 
@@ -125,6 +144,11 @@ class Site:
         pass        #To be implement by child
 
     async def on_ws_from_client_to_server(
+        self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
+    ) -> None:
+        pass        #To be implement by child
+
+    async def on_ws_from_server_to_client(
         self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
     ) -> None:
         pass        #To be implement by child

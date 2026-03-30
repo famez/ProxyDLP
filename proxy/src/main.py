@@ -451,6 +451,8 @@ class WSHandler:
             if not await proxy.route_ws_from_client_to_server(flow, message) and rejectSiteTraffic:
                 # Prevent the message from being sent to the server
                 message.kill()
+        else:
+            await proxy.route_ws_from_server_to_client(flow, message)
 
 class Monitor:
     def __init__(self) -> None:

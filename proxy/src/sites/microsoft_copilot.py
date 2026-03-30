@@ -220,6 +220,39 @@ class Microsoft_Copilot(Site):
             message.kill()
 
 
+    async def on_ws_from_server_to_client(
+        self, flow: http.HTTPFlow, message: websocket.WebSocketMessage
+    ) -> None:
+
+        if flow.request.method == "GET" and "substrate.office.com/m365Copilot/Chathub" in flow.request.pretty_url:
+
+            conversationId: str | None = flow.request.query.get("ConversationId", None)
+
+            try:
+                message_contents: list[bytes] = message.content.split(b'\x1e')
+                message_contents = [part for part in message_contents if part]
+                json_messages: list[dict[str, Any]] = [json.loads(part.decode('utf-8')) for part in message_contents]
+
+                for json_content in json_messages:
+                    if json_content.get("type") != 1 or json_content.get("target") != "update":
+                        continue
+
+                    for argument in json_content.get("arguments", []):
+                        for msg in argument.get("messages", []):
+                            if msg.get("author") != "bot":
+                                continue
+                            # Only process the final complete response (has suggestedResponses)
+                            if "suggestedResponses" not in msg:
+                                continue
+                            response_text: str = msg.get("text", "").strip()
+                            assistant_uuid: str | None = msg.get("messageId") or msg.get("requestId")
+                            if response_text and assistant_uuid and conversationId:
+                                await self.update_response_callback(conversationId, assistant_uuid, response_text)
+
+            except Exception as e:
+                ctx.log.error(f"Failed to decode server WebSocket message: {e}")
+
+
 def get_email_from_auth_header(auth_query_param: str) -> str:
     if auth_query_param:
         jwt_token: str = auth_query_param.strip()
