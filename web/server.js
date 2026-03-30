@@ -23,6 +23,94 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const _EXT_TO_LANG = {
+  '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
+  '.tsx': 'typescript', '.jsx': 'javascript', '.cpp': 'cpp',
+  '.cc': 'cpp', '.cxx': 'cpp', '.c': 'c', '.h': 'cpp', '.hpp': 'cpp',
+  '.java': 'java', '.cs': 'csharp', '.go': 'go', '.rs': 'rust',
+  '.rb': 'ruby', '.php': 'php', '.sh': 'bash', '.bash': 'bash',
+  '.yaml': 'yaml', '.yml': 'yaml', '.json': 'json', '.md': 'markdown',
+  '.html': 'html', '.css': 'css', '.sql': 'sql', '.kt': 'kotlin',
+  '.swift': 'swift', '.scala': 'scala', '.r': 'r', '.lua': 'lua',
+  '.xml': 'xml', '.toml': 'toml',
+};
+
+function _extToLanguage(filePath) {
+  const name = (filePath || '').split('/').pop().toLowerCase();
+  if (name === 'dockerfile') return 'dockerfile';
+  const dot = name.lastIndexOf('.');
+  const ext = dot >= 0 ? name.slice(dot) : '';
+  return _EXT_TO_LANG[ext] || 'plaintext';
+}
+
+function _extractBetween(s, start, end) {
+  const i1 = s.indexOf(start);
+  if (i1 === -1) return '';
+  const i2 = s.indexOf(end, i1 + start.length);
+  if (i2 === -1) return '';
+  return s.slice(i1 + start.length, i2);
+}
+
+function parseCopilotPrompt(prompt) {
+  if (!prompt || !prompt.includes('<|')) return null;
+
+  const result = {};
+
+  // Recently viewed snippets
+  const snippetsBlock = _extractBetween(prompt, '<|recently_viewed_code_snippets|>', '<|/recently_viewed_code_snippets|>');
+  if (snippetsBlock) {
+    const snippets = [];
+    const re = /<\|recently_viewed_code_snippet\|>([\s\S]*?)<\|\/recently_viewed_code_snippet\|>/g;
+    let m;
+    while ((m = re.exec(snippetsBlock)) !== null) {
+      const text = m[1].trim();
+      const fpMatch = text.match(/^code_snippet_file_path:\s*(.+?)(?:\s*\(truncated\))?\n/);
+      if (fpMatch) {
+        const filePath = fpMatch[1].trim();
+        const code = text.slice(fpMatch[0].length).trim();
+        snippets.push({ file_path: filePath, language: _extToLanguage(filePath), code });
+      }
+    }
+    if (snippets.length) result.recently_viewed_snippets = snippets;
+  }
+
+  // Current file
+  const currentFileBlock = _extractBetween(prompt, '<|current_file_content|>', '<|/current_file_content|>').trim();
+  if (currentFileBlock) {
+    const fpMatch = currentFileBlock.match(/^current_file_path:\s*(.+)\n/);
+    if (fpMatch) {
+      const filePath = fpMatch[1].trim();
+      const code = currentFileBlock.slice(fpMatch[0].length).trim();
+      result.current_file = { file_path: filePath, language: _extToLanguage(filePath), code };
+    }
+  }
+
+  // Edit diff history
+  const diffBlock = _extractBetween(prompt, '<|edit_diff_history|>', '<|/edit_diff_history|>').trim();
+  if (diffBlock) result.edit_diff_history = diffBlock;
+
+  // Code to edit
+  const codeToEdit = _extractBetween(prompt, '<|code_to_edit|>', '<|/code_to_edit|>').replace(/<\|cursor\|>/g, '').trim();
+  if (codeToEdit) result.code_to_edit = codeToEdit;
+
+  // Plain-text user question (strip all special-token blocks)
+  const plainText = prompt
+    .replace(/<\|[^|]+\|>[\s\S]*?<\|\/[^|]+\|>/g, '')
+    .replace(/<\|[^|]+\|>/g, '')
+    .trim();
+  if (plainText) result.user_question = plainText;
+
+  return Object.keys(result).length ? result : null;
+}
+
+function enrichEventWithCopilotContext(event) {
+  if (event && !event.copilot_context && event.content) {
+    const parsed = parseCopilotPrompt(event.content);
+    if (parsed) event.copilot_context = parsed;
+  }
+  return event;
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -766,6 +854,8 @@ app.get('/event/:id', authMiddleware, requirePermission("events"), async (req, r
     const event = await events_collection.findOne({ _id: new ObjectId(id) });
     if (!event) return res.status(404).send('Event not found');
 
+    enrichEventWithCopilotContext(event);
+
     // Get the Referer URL, or fallback to '/explore'
     let backUrl = '/explore';
     try {
@@ -795,6 +885,8 @@ app.get('/conversation/:id', authMiddleware, requirePermission("events"), async 
       .find({ conversation_id: id, rational: 'Conversation' })
       .sort({ timestamp: 1 })
       .toArray();
+
+    events.forEach(enrichEventWithCopilotContext);
 
     res.render('conversation', { title: 'Conversation', conversation_id: id, events });
   } catch (err) {
