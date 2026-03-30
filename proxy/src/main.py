@@ -327,6 +327,9 @@ proxy.register_site(Claude, ["claude.ai"])
 # Docker's restart: always will respawn a fresh replica automatically.
 _MEMORY_SOFT_LIMIT_MB: int = 400  # ~78% of the 512 MB container limit
 
+# Maximum number of flows kept in mitmproxy's in-memory View.
+_MAX_FLOWS_IN_VIEW: int = 200
+
 # Maps client_conn.id -> real source IP extracted from X-Forwarded-For (injected by HAProxy).
 # Populated in http_connect (for CONNECT tunnels) and in request (for plain HTTP).
 _real_source_ips: dict[str, str] = {}
@@ -367,6 +370,25 @@ async def _memory_watchdog(check_interval: int = 30) -> None:
         if mem_mb > _MEMORY_SOFT_LIMIT_MB:
             print(f"[memory-watchdog] RSS {mem_mb:.1f} MB exceeds soft limit {_MEMORY_SOFT_LIMIT_MB} MB — exiting for clean restart.")
             os._exit(0)
+
+
+async def _flow_purger(max_flows: int = _MAX_FLOWS_IN_VIEW, check_interval: int = 60) -> None:
+    """Periodically remove the oldest flows from mitmproxy's view to cap RAM usage."""
+    while True:
+        await asyncio.sleep(check_interval)
+        try:
+            view = ctx.master.view
+            current_count: int = len(view)
+            if current_count > max_flows:
+                flows_to_remove = list(view)[: current_count - max_flows]
+                for flow in flows_to_remove:
+                    view.remove(flow)
+                ctx.log.info(
+                    f"[flow-purger] Removed {len(flows_to_remove)} flows "
+                    f"(kept {max_flows} of {current_count})."
+                )
+        except Exception as e:
+            ctx.log.error(f"[flow-purger] Error: {e}")
 
 
 async def _midnight_watcher(check_interval: int = 10) -> None:
@@ -557,6 +579,7 @@ class Lifecycle:
         asyncio.create_task(_config_poller(), name="config-poller")
         asyncio.create_task(_memory_watchdog(), name="memory-watchdog")
         asyncio.create_task(_midnight_watcher(), name="midnight-watcher")
+        asyncio.create_task(_flow_purger(), name="flow-purger")
 
         # Start per-site cleanup tasks — replaces one daemon thread per site
         for site in proxy.get_sites():
