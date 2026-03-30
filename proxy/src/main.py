@@ -325,7 +325,7 @@ proxy.register_site(Claude, ["claude.ai"])
 
 # Soft memory limit: exit cleanly before the container OOM-kills us.
 # Docker's restart: always will respawn a fresh replica automatically.
-_MEMORY_SOFT_LIMIT_MB: int = 970  # ~95% of the 1024 MB container limit
+_MEMORY_SOFT_LIMIT_PCT: float = 90.0  # exit when process RSS exceeds this % of total system RAM
 
 # Maximum number of flows kept in mitmproxy's in-memory View.
 _MAX_FLOWS_IN_VIEW: int = 200
@@ -366,9 +366,11 @@ async def _memory_watchdog(check_interval: int = 30) -> None:
     process: psutil.Process = psutil.Process(os.getpid())
     while True:
         await asyncio.sleep(check_interval)
-        mem_mb: float = process.memory_info().rss / (1024 * 1024)
-        if mem_mb > _MEMORY_SOFT_LIMIT_MB:
-            print(f"[memory-watchdog] RSS {mem_mb:.1f} MB exceeds soft limit {_MEMORY_SOFT_LIMIT_MB} MB — exiting for clean restart.")
+        rss_bytes: int = process.memory_info().rss
+        total_bytes: int = psutil.virtual_memory().total
+        pct: float = rss_bytes / total_bytes * 100.0
+        if pct > _MEMORY_SOFT_LIMIT_PCT:
+            print(f"[memory-watchdog] RSS {pct:.1f}% of total RAM exceeds soft limit {_MEMORY_SOFT_LIMIT_PCT}% — exiting for clean restart.")
             os._exit(0)
 
 
