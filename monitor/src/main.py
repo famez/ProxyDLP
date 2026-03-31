@@ -387,7 +387,7 @@ def on_event_added(event_id: str) -> None:
 
             result = events_collection.update_one(
                 {"_id": ObjectId(event_id)},
-                {"$set": {"leak": leak}}
+                {"$set": {"leak": leak, "extracted_text": event['content']}}
             )
 
         elif event['rational'] == "Attached file":
@@ -395,7 +395,7 @@ def on_event_added(event_id: str) -> None:
 
             result = events_collection.update_one(
                 {"_id": ObjectId(event_id)},
-                {"$set": {"leak": leak}}
+                {"$set": {"leak": leak, "extracted_text": _text}}
             )
 
         if result.modified_count > 0:
@@ -868,28 +868,14 @@ def perform_tf_idf() -> None:
     # Extract all text from events and keep their _id for mapping
     event_ids: list[Any] = []
     texts: list[str] = []
-    # Materialize the cursor immediately to avoid MongoDB cursor timeout during heavy file I/O
+    # Read only the cached extracted_text field — no file I/O or OCR here
     all_events: list[dict[str, Any]] = list(events_collection.find(
-        {}, {"_id": 1, "content": 1, "filepath": 1, "content_type": 1, "rational": 1}
+        {"extracted_text": {"$exists": True}}, {"_id": 1, "extracted_text": 1}
     ))
     total_events: int = len(all_events)
-    logger.info(f"perform_tf_idf: {total_events} events found in DB, starting text extraction")
-    processed: int = 0
+    logger.info(f"perform_tf_idf: {total_events} events with cached text found in DB")
     for event in all_events:
-        processed += 1
-        text: str = ""
-        if event.get("rational") == "Conversation" and event.get("content"):
-            text = event["content"]
-        elif event.get("rational") == "Attached file" and event.get("filepath") and event.get("content_type"):
-            logger.debug(f"perform_tf_idf: decoding file [{processed}/{total_events}] {event['filepath']} ({event['content_type']})")
-            try:
-                text = decode_file(event["filepath"], event["content_type"])
-            except Exception as e:
-                logger.error(f"Error decoding file {event['filepath']}: {e}", exc_info=True)
-        else:
-            logger.debug(f"perform_tf_idf: skipping event [{processed}/{total_events}] rational={event.get('rational')!r}")
-
-        #Check that we are indeed appending a string
+        text: str = event.get("extracted_text", "")
         if isinstance(text, str) and text:
             texts.append(text)
             event_ids.append(event["_id"])
