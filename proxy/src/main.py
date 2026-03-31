@@ -391,8 +391,7 @@ async def _flow_purger(max_flows: int = _MAX_FLOWS_IN_VIEW, check_interval: int 
             current_count: int = len(view)
             if current_count > max_flows:
                 flows_to_remove = list(view)[: current_count - max_flows]
-                for flow in flows_to_remove:
-                    view.remove(flow)
+                view.remove(flows_to_remove)
                 ctx.log.info(
                     f"[flow-purger] Removed {len(flows_to_remove)} flows "
                     f"(kept {max_flows} of {current_count})."
