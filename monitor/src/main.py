@@ -27,6 +27,7 @@ import yara
 from bson.objectid import ObjectId
 from docx import Document
 from nltk.corpus import stopwords
+import xlrd
 from openpyxl import load_workbook
 from PIL import Image
 from pymongo import MongoClient, ReturnDocument, ASCENDING
@@ -279,19 +280,23 @@ def decode_file(filepath: str, content_type: str) -> str:
                     finally:
                         image.close()
 
-    elif content_type in (
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ):
-        workbook = load_workbook(filename=filepath)
+    elif content_type == "application/vnd.ms-excel":
+        wb = xlrd.open_workbook(filepath)
         text_data: list[str] = []
+        for sheet in wb.sheets():
+            for row_idx in range(sheet.nrows):
+                row_text: str = ' '.join([str(sheet.cell_value(row_idx, col)) for col in range(sheet.ncols)])
+                text_data.append(row_text)
+        text = '\n'.join(text_data)
 
+    elif content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+        workbook = load_workbook(filename=filepath)
+        text_data = []
         for sheet in workbook.sheetnames:
             ws = workbook[sheet]
             for row in ws.iter_rows(values_only=True):
-                row_text: str = ' '.join([str(cell) for cell in row if cell is not None])
+                row_text = ' '.join([str(cell) for cell in row if cell is not None])
                 text_data.append(row_text)
-
         text = '\n'.join(text_data)
 
     elif content_type in (
