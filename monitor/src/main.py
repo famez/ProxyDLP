@@ -335,6 +335,7 @@ _RASTER_EXTENSIONS: frozenset[str] = frozenset({
     ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff", ".tif", ".webp",
 })
 _SVG_EXTENSIONS: frozenset[str] = frozenset({".svg", ".svgz"})
+_EMF_EXTENSIONS: frozenset[str] = frozenset({".emf", ".wmf"})
 
 def extract_images_from_docx(docx_path: str) -> str:
     text: str = ""
@@ -345,13 +346,19 @@ def extract_images_from_docx(docx_path: str) -> str:
                 if not filename:
                     continue
                 ext: str = os.path.splitext(filename)[1].lower()
-                if ext not in _RASTER_EXTENSIONS and ext not in _SVG_EXTENSIONS:
+                if ext not in _RASTER_EXTENSIONS and ext not in _SVG_EXTENSIONS and ext not in _EMF_EXTENSIONS:
                     logger.debug(f"[extract_images_from_docx] Skipping unsupported file: {filename}")
                     continue
                 try:
                     raw_bytes: bytes = docx_zip.read(file)
                     if ext in _SVG_EXTENSIONS:
                         image_bytes: bytes = cairosvg.svg2png(bytestring=raw_bytes)
+                    elif ext in _EMF_EXTENSIONS:
+                        doc = pymupdf.open(stream=raw_bytes, filetype=ext.lstrip("."))
+                        page = doc[0]
+                        pix = page.get_pixmap(dpi=150)
+                        image_bytes = pix.tobytes("png")
+                        doc.close()
                     else:
                         image_bytes = raw_bytes
                     image = Image.open(io.BytesIO(image_bytes))
