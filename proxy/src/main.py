@@ -477,7 +477,7 @@ class Monitor:
         """Called when a HTTP/HTTPS request is processed."""
         self.request_count += 1
 
-    def error(self, flow: http.HTTPFlow, msg: str) -> None:
+    def error(self, flow: http.HTTPFlow) -> None:
         """Called when a flow encounters an error (dropped/malformed)."""
         self.dropped_flows += 1
 
