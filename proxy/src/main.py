@@ -121,9 +121,12 @@ async def anonymous_conversation_callback(
 
                     #Retrigger monitor analysis
                     mon_message = monitor_pb2.EventID(id=str(latest_event["_id"]))
-                    ctx.log.info("Sent event to monitor...")
-                    response = await stub.EventAdded(mon_message)
-                    ctx.log.info(f"Response: {response}")
+                    try:
+                        ctx.log.info("Sent event to monitor...")
+                        response = await stub.EventAdded(mon_message)
+                        ctx.log.info(f"Response: {response}")
+                    except Exception as e:
+                        ctx.log.error(f"[conversation_callback] Failed to notify monitor: {e}")
                     return
 
 
@@ -147,9 +150,12 @@ async def anonymous_conversation_callback(
 
     result = await events_collection.insert_one(event)
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
-    ctx.log.info("Sent event to monitor...")
-    response = await stub.EventAdded(mon_message)
-    ctx.log.info(f"Response: {response}")
+    try:
+        ctx.log.info("Sent event to monitor...")
+        response = await stub.EventAdded(mon_message)
+        ctx.log.info(f"Response: {response}")
+    except Exception as e:
+        ctx.log.error(f"[conversation_callback] Failed to notify monitor: {e}")
 
 async def account_login_callback(site: Any, email: str, source_ip: str) -> bool:
     #Check domain check skip
@@ -215,9 +221,12 @@ async def conversation_callback(
 
     result = await events_collection.insert_one(event)
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
-    ctx.log.info("Sent event to monitor...")
-    response = await stub.EventAdded(mon_message)
-    ctx.log.info(f"Response: {response}")
+    try:
+        ctx.log.info("Sent event to monitor...")
+        response = await stub.EventAdded(mon_message)
+        ctx.log.info(f"Response: {response}")
+    except Exception as e:
+        ctx.log.error(f"[conversation_callback] Failed to notify monitor: {e}")
 
 
 def _write_file(filepath: str, content: bytes) -> None:
@@ -299,11 +308,12 @@ async def attached_file_callback(
 
     mon_message = monitor_pb2.EventID(id=str(result.inserted_id))
 
-    ctx.log.info("Sent event to monitor...")
-
-    response = await stub.EventAdded(mon_message)
-
-    ctx.log.info(f"Response: {response}")
+    try:
+        ctx.log.info("Sent event to monitor...")
+        response = await stub.EventAdded(mon_message)
+        ctx.log.info(f"Response: {response}")
+    except Exception as e:
+        ctx.log.error(f"[file_callback] Failed to notify monitor: {e}")
 
 
 proxy: Proxy = Proxy(ProxyCallbacks(
