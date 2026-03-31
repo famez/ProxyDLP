@@ -103,7 +103,7 @@
     <div class="mb-4 text-sm text-gray-600">
       <span class="font-medium">Rational:</span> <%= event.rational %>
     </div>
-    <% if (event.content && permissions.includes('conversations')) { %>
+    <% if (event.content && permissions.includes('conversations') && !event.copilot_context) { %>
       <div class="mb-4">
         <h2 class="text-sm font-semibold text-gray-600 mb-1">Prompt</h2>
         <div class="flex items-start gap-2">

@@ -113,14 +113,13 @@
                 <% if (event.source_ip) { %> · <span class="font-mono"><%= event.source_ip %></span><% } %>
               </div>
               <% if (permissions.includes('conversations')) { %>
-                <div class="bubble-user p-4 text-sm text-gray-800 whitespace-pre-wrap">
-                  <%= event.content || '(no content)' %>
-                </div>
+                <% if (!event.copilot_context) { %>
+                  <div class="bubble-user p-4 text-sm text-gray-800 whitespace-pre-wrap">
+                    <%= event.content || '(no content)' %>
+                  </div>
+                <% } %>
                 <% if (event.copilot_context) { %>
-                  <span class="copilot-toggle" onclick="this.nextElementSibling.classList.toggle('hidden')">
-                    ▶ Copilot context
-                  </span>
-                  <div class="copilot-context-panel hidden">
+                  <div class="copilot-context-panel">
                     <% if (event.copilot_context.user_question) { %>
                       <div class="copilot-section-title">User question</div>
                       <p class="text-xs text-gray-700 bg-indigo-50 border border-indigo-100 rounded p-2 whitespace-pre-wrap"><%= event.copilot_context.user_question %></p>
