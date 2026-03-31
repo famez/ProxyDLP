@@ -9,6 +9,8 @@ import logging
 import logging.handlers
 import smtplib
 import hashlib
+import shutil
+import tempfile
 import threading
 import time
 from collections import Counter
@@ -292,7 +294,7 @@ def decode_file(filepath: str, content_type: str) -> str:
         lines: list[str] = [para.text for para in doc.paragraphs if para.text.strip()]
         text = '\n'.join(lines)
 
-        extract_images_from_docx(filepath)
+        text += extract_images_from_docx(filepath)
 
     elif content_type in (
         "image/jpeg", "image/png", "image/gif", "image/bmp",
@@ -316,20 +318,30 @@ def analyze_file(filepath: str, content_type: str) -> tuple[str, dict[str, Any]]
     return text, analyze_text(text)
 
 
-def extract_images_from_docx(docx_path: str, output_folder: str = "extracted_images") -> None:
-    with zipfile.ZipFile(docx_path, 'r') as docx_zip:
-        # Create output folder if it doesn't exist
-        os.makedirs(output_folder, exist_ok=True)
-
-        # Loop through files in the ZIP and extract images
-        for file in docx_zip.namelist():
-            if file.startswith("word/media/"):
-                filename: str = os.path.basename(file)
-                if filename:  # skip folders
-                    target_path: str = os.path.join(output_folder, filename)
+def extract_images_from_docx(docx_path: str) -> str:
+    text: str = ""
+    tmp_dir: str = tempfile.mkdtemp()
+    try:
+        with zipfile.ZipFile(docx_path, 'r') as docx_zip:
+            for file in docx_zip.namelist():
+                if file.startswith("word/media/"):
+                    filename: str = os.path.basename(file)
+                    if not filename:
+                        continue
+                    target_path: str = os.path.join(tmp_dir, filename)
                     with open(target_path, "wb") as img_file:
                         img_file.write(docx_zip.read(file))
-                    print(f"Saved image: {target_path}")
+                    try:
+                        image = Image.open(target_path)
+                        try:
+                            text += pytesseract.image_to_string(image)
+                        finally:
+                            image.close()
+                    except Exception as e:
+                        print(f"[extract_images_from_docx] Could not OCR {filename}: {e}")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    return text
 
 
 def on_event_added(event_id: str) -> None:
