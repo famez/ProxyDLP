@@ -857,6 +857,7 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
 
 def perform_tf_idf() -> None:
+    logger.info("perform_tf_idf: starting")
     # Create combined stopwords set from all needed languages
     all_stopwords: set[str] = set()
     for lang in ['english', 'spanish', 'french']:
@@ -867,30 +868,39 @@ def perform_tf_idf() -> None:
     # Extract all text from events and keep their _id for mapping
     event_ids: list[Any] = []
     texts: list[str] = []
+    total_events: int = events_collection.count_documents({})
+    logger.info(f"perform_tf_idf: {total_events} events found in DB, starting text extraction")
+    processed: int = 0
     for event in events_collection.find({}, {"_id": 1, "content": 1, "filepath": 1, "content_type": 1, "rational": 1}):
+        processed += 1
         text: str = ""
         if event.get("rational") == "Conversation" and event.get("content"):
             text = event["content"]
         elif event.get("rational") == "Attached file" and event.get("filepath") and event.get("content_type"):
+            logger.debug(f"perform_tf_idf: decoding file [{processed}/{total_events}] {event['filepath']} ({event['content_type']})")
             try:
                 text = decode_file(event["filepath"], event["content_type"])
-
             except Exception as e:
                 logger.error(f"Error decoding file {event['filepath']}: {e}", exc_info=True)
+        else:
+            logger.debug(f"perform_tf_idf: skipping event [{processed}/{total_events}] rational={event.get('rational')!r}")
 
         #Check that we are indeed appending a string
         if isinstance(text, str) and text:
             texts.append(text)
             event_ids.append(event["_id"])
 
+    logger.info(f"perform_tf_idf: text extraction done — {len(texts)}/{total_events} events yielded text")
     if not texts:
         logger.debug("No events to process for TF-IDF.")
         return
 
     # Initialize vectorizer with combined stop words
+    logger.info("perform_tf_idf: fitting TF-IDF vectorizer")
     vectorizer: TfidfVectorizer = TfidfVectorizer(stop_words=stopwords_list)
     tfidf_matrix = vectorizer.fit_transform(texts)
     feature_names: np.ndarray = vectorizer.get_feature_names_out()
+    logger.info(f"perform_tf_idf: TF-IDF matrix shape={tfidf_matrix.shape}, updating DB records")
 
     for i, (event_id, _text) in enumerate(zip(event_ids, texts)):
         scores: np.ndarray = tfidf_matrix[i].toarray().flatten()
@@ -907,6 +917,8 @@ def perform_tf_idf() -> None:
             {"_id": event_id},
             {"$set": {"tfidf_top_words": top_words}}
         )
+
+    logger.info("perform_tf_idf: done")
 
 def run_tf_idf_periodically() -> None:
     """Run perform_tf_idf immediately and then every 2 hours."""
