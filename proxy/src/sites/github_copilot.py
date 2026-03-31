@@ -13,6 +13,18 @@ from proxy import Site, ProxyCallbacks, EmailNotFoundException, decode_jwt, extr
 
 SESSION_TTL: int = 600  # 10 minutes
 
+_COPILOT_INTERNAL_PROMPT_PREFIXES: tuple[str, ...] = (
+    "Please generate exactly",
+    "Please write a brief title for the following request:",
+)
+
+
+def _is_internal_copilot_prompt(prompt: str) -> bool:
+    """Return True for internal GitHub Copilot operational prompts that should not be stored."""
+    stripped = prompt.strip()
+    return any(stripped.startswith(prefix) for prefix in _COPILOT_INTERNAL_PROMPT_PREFIXES)
+
+
 _EXT_TO_LANG: dict[str, str] = {
     '.py': 'python',
     '.js': 'javascript',
@@ -173,6 +185,10 @@ class Github_Copilot(Site):
 
                                 if prompt:
                                     ctx.log.info(f"Prompt found: {prompt}")
+
+                                    if _is_internal_copilot_prompt(prompt):
+                                        ctx.log.info("Skipping internal Copilot operational prompt.")
+                                        break
 
                                     ip_address: str = flow.client_conn.address[0]
 
