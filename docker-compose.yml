@@ -104,6 +104,8 @@ services:
         condition: service_healthy
     environment:
       MONGO_URI: mongodb://root:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/
+      # Uncomment to enable verbose logging: 
+      #LOG_LEVEL: DEBUG
     volumes:
       - uploaded-files:/uploads/
       - faiss-data:/var/faiss/

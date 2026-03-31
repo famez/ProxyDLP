@@ -43,6 +43,14 @@ import monitor_pb2_grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 
 
+_LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, _LOG_LEVEL, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger: logging.Logger = logging.getLogger("monitor")
+
+
 INDEX_PATH: str = '/var/faiss/faiss_index.index'
 
 background_executor: futures.ThreadPoolExecutor = futures.ThreadPoolExecutor(max_workers=15)
@@ -92,7 +100,7 @@ def load_yara_rules() -> None:
         try:
             rule_sources[doc['name']] = doc['content']
         except KeyError:
-            print(f"Invalid YARA rule doc: {doc}")
+            logger.warning(f"Invalid YARA rule doc: {doc}")
 
     yara_rules_compiled = yara.compile(sources=rule_sources)
     with yara_rw_lock.gen_wlock():
@@ -173,13 +181,13 @@ def validate_yara_rule_string(rule_str: str) -> tuple[bool, list[str]]:
     try:
         yara.compile(source=rule_str)
         rule_identifiers: list[str] = extract_rule_identifiers(rule_str)
-        print("YARA rule is valid.")
+        logger.debug("YARA rule is valid.")
         return True, rule_identifiers
     except yara.SyntaxError as e:
-        print(f"Syntax error: {e}")
+        logger.error(f"Syntax error in YARA rule: {e}")
         return False, []
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error validating YARA rule: {e}", exc_info=True)
         return False, []
 
 
@@ -204,7 +212,7 @@ def analyze_topic_leak(text: str) -> list[dict[str, Any]]:
         scores, indices = search_faiss(embedding)  # This will use the global faiss_index
         for score, idx in zip(scores[0], indices[0]):
             if score >= 0.3:        #Cosine similarity threshold higher or equals to 0.3
-                print(f"Found similar embedding with score {score} at index {idx}")
+                logger.debug(f"Found similar embedding with score {score} at index {idx}")
 
                 doc: dict[str, Any] | None = topics_collection.find_one(
                     {"faiss_indexes": int(idx)},
@@ -212,11 +220,11 @@ def analyze_topic_leak(text: str) -> list[dict[str, Any]]:
                 )
 
                 if doc:
-                    print("Matched Document ID:", doc["_id"])
+                    logger.debug(f"Matched Document ID: {doc['_id']}")
                     leaked_topics.append({"name": doc['name'], "faiss_id": int(idx), "score": float(score)})
 
                 else:
-                    print("No matching document found.")
+                    logger.debug("No matching document found.")
 
     return leaked_topics
 
@@ -259,7 +267,7 @@ def decode_file(filepath: str, content_type: str) -> str:
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 image_list = page.get_images(full=True)
-                print(f"[+] Found {len(image_list)} images on page {page_num}")
+                logger.debug(f"[+] Found {len(image_list)} images on page {page_num}")
 
                 for img_index, img in enumerate(image_list):
                     xref: int = img[0]
@@ -338,7 +346,7 @@ def extract_images_from_docx(docx_path: str) -> str:
                         finally:
                             image.close()
                     except Exception as e:
-                        print(f"[extract_images_from_docx] Could not OCR {filename}: {e}")
+                        logger.warning(f"[extract_images_from_docx] Could not OCR {filename}: {e}", exc_info=True)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
     return text
@@ -346,10 +354,10 @@ def extract_images_from_docx(docx_path: str) -> str:
 
 def on_event_added(event_id: str) -> None:
     try:
-        print(f"Started on_event_added for Event ID: {event_id}")
+        logger.debug(f"Started on_event_added for Event ID: {event_id}")
         event: dict[str, Any] | None = events_collection.find_one({'_id': ObjectId(event_id)})
 
-        print(f"Event obtained")
+        logger.debug(f"Event obtained: {event_id}")
 
         leak: dict[str, Any] = {}
 
@@ -372,18 +380,16 @@ def on_event_added(event_id: str) -> None:
             )
 
         if result.modified_count > 0:
-            print("Document updated successfully.")
+            logger.debug(f"Event {event_id} updated successfully.")
         else:
-            print("No changes made or document not found.")
+            logger.warning(f"Event {event_id}: no changes made or document not found.")
 
         check_alerts(leak, event)
 
-
-        print(f"Finished long task for Event ID: {event_id}")
+        logger.debug(f"Finished processing Event ID: {event_id}")
 
     except Exception as e:
-        # Handle the exception
-        print(f"An error occurred: {e}")
+        logger.error(f"Error processing event {event_id}: {e}", exc_info=True)
 
 
 def check_alerts(leak: dict[str, Any], event: dict[str, Any]) -> None:
@@ -402,7 +408,7 @@ def check_alerts(leak: dict[str, Any], event: dict[str, Any]) -> None:
         "yara": dict(yara_counts)
     }
 
-    print(leak_count)
+    logger.debug(f"Leak counts: {leak_count}")
 
     results: list[dict[str, Any]] = list(alert_rules_collection.aggregate([
         {
@@ -482,7 +488,7 @@ def check_alerts(leak: dict[str, Any], event: dict[str, Any]) -> None:
         }
     ]))
 
-    print(results)
+    logger.debug(f"Alert rules query results: {results}")
 
     # Comparison function
     def rule_matches(alert_doc: dict[str, Any], leak_count: dict[str, dict[str, int]]) -> bool:
@@ -503,7 +509,7 @@ def check_alerts(leak: dict[str, Any], event: dict[str, Any]) -> None:
 
     # Send matching alert rules to the configured destinations
     for alert in matching_alerts:
-        print(f"Matching alert rule: {alert['name']}")
+        logger.info(f"Matching alert rule: {alert['name']}")
         for destination in alert["destinations"]:
             if(destination['type'] == "local_logs"):
                 rotation_limit: int = destination.get("rotationLimit", 500)
@@ -551,7 +557,7 @@ def send_alert_to_syslog(
     event: dict[str, Any],
 ) -> None:
     # Create a syslog handler
-    print("Send to syslog...")
+    logger.debug("Sending alert to syslog...")
     logger: logging.Logger = logging.getLogger('ProxyDLP')
     logger.setLevel(logging.INFO)
     syslog_handler: logging.handlers.SysLogHandler = logging.handlers.SysLogHandler(
@@ -679,10 +685,10 @@ def send_alert_to_email(
 
 def on_topic_rule_added(topic_rule_id: str) -> None:
     try:
-        print(f"Started on_topic_rule_added for Topic Rule ID: {topic_rule_id}")
+        logger.debug(f"Started on_topic_rule_added for Topic Rule ID: {topic_rule_id}")
         topic_rule: dict[str, Any] | None = topics_collection.find_one({'_id': ObjectId(topic_rule_id)})
 
-        print(f"Topic Rule obtained: {topic_rule}")
+        logger.debug(f"Topic Rule obtained: {topic_rule_id}")
 
         chunks: list[str] = chunk_text(topic_rule['pattern'])
         embeddings: np.ndarray = embeddings_model.encode(chunks, normalize_embeddings=True)
@@ -703,12 +709,11 @@ def on_topic_rule_added(topic_rule_id: str) -> None:
         )
 
     except Exception as e:
-        # Handle the exception
-        print(f"An error occurred: {e}")
+        logger.error(f"Error in on_topic_rule_added for {topic_rule_id}: {e}", exc_info=True)
 
 
 def remove_topic_rule(topic_rule_id: str, delete_only_indexes: bool = False) -> None:
-    print(f"Received Topic Rule ID: {topic_rule_id}")
+    logger.debug(f"remove_topic_rule called for ID: {topic_rule_id}")
 
     topic_rule: dict[str, Any] | None = topics_collection.find_one({'_id': ObjectId(topic_rule_id)})
 
@@ -717,7 +722,7 @@ def remove_topic_rule(topic_rule_id: str, delete_only_indexes: bool = False) -> 
         selector: faiss.IDSelectorBatch = faiss.IDSelectorBatch(ids)
         with faiss_rw_lock.gen_wlock():
             n_removed: int = faiss_index.remove_ids(selector)
-            print(f"Removed {n_removed} vectors from FAISS index")
+            logger.info(f"Removed {n_removed} vectors from FAISS index for rule {topic_rule_id}")
             # Save the FAISS index to disk
             faiss.write_index(faiss_index, INDEX_PATH)
 
@@ -727,17 +732,17 @@ def remove_topic_rule(topic_rule_id: str, delete_only_indexes: bool = False) -> 
                 {'$unset': {'faiss_indexes': ""}}
             )
         else:
-            print(f"Deleting document")
+            logger.debug(f"Deleting topic rule document {topic_rule_id}")
             topics_collection.delete_one({'_id': ObjectId(topic_rule_id)})
 
     except Exception as e:
-        print(f"Exception: {e}")
+        logger.error(f"Error in remove_topic_rule for {topic_rule_id}: {e}", exc_info=True)
 
 
 class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
     def EventAdded(self, request: Any, context: grpc.ServicerContext) -> Any:
-        print(f"Received Event ID: {request.id}")
+        logger.debug(f"Received Event ID: {request.id}")
         if _event_semaphore.acquire(blocking=False):
             def _run(event_id: str) -> None:
                 try:
@@ -746,11 +751,11 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
                     _event_semaphore.release()
             background_executor.submit(_run, request.id)
         else:
-            print(f"Warning: event analysis queue full, dropping event {request.id}")
+            logger.warning(f"Event analysis queue full, dropping event {request.id}")
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
 
     def TopicRuleAdded(self, request: Any, context: grpc.ServicerContext) -> Any:
-        print(f"Received Topic Rule ID: {request.id}")
+        logger.debug(f"Received Topic Rule ID: {request.id}")
         on_topic_rule_added(request.id)
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
 
@@ -765,11 +770,11 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
     #We have this callback to check if the Yara rule is valid before saving it to the database
     def YaraRuleAdded(self, yara_rule: Any, context: grpc.ServicerContext) -> Any:
-        print(f"Received Yara rule name: {yara_rule.name}")
+        logger.debug(f"Received Yara rule name: {yara_rule.name}")
 
         is_valid, rule_identifiers = validate_yara_rule_string(yara_rule.content)
         if not is_valid:
-            print(f"Invalid Yara rule: {yara_rule.name}")
+            logger.warning(f"Invalid Yara rule: {yara_rule.name}")
             return monitor_pb2.MonitorReply(result=1)
 
         try:
@@ -782,18 +787,17 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
             load_yara_rules()  # Reload Yara rules after adding a new one
         except Exception as e:
-            print(f"Error saving Yara rule: {e}")
+            logger.error(f"Error saving Yara rule {yara_rule.name}: {e}", exc_info=True)
             return monitor_pb2.MonitorReply(result=2)
 
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
 
     def YaraRuleEdited(self, yara_rule_edit_request: Any, context: grpc.ServicerContext) -> Any:
-        print(f"Received Yara rule name: {yara_rule_edit_request.rule.name}")
-        print(f"Received Yara rule id: {yara_rule_edit_request.id.id}")
+        logger.debug(f"Received Yara rule edit: name={yara_rule_edit_request.rule.name} id={yara_rule_edit_request.id.id}")
 
         is_valid, rule_identifiers = validate_yara_rule_string(yara_rule_edit_request.rule.content)
         if not is_valid:
-            print(f"Invalid Yara rule: {yara_rule_edit_request.rule.name}")
+            logger.warning(f"Invalid Yara rule: {yara_rule_edit_request.rule.name}")
             return monitor_pb2.MonitorReply(result=1)
 
         try:
@@ -811,7 +815,7 @@ class MonitorServicer(monitor_pb2_grpc.MonitorServicer):
 
             load_yara_rules()  # Reload Yara rules after adding a new one
         except Exception as e:
-            print(f"Error saving Yara rule: {e}")
+            logger.error(f"Error updating Yara rule {yara_rule_edit_request.rule.name}: {e}", exc_info=True)
             return monitor_pb2.MonitorReply(result=2)
 
         return monitor_pb2.MonitorReply(result=0)       #Everything ok :)
@@ -853,7 +857,7 @@ def perform_tf_idf() -> None:
                 text = decode_file(event["filepath"], event["content_type"])
 
             except Exception as e:
-                print(f"Error decoding file {event['filepath']}: {e}")
+                logger.error(f"Error decoding file {event['filepath']}: {e}", exc_info=True)
 
         #Check that we are indeed appending a string
         if isinstance(text, str) and text:
@@ -861,7 +865,7 @@ def perform_tf_idf() -> None:
             event_ids.append(event["_id"])
 
     if not texts:
-        print("No events to process for TF-IDF.")
+        logger.debug("No events to process for TF-IDF.")
         return
 
     # Initialize vectorizer with combined stop words
@@ -891,7 +895,7 @@ def run_tf_idf_periodically() -> None:
         try:
             perform_tf_idf()
         except Exception as e:
-            print(f"Error in perform_tf_idf: {e}")
+            logger.error(f"Error in perform_tf_idf: {e}", exc_info=True)
         time.sleep(2 * 60 * 60)  # Sleep for 2 hours
 
 
@@ -904,7 +908,7 @@ def purge_old_data() -> None:
     events_result = events_collection.delete_many({"timestamp": {"$lt": cutoff}})
     logs_result = alert_locallogs_collection.delete_many({"timestamp": {"$lt": cutoff}})
     retention_settings_collection.update_one({}, {"$set": {"lastPurge": datetime.now(timezone.utc)}}, upsert=True)
-    print(f"[Retention] Purged {events_result.deleted_count} events and {logs_result.deleted_count} alert-logs older than {retention_days} day(s) (cutoff: {cutoff.isoformat()})")
+    logger.info(f"[Retention] Purged {events_result.deleted_count} events and {logs_result.deleted_count} alert-logs older than {retention_days} day(s) (cutoff: {cutoff.isoformat()})")
 
 def run_retention_purge_periodically() -> None:
     """Run purge immediately at startup and then every 24 hours."""
@@ -912,7 +916,7 @@ def run_retention_purge_periodically() -> None:
         try:
             purge_old_data()
         except Exception as e:
-            print(f"[Retention] Scheduled purge failed: {e}")
+            logger.error(f"[Retention] Scheduled purge failed: {e}", exc_info=True)
         time.sleep(24 * 60 * 60)  # Sleep for 24 hours
 
 
@@ -937,7 +941,7 @@ def main() -> None:
 
     server.add_insecure_port("[::]:50051")
     server.start()
-    print("Server running on port 50051...")
+    logger.info("Server running on port 50051...")
     server.wait_for_termination()
 
 if __name__ == "__main__":
