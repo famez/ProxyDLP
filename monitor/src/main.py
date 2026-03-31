@@ -868,10 +868,14 @@ def perform_tf_idf() -> None:
     # Extract all text from events and keep their _id for mapping
     event_ids: list[Any] = []
     texts: list[str] = []
-    total_events: int = events_collection.count_documents({})
+    # Materialize the cursor immediately to avoid MongoDB cursor timeout during heavy file I/O
+    all_events: list[dict[str, Any]] = list(events_collection.find(
+        {}, {"_id": 1, "content": 1, "filepath": 1, "content_type": 1, "rational": 1}
+    ))
+    total_events: int = len(all_events)
     logger.info(f"perform_tf_idf: {total_events} events found in DB, starting text extraction")
     processed: int = 0
-    for event in events_collection.find({}, {"_id": 1, "content": 1, "filepath": 1, "content_type": 1, "rational": 1}):
+    for event in all_events:
         processed += 1
         text: str = ""
         if event.get("rational") == "Conversation" and event.get("content"):
@@ -936,10 +940,34 @@ def purge_old_data() -> None:
     settings: dict[str, Any] | None = retention_settings_collection.find_one()
     retention_days: int = settings.get("retentionDays", RETENTION_DEFAULT_DAYS) if settings else RETENTION_DEFAULT_DAYS
     cutoff: datetime = datetime.now(timezone.utc) - timedelta(days=int(retention_days))
+
+    # Collect filepaths of "Attached file" events that will be deleted
+    expiring_filepaths: set[str] = {
+        doc["filepath"]
+        for doc in events_collection.find(
+            {"timestamp": {"$lt": cutoff}, "rational": "Attached file", "filepath": {"$exists": True}},
+            {"filepath": 1}
+        )
+        if doc.get("filepath")
+    }
+
     events_result = events_collection.delete_many({"timestamp": {"$lt": cutoff}})
     logs_result = alert_locallogs_collection.delete_many({"timestamp": {"$lt": cutoff}})
+
+    # Delete files that are no longer referenced by any remaining event
+    files_deleted: int = 0
+    for filepath in expiring_filepaths:
+        still_referenced: bool = events_collection.count_documents({"filepath": filepath}) > 0
+        if not still_referenced:
+            try:
+                os.remove(filepath)
+                files_deleted += 1
+                logger.debug(f"[Retention] Deleted orphaned file: {filepath}")
+            except OSError as e:
+                logger.warning(f"[Retention] Could not delete file {filepath}: {e}")
+
     retention_settings_collection.update_one({}, {"$set": {"lastPurge": datetime.now(timezone.utc)}}, upsert=True)
-    logger.info(f"[Retention] Purged {events_result.deleted_count} events and {logs_result.deleted_count} alert-logs older than {retention_days} day(s) (cutoff: {cutoff.isoformat()})")
+    logger.info(f"[Retention] Purged {events_result.deleted_count} events, {logs_result.deleted_count} alert-logs, and {files_deleted} files older than {retention_days} day(s) (cutoff: {cutoff.isoformat()})")
 
 def run_retention_purge_periodically() -> None:
     """Run purge immediately at startup and then every 24 hours."""
