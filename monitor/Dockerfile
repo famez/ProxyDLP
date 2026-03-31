@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
     libleptonica-dev \
+    libcairo2 \
     curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 

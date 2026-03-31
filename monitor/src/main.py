@@ -9,8 +9,6 @@ import logging
 import logging.handlers
 import smtplib
 import hashlib
-import shutil
-import tempfile
 import threading
 import time
 from collections import Counter
@@ -37,6 +35,8 @@ from readerwriterlock import rwlock
 from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from syslog_rfc5424_formatter import RFC5424Formatter
+
+import cairosvg
 
 import monitor_pb2
 import monitor_pb2_grpc
@@ -326,29 +326,36 @@ def analyze_file(filepath: str, content_type: str) -> tuple[str, dict[str, Any]]
     return text, analyze_text(text)
 
 
+_RASTER_EXTENSIONS: frozenset[str] = frozenset({
+    ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff", ".tif", ".webp",
+})
+_SVG_EXTENSIONS: frozenset[str] = frozenset({".svg", ".svgz"})
+
 def extract_images_from_docx(docx_path: str) -> str:
     text: str = ""
-    tmp_dir: str = tempfile.mkdtemp()
-    try:
-        with zipfile.ZipFile(docx_path, 'r') as docx_zip:
-            for file in docx_zip.namelist():
-                if file.startswith("word/media/"):
-                    filename: str = os.path.basename(file)
-                    if not filename:
-                        continue
-                    target_path: str = os.path.join(tmp_dir, filename)
-                    with open(target_path, "wb") as img_file:
-                        img_file.write(docx_zip.read(file))
+    with zipfile.ZipFile(docx_path, 'r') as docx_zip:
+        for file in docx_zip.namelist():
+            if file.startswith("word/media/"):
+                filename: str = os.path.basename(file)
+                if not filename:
+                    continue
+                ext: str = os.path.splitext(filename)[1].lower()
+                if ext not in _RASTER_EXTENSIONS and ext not in _SVG_EXTENSIONS:
+                    logger.debug(f"[extract_images_from_docx] Skipping unsupported file: {filename}")
+                    continue
+                try:
+                    raw_bytes: bytes = docx_zip.read(file)
+                    if ext in _SVG_EXTENSIONS:
+                        image_bytes: bytes = cairosvg.svg2png(bytestring=raw_bytes)
+                    else:
+                        image_bytes = raw_bytes
+                    image = Image.open(io.BytesIO(image_bytes))
                     try:
-                        image = Image.open(target_path)
-                        try:
-                            text += pytesseract.image_to_string(image)
-                        finally:
-                            image.close()
-                    except Exception as e:
-                        logger.warning(f"[extract_images_from_docx] Could not OCR {filename}: {e}", exc_info=True)
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+                        text += pytesseract.image_to_string(image)
+                    finally:
+                        image.close()
+                except Exception as e:
+                    logger.warning(f"[extract_images_from_docx] Could not OCR {filename}: {e}", exc_info=True)
     return text
 
 
