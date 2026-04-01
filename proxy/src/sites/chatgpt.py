@@ -163,6 +163,8 @@ class ChatGPT(Site):
                         if flow.response and flow.response.headers.get("Content-Type", "").startswith("text/event-stream"):
                             try:
                                 event_data = flow.response.text
+                                parsed = parse_assistant_response(event_data)
+                                conversation_id = None
                                 for line in event_data.splitlines():
                                     if line.startswith("data:"):
                                         data = line[len("data:"):].strip()
@@ -171,10 +173,14 @@ class ChatGPT(Site):
                                                 event = json.loads(data)
                                                 if "conversation_id" in event:
                                                     conversation_id = event['conversation_id']
-                                                    await self.conversation_callback(email, conversation_text, conversation_id)
                                                     break
                                             except Exception as e:
                                                 ctx.log.error(f"Failed to parse event data: {e}")
+                                if conversation_id:
+                                    await self.conversation_callback(email, conversation_text, conversation_id)
+                                    if parsed:
+                                        assistant_uuid, response_text = parsed
+                                        await self.update_response_callback(conversation_id, assistant_uuid, response_text)
                             except Exception as e:
                                 ctx.log.error(f"Error parsing text/event-stream: {e}")
 
@@ -204,6 +210,127 @@ class ChatGPT(Site):
                 file_id = extract_substring_between(flow.request.pretty_url, "oaiusercontent.com/", "?")
                 self.file_ids[file_id] = {"filepath": filepath, "content_type": content_type}
                 self._file_id_timestamps[file_id] = time.time()
+
+
+def _apply_delta_patch(obj: Any, path: str, op: str, value: Any) -> Any:
+    """Apply a single JSON-patch-like operation to obj at path."""
+    if not path or path == "/":
+        if op == "replace":
+            return value
+        return obj
+
+    parts = [p for p in path.split("/") if p]
+    target = obj
+    for part in parts[:-1]:
+        if isinstance(target, dict):
+            target = target.setdefault(part, {})
+        elif isinstance(target, list):
+            target = target[int(part)]
+        else:
+            return obj
+
+    key = parts[-1]
+    if isinstance(target, dict):
+        if op == "append":
+            existing = target.get(key)
+            if isinstance(existing, dict) and isinstance(value, dict):
+                existing.update(value)
+            else:
+                target[key] = (existing or "") + value
+        elif op in ("replace", "add"):
+            target[key] = value
+    elif isinstance(target, list):
+        idx = int(key)
+        if op == "append":
+            existing = target[idx]
+            if isinstance(existing, dict) and isinstance(value, dict):
+                existing.update(value)
+            else:
+                target[idx] = existing + value
+        elif op in ("replace", "add"):
+            target[idx] = value
+
+    return obj
+
+
+def parse_assistant_response(event_data: str) -> tuple[str, str] | None:
+    """Parse a ChatGPT delta-encoded eventstream and return (assistant_uuid, response_text), or None."""
+    channels: dict[int, Any] = {}
+    current_channel: int = 0
+
+    for line in event_data.splitlines():
+        if not line.startswith("data:"):
+            continue
+        raw = line[len("data:"):].strip()
+        if not raw or raw == "[DONE]":
+            continue
+        try:
+            delta: Any = json.loads(raw)
+        except Exception:
+            continue
+
+        if not isinstance(delta, dict):
+            ctx.log.debug(f"[parse_assistant_response] Skipping non-dict delta: {type(delta)}")
+            continue
+
+        o: str | None = delta.get("o")
+        p: str = delta.get("p", "")
+        v: Any = delta.get("v")
+        c: int = delta.get("c", current_channel)
+
+        # Initialize or replace an entire channel object
+        if o == "add" and p == "" and isinstance(v, dict):
+            ctx.log.debug(f"[parse_assistant_response] Channel {c} init (add), role={v.get('message', {}).get('author', {}).get('role')}")
+            channels[c] = v
+            current_channel = c
+            continue
+
+        if o is None and isinstance(v, dict) and "message" in v:
+            # Full object assignment for a channel
+            ctx.log.debug(f"[parse_assistant_response] Channel {c} set, role={v.get('message', {}).get('author', {}).get('role')}")
+            channels[c] = v
+            current_channel = c
+            continue
+
+        # Patch operations (list of patches or single patch on current channel)
+        patches: list[dict[str, Any]] = []
+        if o == "patch" and isinstance(v, list):
+            patches = v
+            c = current_channel
+        elif o is None and isinstance(v, list):
+            patches = v
+            c = current_channel
+        elif o in ("append", "replace") and p:
+            patches = [{"p": p, "o": o, "v": v}]
+            c = current_channel
+
+        if patches:
+            if c not in channels:
+                ctx.log.debug(f"[parse_assistant_response] Patches for unknown channel {c}, known={list(channels.keys())}")
+            else:
+                for patch in patches:
+                    try:
+                        _apply_delta_patch(channels[c], patch.get("p", ""), patch.get("o", ""), patch.get("v"))
+                    except Exception as e:
+                        ctx.log.error(f"[parse_assistant_response] Patch error on channel {c}, patch={patch}: {e}")
+
+    ctx.log.debug(f"[parse_assistant_response] Channels after parsing: {list(channels.keys())}")
+    for ch_idx, ch_obj in channels.items():
+        msg = ch_obj.get("message", {}) if isinstance(ch_obj, dict) else {}
+        author = msg.get("author", {})
+        role = author.get("role")
+        parts = msg.get("content", {}).get("parts", [])
+        ctx.log.debug(f"[parse_assistant_response] Channel {ch_idx}: role={role}, parts={parts}")
+        if role == "assistant":
+            if parts and isinstance(parts[0], str):
+                assistant_uuid: str = msg.get("id", "")
+                ctx.log.info(f"[parse_assistant_response] Extracted response (uuid={assistant_uuid}): {parts[0][:100]!r}")
+                return assistant_uuid, parts[0]
+            else:
+                ctx.log.debug(f"[parse_assistant_response] Assistant channel {ch_idx} has no valid parts")
+
+    ctx.log.debug("[parse_assistant_response] No assistant response found")
+    return None
 
 
 def get_email_from_auth_header(auth_header: str | None) -> str:
