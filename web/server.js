@@ -329,6 +329,28 @@ app.get('/terminal/instances', authMiddleware, requirePermission("mitmterminal")
   });
 });
 
+app.get('/terminal/sessions', authMiddleware, requirePermission("mitmterminal"), async (_req, res) => {
+  try {
+    const results = await Promise.allSettled(
+      proxyClients.map((client, idx) => new Promise((resolve, reject) => {
+        client.GetActiveSessions({}, (err, response) => {
+          if (err) reject(err);
+          else resolve({ index: idx, address: proxyAddresses[idx], sessions: response.sessions || [] });
+        });
+      }))
+    );
+
+    const replicas = results
+      .filter(r => r.status === 'fulfilled')
+      .map(r => r.value);
+
+    res.json({ replicas });
+  } catch (err) {
+    console.error('Error fetching sessions:', err);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
 app.get('/explore', authMiddleware, requirePermission("events"), async (req, res) => {
   const {
     start, end, user, site, rational,

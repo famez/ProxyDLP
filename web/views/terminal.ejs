@@ -17,11 +17,17 @@
   <!-- Replica selector (hidden when only one instance) -->
   <div id="replicaBar" class="hidden w-full max-w-2xl mb-4 flex gap-2 flex-wrap"></div>
 
-  <!-- Button to toggle stats -->
-  <button id="toggleStats"
-    class="mb-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow-md transition">
-    Show MitMproxy Stats
-  </button>
+  <!-- Action buttons row -->
+  <div class="flex gap-3 mb-4">
+    <button id="toggleStats"
+      class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2 rounded-lg shadow-md transition">
+      Show MitMproxy Stats
+    </button>
+    <button id="toggleSessions"
+      class="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-2 rounded-lg shadow-md transition">
+      Show Active Sessions
+    </button>
+  </div>
 
   <!-- Hidden stats card -->
   <div id="statsCard" class="hidden w-full max-w-2xl bg-white p-6 rounded-2xl shadow-xl mb-6">
@@ -54,6 +60,14 @@
         <button class="time-btn bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600" data-minutes="30">30m</button>
         <button class="time-btn bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600" data-minutes="60">60m</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Sessions card -->
+  <div id="sessionsCard" class="hidden w-full max-w-2xl bg-white p-6 rounded-2xl shadow-xl mb-6">
+    <h2 class="text-2xl font-bold text-purple-700 mb-4">Active Sessions</h2>
+    <div id="sessionsContent" class="space-y-4 text-gray-700">
+      <p class="text-gray-400 text-sm">Loading…</p>
     </div>
   </div>
 
@@ -231,6 +245,62 @@
       toggleBtn.textContent = visible ? "Hide MitMproxy Stats" : "Show MitMproxy Stats";
       if (visible) { fetchStats(); statsInterval = setInterval(fetchStats, 5000); }
       else clearInterval(statsInterval);
+    });
+
+    // === Sessions logic ===
+    const sessionsBtn   = document.getElementById('toggleSessions');
+    const sessionsCard  = document.getElementById('sessionsCard');
+    const sessionsContent = document.getElementById('sessionsContent');
+    let sessionsInterval = null;
+
+    async function fetchSessions() {
+      try {
+        const res = await fetch('/terminal/sessions');
+        if (!res.ok) throw new Error('Failed to fetch sessions');
+        const { replicas } = await res.json();
+
+        if (!replicas || replicas.length === 0) {
+          sessionsContent.innerHTML = '<p class="text-gray-400 text-sm">No proxy replicas available.</p>';
+          return;
+        }
+
+        sessionsContent.innerHTML = replicas.map(r => {
+          const rows = r.sessions.length === 0
+            ? '<tr><td colspan="2" class="px-3 py-2 text-gray-400 text-sm text-center">No active sessions</td></tr>'
+            : r.sessions.map(s => `
+                <tr class="border-t border-gray-100">
+                  <td class="px-3 py-2 font-mono text-sm">${s.source_ip}</td>
+                  <td class="px-3 py-2 text-sm">${s.user || '<span class="text-gray-400">—</span>'}</td>
+                </tr>`).join('');
+
+          return `
+            <div>
+              <h3 class="font-semibold text-purple-600 mb-2">Replica ${r.index}
+                <span class="text-xs text-gray-400 font-normal ml-1">${r.address}</span>
+              </h3>
+              <table class="w-full text-left border border-gray-200 rounded-lg overflow-hidden text-sm">
+                <thead class="bg-purple-50 text-purple-700">
+                  <tr>
+                    <th class="px-3 py-2 font-semibold">Source IP</th>
+                    <th class="px-3 py-2 font-semibold">User</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>`;
+        }).join('');
+      } catch (err) {
+        console.error('Error fetching sessions:', err);
+        sessionsContent.innerHTML = '<p class="text-red-400 text-sm">Error loading sessions.</p>';
+      }
+    }
+
+    sessionsBtn.addEventListener('click', () => {
+      sessionsCard.classList.toggle('hidden');
+      const visible = !sessionsCard.classList.contains('hidden');
+      sessionsBtn.textContent = visible ? 'Hide Active Sessions' : 'Show Active Sessions';
+      if (visible) { fetchSessions(); sessionsInterval = setInterval(fetchSessions, 5000); }
+      else clearInterval(sessionsInterval);
     });
   </script>
 </body>

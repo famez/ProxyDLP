@@ -158,6 +158,7 @@ async def anonymous_conversation_callback(
         ctx.log.error(f"[conversation_callback] Failed to notify monitor: {e}")
 
 async def account_login_callback(site: Any, email: str, source_ip: str) -> bool:
+    _ip_to_user[source_ip] = email
     #Check domain check skip
     domain_settings: dict[str, Any] | None = await domain_settings_collection.find_one()
     if not domain_settings or "check_domain" not in domain_settings or not domain_settings['check_domain']:
@@ -184,6 +185,7 @@ async def account_login_callback(site: Any, email: str, source_ip: str) -> bool:
 
 
 async def account_check_callback(site: Any, email: str, source_ip: str) -> bool:
+    _ip_to_user[source_ip] = email
     #Check domain check skip
     domain_settings: dict[str, Any] | None = await domain_settings_collection.find_one()
     if not domain_settings or "check_domain" not in domain_settings or not domain_settings['check_domain']:
@@ -200,6 +202,7 @@ async def conversation_callback(
     site: Any, email: str, content: str, source_ip: str, conversation_id: str | None,
     metadata: dict | None = None
 ) -> None:
+    _ip_to_user[source_ip] = email
     event: dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc),
         "user": email,
@@ -351,6 +354,9 @@ _MAX_FLOWS_IN_VIEW: int = 200
 # Maps client_conn.id -> real source IP extracted from X-Forwarded-For (injected by HAProxy).
 # Populated in http_connect (for CONNECT tunnels) and in request (for plain HTTP).
 _real_source_ips: dict[str, str] = {}
+
+# Maps source_ip -> last known authenticated user seen on that IP.
+_ip_to_user: dict[str, str] = {}
 
 
 async def _config_poller(check_interval: int = 5) -> None:
@@ -537,6 +543,25 @@ class ProxyServicer(proxy_pb2_grpc.ProxyServicer):
             mem=mem,
             dropped_flows=monitor.dropped_flows,
         )
+
+    async def GetActiveSessions(self, request: Any, context: grpc.aio.ServicerContext) -> Any:
+        seen: set[tuple[str, str]] = set()
+        sessions: list[proxy_pb2.Session] = []
+        for conn_id in list(monitor.active_flows):
+            ip: str | None = _real_source_ips.get(conn_id)
+            if ip is None:
+                continue
+            user: str = _ip_to_user.get(ip, "")
+            if not user:
+                # Fallback: look up the user from the agents collection (populated by heartbeat)
+                agent: dict[str, Any] | None = await agents_collection.find_one({"ip": ip}, {"user": 1})
+                if agent:
+                    user = agent.get("user", "")
+            key: tuple[str, str] = (ip, user)
+            if key not in seen:
+                seen.add(key)
+                sessions.append(proxy_pb2.Session(source_ip=ip, user=user))
+        return proxy_pb2.SessionList(sessions=sessions)
 
 
 async def _init_db() -> None:

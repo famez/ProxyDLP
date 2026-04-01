@@ -8,6 +8,7 @@ service Proxy {
   rpc SiteRejectEnabled (Enabled) returns (ProxyReply);
   rpc SiteMonitoringToggled (Site) returns (ProxyReply);
   rpc GetMitmStats (google.protobuf.Empty) returns (MitmStats);
+  rpc GetActiveSessions (google.protobuf.Empty) returns (SessionList);
 }
 
 message Site {
@@ -29,4 +30,13 @@ message MitmStats {
   float rps = 3;
   float mem = 4;
   int32 dropped_flows = 5;
+}
+
+message Session {
+  string source_ip = 1;
+  string user = 2;
+}
+
+message SessionList {
+  repeated Session sessions = 1;
 }
