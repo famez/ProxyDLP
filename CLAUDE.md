@@ -115,3 +115,25 @@ docker compose logs -f proxy       # follow proxy logs
 ```
 
 CSS must be rebuilt when Tailwind classes change: `npm run build:css` (inside `web/`).
+
+## Client agent (Windows) — optional
+
+> **The agent is optional.** Endpoints can be onboarded simply by pointing the browser/system proxy at HAProxy (`:8080`/`:443`) and trusting the mitmproxy CA — no agent needed. The agent automates this setup and provides richer machine-level telemetry.
+
+The Windows endpoint agent lives in a separate repository: **https://github.com/famez/ProxyDLPAgent**
+
+It is a **Rust** Windows service that runs on corporate endpoints. Key responsibilities:
+
+- Registers with the ProxyDLP server on startup (`POST /api/agents/register` in `web/agents.js`) and sends a heartbeat every ~2 minutes to keep the `agents` MongoDB collection up to date.
+- Fetches the list of monitored domains from the server and generates a **PAC (Proxy Auto-Config) file** that redirects only those domains through the HAProxy/mitmproxy stack.
+- Applies the PAC URL to the Windows system proxy settings via the registry (Group Policy paths + `WinHttpSetDefaultProxyConfiguration`).
+- Installs the mitmproxy CA certificate (`mitmCA.pem`) from `C:\Program Files\ProxyDLPAgent\` into the Windows trust store so TLS interception is transparent to the browser/IDE.
+
+Key implementation details:
+- Registry config key: `HKEY_LOCAL_MACHINE\SOFTWARE\ProxyDlp\ProxyHostname` — points to the ProxyDLP server hostname.
+- Async runtime: **Tokio**; HTTPS via **reqwest + rustls** (no OpenSSL dependency).
+- Logs to `C:\trace.log`; requires administrator privileges.
+- Cross-compiled from Linux to Windows (`x86_64-pc-windows-gnu`) via MinGW; native Windows builds also supported.
+- Licensed GPL-3.0.
+
+The agent's GUID is stored server-side in the `agents` collection and is used to correlate events (`agent_id` field in the `events` collection) with a specific machine when the user has not yet authenticated to an AI service.
