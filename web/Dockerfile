@@ -5,6 +5,7 @@ RUN apt-get update && \
     apt-get install -y \
         git \
         curl \
+        gcc \
         gcc-mingw-w64-x86-64 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -14,6 +15,9 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Add Windows cross-compilation target
 RUN rustup target add x86_64-pc-windows-gnu
+
+# Tell Cargo to use the MinGW cross-linker for the Windows target
+ENV CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc
 
 WORKDIR /build
 
