@@ -4,25 +4,26 @@ FROM ubuntu:24.04 AS builder
 RUN apt-get update && \
     apt-get install -y \
         git \
-        make \
-        mingw-w64 \
+        curl \
+        gcc-mingw-w64-x86-64 \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Rust toolchain
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Add Windows cross-compilation target
+RUN rustup target add x86_64-pc-windows-gnu
 
 WORKDIR /build
 
 # Clone the ProxyDLPAgent repo
-RUN git clone --branch v1.2.0 --single-branch https://github.com/famez/ProxyDLPAgent.git
+RUN git clone --branch v2.0.0 --single-branch https://github.com/famez/ProxyDLPAgent.git
 
-#For testing
-#RUN git clone https://github.com/famez/ProxyDLPAgent.git \
-#   && cd ProxyDLPAgent \
-#   && git checkout 01afb04eb5d01601684249389161bb235be0f537
+WORKDIR /build/ProxyDLPAgent
 
-
-WORKDIR /build/ProxyDLPAgent/src/
-
-# Build Windows exe with mingw
-RUN make
+# Build Windows exe with Cargo (cross-compile to x86_64-pc-windows-gnu)
+RUN cargo build --release --target x86_64-pc-windows-gnu
 
 # ---------- Stage 2: Package with Inno Setup ----------
 FROM ubuntu:24.04 AS installer
@@ -46,10 +47,8 @@ WORKDIR /iss
 RUN wget https://jrsoftware.org/download.php/is.exe -O innosetup.exe
 RUN xvfb-run wine innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
 
-# Copy exe from builder stage
-COPY --from=builder /build/ProxyDLPAgent/src/build/proxydlp.exe ./proxydlp.exe
-COPY --from=builder /build/ProxyDLPAgent/libs/*.dll ./
-COPY --from=builder /build/ProxyDLPAgent/libs/*.sys ./
+# Copy exe from builder stage (Rust build, statically linked — no DLLs needed)
+COPY --from=builder /build/ProxyDLPAgent/target/x86_64-pc-windows-gnu/release/proxydlp.exe ./proxydlp.exe
 
 # Copy your Inno Setup script
 COPY web/ProxyDLPAgent.iss .

@@ -22,14 +22,7 @@ ArchitecturesInstallIn64BitMode=x64
 ; Main executable
 Source: "proxydlp.exe"; DestDir: "{app}"; Flags: ignoreversion
 
-; Supporting DLLs
-Source: "libcurl-x64.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "libwinpthread-1.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "WinDivert.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "WinDivert64.sys"; DestDir: "{app}"; Flags: ignoreversion
-
-; Certificate (as we are using the mingw version of libcurl, this version is compiled using LibreSSL, not schannels, so the certificate must be installed on 
-; the Windows certificate storage and also in the program directory to be loaded by libcurl).
+; Certificate (must be installed in Windows certificate storage for TLS interception)
 Source: "mitmCA.pem"; DestDir: "{app}"; Flags: ignoreversion
 Source: "mitmCA.pem"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
@@ -58,5 +51,3 @@ Filename: "cmd.exe"; Parameters: "/C sc delete ProxyDLPAgent"; Flags: runhidden
 ; Deregister executable
 Filename: "cmd.exe"; Parameters: "/C ""{app}\proxydlp.exe"" /deregister"; Flags: runhidden
 
-; Stop WinDivert service
-Filename: "cmd.exe"; Parameters: "/C sc stop WinDivert"; Flags: runhidden
