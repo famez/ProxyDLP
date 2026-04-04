@@ -26,8 +26,10 @@ class Proxy:
         self.sites: list[Site] = []
         self.callbacks = callbacks
 
-    def register_site(self, cls: type[Site], urls: list[str]) -> None:
+    def register_site(self, cls: type[Site], urls: list[str], subdomains: list[str] | None = None) -> None:
         site = cls(urls, self.callbacks)
+        if subdomains is not None:
+            site.subdomains = subdomains
         self.sites.append(site)
 
     async def route_request(self, flow: http.HTTPFlow) -> bool:
@@ -91,9 +93,10 @@ class EmailNotFoundException(Exception):
 
 
 class Site:
-    def __init__(self, name: str, urls: list[str], callbacks: ProxyCallbacks) -> None:
+    def __init__(self, name: str, urls: list[str], callbacks: ProxyCallbacks, subdomains: list[str] | None = None) -> None:
         self.name: str = name
         self.urls: list[str] = urls
+        self.subdomains: list[str] = subdomains or []
         self.source_ip: str = ""     #To keep track of the source IP address.
         self.callbacks = callbacks
         self.enabled: bool = False
@@ -109,6 +112,9 @@ class Site:
 
     def get_urls(self) -> list[str]:
         return self.urls
+
+    def get_subdomains(self) -> list[str]:
+        return self.subdomains
 
     def get_name(self) -> str:
         return self.name

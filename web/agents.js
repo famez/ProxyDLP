@@ -161,19 +161,15 @@ router.get('/monitored_domains', async (req, res) => {
     client = dbClient;
     db = database;
 
-    //Get sites URLs
-    const site_docs = await db.collection('sites').find().toArray();
+    //Get sites with their exact subdomains
+    const site_docs = await db.collection('sites').find({ enabled: true }).toArray();
 
-    // Flatten all URL entries
-    const rawUrls = site_docs.flatMap(site => site.urls || []);
-    const cleanedUrls = rawUrls.map(url => url.trim()).filter(Boolean);
-
-    // Extract unique domains only (drop any path after slash)
+    // Collect exact subdomains declared by each enabled site
+    const rawSubdomains = site_docs.flatMap(site => site.subdomains || []);
     const domains = [...new Set(
-      cleanedUrls.map(url => url.split('/')[0].toLowerCase())
+      rawSubdomains.map(d => d.trim().toLowerCase()).filter(Boolean)
     )];
 
-    
     return res.json({ domains });
 
   } catch (err) {

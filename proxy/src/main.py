@@ -331,17 +331,27 @@ proxy: Proxy = Proxy(ProxyCallbacks(
 ))
 
 
-proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"])
+proxy.register_site(ChatGPT, ["openai.com", "chatgpt.com", "oaiusercontent.com"],
+                    subdomains=["chatgpt.com", "auth.openai.com", "oaiusercontent.com"])
 proxy.register_site(Microsoft_Copilot, ["substrate.office.com", "sharepoint.com", "graph.microsoft.com",
-                                        "copilot.microsoft.com"])
-proxy.register_site(Github_Copilot, ["githubcopilot.com", "api.github.com"])
-proxy.register_site(DeepSeek, ["deepseek.com"])
-proxy.register_site(BlackBox, ["blackbox.ai"])
-proxy.register_site(Gemini, ["gemini.google.com", "push.clients6.google.com"])
-proxy.register_site(DeepL, ["deepl.com"])
-proxy.register_site(Perplexity, ["perplexity.ai", "ppl-ai-file-upload.s3.amazonaws.com"])
-proxy.register_site(Grok, ["grok.com"])
-proxy.register_site(Claude, ["claude.ai"])
+                                        "copilot.microsoft.com"],
+                    subdomains=["copilot.microsoft.com", "substrate.office.com", "graph.microsoft.com"])
+proxy.register_site(Github_Copilot, ["githubcopilot.com", "api.github.com"],
+                    subdomains=["githubcopilot.com", "api.github.com"])
+proxy.register_site(DeepSeek, ["deepseek.com"],
+                    subdomains=["chat.deepseek.com"])
+proxy.register_site(BlackBox, ["blackbox.ai"],
+                    subdomains=["www.blackbox.ai"])
+proxy.register_site(Gemini, ["gemini.google.com", "push.clients6.google.com"],
+                    subdomains=["gemini.google.com", "push.clients6.google.com"])
+proxy.register_site(DeepL, ["deepl.com"],
+                    subdomains=["www.deepl.com", "dict.deepl.com"])
+proxy.register_site(Perplexity, ["perplexity.ai", "ppl-ai-file-upload.s3.amazonaws.com"],
+                    subdomains=["www.perplexity.ai", "ppl-ai-file-upload.s3.amazonaws.com"])
+proxy.register_site(Grok, ["grok.com"],
+                    subdomains=["grok.com"])
+proxy.register_site(Claude, ["claude.ai"],
+                    subdomains=["claude.ai"])
 
 
 # Soft memory limit: exit cleanly before the container OOM-kills us.
@@ -573,11 +583,14 @@ async def _init_db() -> None:
     #Add sites to the database for being checked later on the web interface.
     for site in proxy.get_sites():
         try:
-            await sites_collection.insert_one({
-                "name": site.get_name(),        #Name is unique ID, so once it is added the first time, this will "fail"
-                "urls": site.get_urls(),
-                "enabled": False                #Let's default to disable all the sites.
-            })
+            await sites_collection.update_one(
+                {"name": site.get_name()},
+                {
+                    "$set": {"urls": site.get_urls(), "subdomains": site.get_subdomains()},
+                    "$setOnInsert": {"enabled": False},
+                },
+                upsert=True
+            )
         except Exception:
             pass
 
