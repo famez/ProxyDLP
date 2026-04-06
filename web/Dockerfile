@@ -22,7 +22,7 @@ ENV CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc
 WORKDIR /build
 
 # Clone the ProxyDLPAgent repo
-RUN git clone --branch v2.0.0 --single-branch https://github.com/famez/ProxyDLPAgent.git
+RUN git clone --branch dev2 --single-branch https://github.com/famez/ProxyDLPAgent.git
 
 WORKDIR /build/ProxyDLPAgent
 
