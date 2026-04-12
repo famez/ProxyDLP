@@ -137,9 +137,17 @@ router.post('/heartbeat', async (req, res) => {
       }
     );
 
+    // Fetch monitored sites (enabled only) and collect their subdomains
+    const site_docs = await db.collection('sites').find({ enabled: true }).toArray();
+    const siteSubdomains = site_docs.flatMap(site => site.subdomains || []);
+    const monitored_sites = [...new Set(
+      siteSubdomains.map(d => d.trim().toLowerCase()).filter(Boolean)
+    )];
+
     return res.json({
       status: 'ok',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      monitored_sites
     });
 
   } catch (err) {
@@ -148,37 +156,6 @@ router.post('/heartbeat', async (req, res) => {
   } finally {
     if (client) await client.close();
   }
-});
-
-
-router.get('/monitored_domains', async (req, res) => {
-
-  let client, db;
-
-  try {
-
-    const { agent, client: dbClient, db: database } = await authenticateRequest(req);
-    client = dbClient;
-    db = database;
-
-    //Get sites with their exact subdomains
-    const site_docs = await db.collection('sites').find({ enabled: true }).toArray();
-
-    // Collect exact subdomains declared by each enabled site
-    const rawSubdomains = site_docs.flatMap(site => site.subdomains || []);
-    const domains = [...new Set(
-      rawSubdomains.map(d => d.trim().toLowerCase()).filter(Boolean)
-    )];
-
-    return res.json({ domains });
-
-  } catch (err) {
-    console.error('Error geting domains information:', err);
-    return res.status(500).send('Internal Server Error');
-  } finally {
-    if (client) await client.close();
-  }
-
 });
 
 router.get('/deregister', async (req, res) => {
